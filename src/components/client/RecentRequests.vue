@@ -7,7 +7,6 @@ defineProps({
 })
 
 const emit = defineEmits(['view-all', 'view-details'])
-
 // Couleurs de badge par statut, centralisées ici pour éviter de dupliquer le mapping
 // entre la version tableau (desktop) et la version carte (mobile)
 const statusStyles = {

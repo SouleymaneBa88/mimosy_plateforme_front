@@ -1,11 +1,10 @@
 <script setup>
 defineProps({
   icon: {
-    // Emoji simple, comme dans la maquette (🔧, ⚡, ✨...)
+    // Emoji simple, comme dans la maquette 
     type: String,
     required: true,
   },
-
   iconBackground: {
     type: String,
     default: '#FAF5F0',

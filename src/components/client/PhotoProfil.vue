@@ -60,7 +60,6 @@ function onPhotoSelectionnee(event) {
   }
 
   const previewUrl = URL.createObjectURL(fichier)
-
   // Met a jour l'aperçu immediatement, puis remonte le vrai fichier au parent.
   emit('update:photo', previewUrl)
   emit('selected', fichier)
