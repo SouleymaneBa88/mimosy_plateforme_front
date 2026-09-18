@@ -1,0 +1,5 @@
+<script setup>
+defineProps({ demande: { type: Object, required: true }, selected: Boolean })
+defineEmits(['select'])
+</script>
+<template><button type="button" class="w-full rounded-2xl border bg-white p-5 text-left" :class="selected ? 'border-[#2F6250] ring-2 ring-[#2F6250]/10' : 'border-[#E2E8F0]'" @click="$emit('select', demande.id)"><div class="flex items-start justify-between gap-3"><div><h3 class="font-bold text-[#051F20]">{{ demande.service }}</h3><p class="mt-1 text-sm text-[#64748B]">{{ demande.client.nom }} · {{ demande.localisation }}</p></div><span class="rounded-full px-3 py-1 text-xs font-bold" :class="demande.statut === 'EN_ATTENTE' ? 'bg-[#FFF7E6] text-[#9A723C]' : demande.statut === 'ACCEPTEE' ? 'bg-[#EAF8F2] text-[#16805B]' : demande.statut === 'REFUSEE' ? 'bg-[#FFF0EE] text-[#A85148]' : 'bg-[#EDF4FF] text-[#3267B1]'">{{ demande.statutLabel }}</span></div><div class="mt-4 flex justify-between text-xs text-[#64748B]"><span>{{ demande.date }} · {{ demande.heure }}</span><strong class="text-[#2F6250]">{{ demande.budget.toLocaleString('fr-FR') }} FCFA</strong></div></button></template>
