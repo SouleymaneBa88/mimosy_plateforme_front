@@ -503,30 +503,27 @@ const handleGoogleSignup = () => {
         >
           <!-- Logo -->
 
-          <button
-            type="button"
-            class="flex w-fit items-center gap-2"
-            aria-label="Accueil MIMOSY"
-            @click="goToHome"
-          >
-            <span
-              class="flex h-8 w-8 items-center justify-center rounded-[10px] bg-[#2F6250] font-['Plus_Jakarta_Sans'] text-[20px] font-[800] text-white"
-            >
-              M
-            </span>
-
-            <span
-              class="font-['Plus_Jakarta_Sans'] text-[22px] font-[800] text-white"
-            >
-              MIMOSY
-            </span>
-          </button>
+          <div class="flex items-center justify-between px-8 py-8">
+      <button
+        type="button"
+        class="flex items-center rounded-md transition hover:opacity-80"
+        aria-label="Retour à l'accueil"
+        title="Retour à l'accueil"
+        @click=""
+      >
+        <img
+          src="/images/mimosy_logo_transparent.png"
+          alt="MIMOSY"
+          class="h-auto w-[175px] object-contain"
+        />
+      </button>
+    </div>
 
           <!-- Texte -->
 
           <div class="max-w-[520px]">
             <h1
-              class="font-['Plus_Jakarta_Sans'] text-4xl font-[800] leading-[1.2] text-white"
+              class="font-sans text-4xl font-[800] leading-[1.2] text-white"
             >
               Rejoignez la plus grande communauté de services.
             </h1>
@@ -561,13 +558,13 @@ const handleGoogleSignup = () => {
             @click="goToHome"
           >
             <span
-              class="flex h-8 w-8 items-center justify-center rounded-[10px] bg-[#2F6250] font-['Plus_Jakarta_Sans'] text-[20px] font-[800] text-white"
+              class="flex h-8 w-8 items-center justify-center rounded-[10px] bg-[#2F6250] font-sans text-[20px] font-[800] text-white"
             >
               M
             </span>
 
             <span
-              class="font-['Plus_Jakarta_Sans'] text-[22px] font-[800] text-[#051F20]"
+              class="font-sans text-[22px] font-[800] text-[#051F20]"
             >
               MIMOSY
             </span>
@@ -578,14 +575,24 @@ const handleGoogleSignup = () => {
           <!-- ================================================= -->
 
           <div class="flex flex-col items-center text-center">
-            <div
-              class="flex h-10 w-10 items-center justify-center rounded-[12px] bg-[#2F6250] font-['Plus_Jakarta_Sans'] text-[22px] font-[800] text-white"
-            >
-              M
+            <div class="flex items-center justify-between px-8 py-8">
+              <button
+                type="button"
+                class="flex items-center rounded-md transition hover:opacity-80"
+                aria-label="Retour à l'accueil"
+                title="Retour à l'accueil"
+                @click="goHome"
+              >
+              <img
+              src="/images/mimosy_logo_transparent.png"
+              alt="MIMOSY"
+              class="h-auto w-[175px] object-contain"
+              />
+              </button>
             </div>
 
             <h2
-              class="mt-2 font-['Plus_Jakarta_Sans'] text-[26px] font-[800] text-[#0F172A]"
+              class="mt-2 font-sans text-[26px] font-[800] text-[#0F172A]"
             >
               Créer un compte
             </h2>
@@ -975,19 +982,19 @@ const handleGoogleSignup = () => {
           <!-- SÉPARATEUR -->
           <!-- ================================================= -->
 
-          <div class="my-5 flex items-center gap-4">
+          <!-- <div class="my-5 flex items-center gap-4">
             <div class="h-px flex-1 bg-[#E2E8F0]"></div>
 
             <span class="text-[13px] text-[#64748B]"> ou </span>
 
             <div class="h-px flex-1 bg-[#E2E8F0]"></div>
-          </div>
+          </div> -->
 
           <!-- ================================================= -->
           <!-- GOOGLE -->
           <!-- ================================================= -->
 
-          <button
+          <!-- <button
             type="button"
             class="flex h-11 w-full items-center justify-center gap-3 rounded-[10px] border border-[#E2E8F0] bg-white px-4 text-sm font-bold text-[#0F172A] transition hover:border-[#2F6250] hover:bg-[#FFFDF9]"
             @click="handleGoogleSignup"
@@ -1015,7 +1022,7 @@ const handleGoogleSignup = () => {
             </svg>
 
             Continuer avec Google
-          </button>
+          </button> -->
 
           <!-- ================================================= -->
           <!-- LOGIN -->

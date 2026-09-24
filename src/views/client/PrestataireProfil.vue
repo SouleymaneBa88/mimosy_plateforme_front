@@ -4,60 +4,90 @@
  * ------------------------------------------------------------------
  * Page de profil public d'un prestataire de services.
  *
- * Affiche l'identité, les services/tarifs et les compétences d'un
- * prestataire, et permet au client de :
- *   1. Envoyer une "demande de prestation" (réservation directe)
- *   2. Envoyer une "demande de devis" (estimation avant engagement)
- *
- * La logique métier n'a pas été modifiée : seule l'interface a été
- * retravaillée.
- *
- * NOTE IMPORTANTE SUR LES MODALES
- * ------------------------------------------------------------------
- * Les modales sont déplacées dans <body> par <Teleport>. Elles ne sont
- * donc PAS descendantes de .provider-profile : si les variables CSS
- * sont déclarées sur ce conteneur, elles ne les héritent pas et
- * s'affichent sans couleurs ni bordures. Les jetons sont désormais
- * déclarés sur :root (préfixe "pp-" pour éviter toute collision avec
- * le design system global de l'application).
+ * Disposition reprise de
+ * front_mimosy/src/views/clients/DetailsPrestataire.vue (fil d'ariane,
+ * en-tête avec photo/nom/badges, sections À propos / Services / Avis,
+ * colonne latérale avec disponibilités et localisation) — la logique
+ * ci-dessous n'a pas changé : demande de prestation, demande de devis et
+ * prise de rendez-vous restent les vraies actions connectées à l'API
+ * MIMOSY (aucune de ces trois actions n'existe dans front_mimosy).
  * ------------------------------------------------------------------
  */
 
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
+  ArrowLeft,
   BadgeCheck,
-  Briefcase,
-  ChevronRight,
   Clock3,
   MapPin,
-  MessageSquareQuote,
   Sparkles,
+  Star,
   X,
 } from 'lucide-vue-next'
 
-import AppLayout from '@/components/layout/AppLayout.vue'
+import ClientLayout from '@/components/layout/ClientLayout.vue'
 import { useDemandePrestationStore } from '@/stores/demandePrestation'
 import { usePrestataireStore } from '@/stores/prestataire'
+import { useRendezVousStore } from '@/stores/rendezVous'
 import * as devisService from '@/services/devisService'
+import * as rendezVousService from '@/services/rendezVousService'
 
 const route = useRoute()
 const router = useRouter()
 const prestataireStore = usePrestataireStore()
 const demandeStore = useDemandePrestationStore()
+const rendezVousStore = useRendezVousStore()
 
 /* ---------------------------------------------------------------- *
- * État local des deux modales (prestation / devis)
+ * État local des trois modales (prestation / devis / rendez-vous)
  * ---------------------------------------------------------------- */
 const demandeModalOpen = ref(false)
 const devisModalOpen = ref(false)
+const rendezVousModalOpen = ref(false)
 const demandeEnvoyee = ref(false)
 const devisEnvoye = ref(false)
 const devisError = ref('')
 const devisLoading = ref(false)
+const rendezVousEnvoye = ref(false)
+const rendezVousError = ref('')
+const rendezVousLoading = ref(false)
 
 const demandeForm = reactive({ service: '', description: '', date_souhaitee: '', budget: '' })
 const devisForm = reactive({ service: '', description: '', date_souhaitee: '', budget_estime: '' })
+
+/* ---------------------------------------------------------------- *
+ * Prise de rendez-vous : date choisie -> créneaux calculés par
+ * le backend (jamais recalculés côté frontend) -> créneau choisi.
+ * ---------------------------------------------------------------- */
+const rendezVousForm = reactive({ service: '', date: '', creneau: null, notes: '' })
+const creneauxDisponibles = ref([])
+const creneauxLoading = ref(false)
+const creneauxError = ref('')
+
+function formaterHeure(isoString) {
+  return new Date(isoString).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+}
+
+async function chargerCreneaux() {
+  creneauxDisponibles.value = []
+  rendezVousForm.creneau = null
+  creneauxError.value = ''
+
+  if (!rendezVousForm.date || !prestataire.value?.id) return
+
+  creneauxLoading.value = true
+  try {
+    creneauxDisponibles.value = await rendezVousService.listCreneauxDisponibles(
+      prestataire.value.id,
+      rendezVousForm.date,
+    )
+  } catch (error) {
+    creneauxError.value = error.message
+  } finally {
+    creneauxLoading.value = false
+  }
+}
 
 /* ---------------------------------------------------------------- *
  * Propriétés calculées dérivées du prestataire chargé
@@ -98,7 +128,7 @@ const displayName = computed(
 const isLoading = computed(() => prestataireStore.isLoading)
 
 // Une modale est-elle ouverte ? (sert au verrouillage du défilement)
-const anyModalOpen = computed(() => demandeModalOpen.value || devisModalOpen.value)
+const anyModalOpen = computed(() => demandeModalOpen.value || devisModalOpen.value || rendezVousModalOpen.value)
 
 /* ---------------------------------------------------------------- *
  * Confort d'utilisation des modales
@@ -112,6 +142,7 @@ watch(anyModalOpen, (open) => {
 function onKeydown(event) {
   if (event.key !== 'Escape') return
   if (devisModalOpen.value) fermerDevisModal()
+  else if (rendezVousModalOpen.value) fermerRendezVousModal()
   else if (demandeModalOpen.value) fermerDemandeModal()
 }
 
@@ -139,7 +170,7 @@ onBeforeUnmount(() => {
  * Navigation
  * ---------------------------------------------------------------- */
 function retourListe() {
-  router.push({ name: 'client.services' })
+  router.push({ name: 'client-home' })
 }
 
 /* ---------------------------------------------------------------- *
@@ -224,255 +255,299 @@ function fermerDevisModal() {
   devisModalOpen.value = false
   devisError.value = ''
 }
+
+/* ---------------------------------------------------------------- *
+ * Modale "Prendre rendez-vous"
+ * ---------------------------------------------------------------- */
+function prendreRendezVous() {
+  rendezVousEnvoye.value = false
+  rendezVousError.value = ''
+  rendezVousForm.service = servicesDisponibles.value[0]?.service?.id || ''
+  rendezVousForm.date = ''
+  rendezVousForm.creneau = null
+  rendezVousForm.notes = ''
+  creneauxDisponibles.value = []
+  rendezVousModalOpen.value = true
+}
+
+async function envoyerRendezVous() {
+  if (!prestataire.value?.id || !rendezVousForm.service || !rendezVousForm.creneau) {
+    rendezVousError.value = 'Veuillez choisir un service et un créneau disponible.'
+    return
+  }
+
+  rendezVousLoading.value = true
+  rendezVousError.value = ''
+  try {
+    await rendezVousStore.creerRendezVous({
+      prestataire: prestataire.value.id,
+      service: rendezVousForm.service,
+      date_heure_debut: rendezVousForm.creneau.heure_debut,
+      date_heure_fin: rendezVousForm.creneau.heure_fin,
+      notes: rendezVousForm.notes.trim(),
+    })
+    rendezVousEnvoye.value = true
+  } catch (error) {
+    rendezVousError.value = error.message
+  } finally {
+    rendezVousLoading.value = false
+  }
+}
+
+function fermerRendezVousModal() {
+  rendezVousModalOpen.value = false
+  rendezVousError.value = ''
+}
+
+watch(() => rendezVousForm.date, chargerCreneaux)
 </script>
 
 <template>
-  <AppLayout>
-    <div class="pp-page">
-      <!-- ============================================================ -->
-      <!-- États globaux : chargement / erreur / profil introuvable      -->
-      <!-- ============================================================ -->
-      <div v-if="isLoading" class="pp-state">
-        <span class="pp-spinner" aria-hidden="true"></span>
+  <ClientLayout>
+    <section class="mx-auto w-full max-w-[100%] px-4 py-10 sm:px-8 sm:py-12">
+      <!-- États globaux : chargement / erreur -->
+      <div v-if="isLoading" class="flex items-center justify-center gap-2.5 rounded-2xl border border-mimosy-border bg-mimosy-surface p-12 font-sans text-sm text-mimosy-secondary">
+        <span class="h-4 w-4 animate-spin rounded-full border-2 border-mimosy-border border-t-mimosy-primary" />
         Chargement du profil…
       </div>
 
-      <div v-else-if="prestataireStore.errorMessage" class="pp-state pp-state--error">
+      <div v-else-if="prestataireStore.errorMessage" class="rounded-2xl border border-[#a85148] bg-[#fbeeec] p-8 text-center font-sans text-sm text-[#a85148]">
         {{ prestataireStore.errorMessage }}
       </div>
 
-      <!-- ============================================================ -->
-      <!-- Profil du prestataire                                         -->
-      <!-- ============================================================ -->
-      <div v-else-if="prestataire" class="pp-shell">
+      <template v-else-if="prestataire">
         <!-- Fil d'ariane -->
-        <nav class="pp-breadcrumb" aria-label="Fil d'ariane">
-          <button type="button" class="pp-breadcrumb__link" @click="retourListe">Trouver un prestataire</button>
-          <ChevronRight class="pp-breadcrumb__sep" :stroke-width="2.5" />
-          <span class="pp-breadcrumb__current">{{ displayName }}</span>
-        </nav>
+        <button type="button" class="flex items-center gap-1.5 font-sans text-sm font-medium text-mimosy-secondary transition hover:text-mimosy-text" @click="retourListe">
+          <ArrowLeft :size="16" :stroke-width="1.8" />
+          Retour aux prestataires
+        </button>
 
-        <!-- ---------------------------------------------------------- -->
-        <!-- Carte d'identité                                            -->
-        <!-- ---------------------------------------------------------- -->
-        <section class="pp-hero">
-          <div v-if="prestataire.photo" class="pp-hero__avatar">
-            <img :src="prestataire.photo" :alt="`Photo de ${displayName}`" />
-          </div>
-          <div v-else class="pp-hero__avatar pp-hero__avatar--initial pp-display" aria-hidden="true">
-            {{ displayName.charAt(0) }}
-          </div>
+        <div class="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <div class="flex min-w-0 flex-col gap-6 lg:col-span-2">
+            <!-- En-tête prestataire (repris de front_mimosy/EnTetePrestataireDetail.vue) -->
+            <div class="rounded-[24px] border border-mimosy-border bg-mimosy-surface p-6 sm:p-8">
+              <div class="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
+                <div class="flex flex-col gap-4 sm:flex-row sm:items-start">
+                  <img
+                    v-if="prestataire.photo"
+                    :src="prestataire.photo"
+                    :alt="`Photo de ${displayName}`"
+                    class="h-24 w-24 shrink-0 rounded-2xl object-cover sm:h-28 sm:w-28"
+                  />
+                  <div v-else class="flex h-24 w-24 shrink-0 items-center justify-center rounded-2xl bg-mimosy-primaryBg font-serif text-4xl text-mimosy-primary sm:h-28 sm:w-28">
+                    {{ displayName.charAt(0) }}
+                  </div>
 
-          <div class="pp-hero__body">
-            <div class="pp-hero__titleRow">
-              <h1 class="pp-display pp-hero__name">{{ displayName }}</h1>
-              <span v-if="prestataire.statut_verification === 'VERIFIE'" class="pp-badge pp-badge--verified">
-                <BadgeCheck class="pp-icon-sm" :stroke-width="2.5" /> Profil vérifié
-              </span>
+                  <div class="flex min-w-0 flex-col gap-2.5">
+                    <h1 class="font-serif text-[28px] leading-[34px] text-mimosy-text sm:text-[32px] sm:leading-[38px]">{{ displayName }}</h1>
+                    <p class="font-sans text-sm font-medium text-mimosy-secondary">
+                      {{ prestataire.description || 'Prestataire MIMOSY' }}
+                    </p>
+
+                    <div class="flex flex-wrap items-center gap-2">
+                      <span v-if="prestataire.statut_verification === 'VERIFIE'" class="flex items-center gap-1.5 rounded-full bg-mimosy-primaryBg px-2.5 py-1">
+                        <BadgeCheck :size="12" :stroke-width="2" class="text-mimosy-primary" />
+                        <span class="font-sans text-[10px] font-bold uppercase leading-[15px] text-mimosy-primary">Vérifié</span>
+                      </span>
+                      <span
+                        class="rounded-full px-2.5 py-1 font-sans text-[10px] font-bold uppercase leading-[15px]"
+                        :class="prestataire.disponibilite ? 'bg-mimosy-page text-mimosy-primary' : 'bg-mimosy-grayBg text-mimosy-secondary'"
+                      >
+                        {{ prestataire.disponibilite ? 'Disponible' : 'Indisponible' }}
+                      </span>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-x-4 gap-y-1 font-sans text-xs text-mimosy-secondary">
+                      <span class="flex items-center gap-1.5">
+                        <Clock3 :size="13" :stroke-width="1.8" />
+                        {{ prestataire.experience }} an(s) d'expérience
+                      </span>
+                      <span class="flex items-center gap-1.5">
+                        <MapPin :size="13" :stroke-width="1.8" />
+                        Localisation non renseignée
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="flex shrink-0 flex-col items-start gap-1.5 sm:items-end">
+                  <button type="button" class="w-full rounded-xl bg-mimosy-primary px-6 py-3 font-sans text-sm font-bold text-white transition hover:opacity-90 sm:w-auto" @click="demanderPrestation">
+                    Demander une prestation
+                  </button>
+                </div>
+              </div>
             </div>
 
-            <p class="pp-hero__desc">
-              {{ prestataire.description || 'Aucune description professionnelle disponible.' }}
-            </p>
+            <!-- À propos -->
+            <section v-if="prestataire.description" class="rounded-[24px] border border-mimosy-border bg-mimosy-surface p-6 sm:p-8">
+              <h2 class="font-serif text-2xl text-mimosy-text">À propos</h2>
+              <p class="mt-4 font-sans text-sm leading-relaxed text-mimosy-secondary">{{ prestataire.description }}</p>
+            </section>
 
-            <dl class="pp-hero__stats">
-              <div class="pp-stat">
-                <dt class="pp-stat__label"><Clock3 class="pp-icon-sm" :stroke-width="2" /> Expérience</dt>
-                <dd class="pp-stat__value pp-display">{{ prestataire.experience }} an(s)</dd>
-              </div>
-              <div class="pp-stat">
-                <dt class="pp-stat__label"><Briefcase class="pp-icon-sm" :stroke-width="2" /> Services</dt>
-                <dd class="pp-stat__value pp-display">{{ services.length }}</dd>
-              </div>
-              <div class="pp-stat">
-                <dt class="pp-stat__label">
-                  <span class="pp-dot" :class="prestataire.disponibilite ? 'pp-dot--on' : 'pp-dot--off'"></span>
-                  Statut
-                </dt>
-                <dd class="pp-stat__value pp-stat__value--text">
-                  {{ prestataire.disponibilite ? 'Disponible' : 'Indisponible' }}
-                </dd>
-              </div>
-            </dl>
-          </div>
-        </section>
-
-        <!-- ---------------------------------------------------------- -->
-        <!-- Corps de page : contenu principal + colonne latérale        -->
-        <!-- ---------------------------------------------------------- -->
-        <div class="pp-grid">
-          <div class="pp-main">
             <!-- Services et tarifs -->
-            <section class="pp-card">
-              <header class="pp-card__head">
-                <h2 class="pp-display pp-card__title">Services et tarifs</h2>
-                <span v-if="services.length" class="pp-count">{{ services.length }}</span>
-              </header>
-
-              <div v-if="services.length" class="pp-offers">
-                <article v-for="offer in services" :key="offer.id" class="pp-offer">
-                  <div class="pp-offer__top">
-                    <div class="pp-offer__info">
-                      <h3 class="pp-display pp-offer__name">{{ offer.service?.nom }}</h3>
-                      <p class="pp-offer__desc">
-                        {{ offer.description || offer.service?.description || 'Aucune description disponible.' }}
-                      </p>
-                    </div>
-                    <p class="pp-display pp-offer__price">
-                      {{ Number(offer.prix).toLocaleString('fr-FR') }}
-                      <span class="pp-offer__unit">{{ offer.unite }}</span>
-                    </p>
-                  </div>
-                  <span class="pp-badge" :class="offer.disponible ? 'pp-badge--on' : 'pp-badge--off'">
-                    <span class="pp-dot" :class="offer.disponible ? 'pp-dot--on' : 'pp-dot--off'"></span>
-                    {{ offer.disponible ? 'Disponible' : 'Indisponible' }}
-                  </span>
-                </article>
+            <section class="rounded-[24px] border border-mimosy-border bg-mimosy-surface p-6 sm:p-8">
+              <div class="flex items-center justify-between gap-3">
+                <h2 class="font-serif text-2xl text-mimosy-text">Services et tarifs</h2>
+                <span v-if="services.length" class="flex h-6 min-w-6 items-center justify-center rounded-full bg-mimosy-primaryBg px-2 font-sans text-xs font-bold text-mimosy-primary">{{ services.length }}</span>
               </div>
-              <p v-else class="pp-empty">Aucun service disponible.</p>
+
+              <div v-if="services.length" class="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div v-for="offer in services" :key="offer.id" class="flex items-start justify-between gap-3 rounded-2xl border border-mimosy-border p-4 transition hover:border-mimosy-primary/40">
+                  <div class="flex min-w-0 flex-col gap-0.5">
+                    <span class="font-sans text-sm font-bold leading-snug text-mimosy-text">{{ offer.service?.nom }}</span>
+                    <span class="font-sans text-xs leading-snug text-mimosy-secondary">{{ offer.description || offer.service?.description || 'Aucune description disponible.' }}</span>
+                    <span class="mt-1 font-sans text-[10px] font-bold uppercase" :class="offer.disponible ? 'text-mimosy-primary' : 'text-mimosy-secondary'">
+                      {{ offer.disponible ? 'Disponible' : 'Indisponible' }}
+                    </span>
+                  </div>
+                  <span class="shrink-0 whitespace-nowrap font-sans text-sm font-bold text-mimosy-text">
+                    {{ Number(offer.prix).toLocaleString('fr-FR') }} FCFA<span class="font-normal text-mimosy-secondary"> / {{ offer.unite }}</span>
+                  </span>
+                </div>
+              </div>
+              <p v-else class="mt-5 font-sans text-sm text-mimosy-secondary">Aucun service disponible.</p>
             </section>
 
             <!-- Compétences -->
-            <section class="pp-card">
-              <header class="pp-card__head">
-                <h2 class="pp-display pp-card__title">Compétences</h2>
-                <span v-if="competences.length" class="pp-count">{{ competences.length }}</span>
-              </header>
-              <div v-if="competences.length" class="pp-chips">
-                <span v-for="competence in competences" :key="competence.id" class="pp-chip">
-                  <Sparkles class="pp-icon-xs" :stroke-width="2" />
+            <section v-if="competences.length" class="rounded-[24px] border border-mimosy-border bg-mimosy-surface p-6 sm:p-8">
+              <h2 class="font-serif text-2xl text-mimosy-text">Compétences</h2>
+              <div class="mt-5 flex flex-wrap gap-2">
+                <span v-for="competence in competences" :key="competence.id" class="flex items-center gap-1.5 rounded-full border border-mimosy-border bg-mimosy-page px-3.5 py-1.5 font-sans text-xs font-bold text-mimosy-text">
+                  <Sparkles :size="12" :stroke-width="2" class="text-mimosy-primary" />
                   {{ competence.nom }}
                 </span>
               </div>
-              <p v-else class="pp-empty">Aucune compétence renseignée.</p>
             </section>
 
-            <!-- Avis : déplacé sous les compétences, dans la colonne principale -->
-            <section class="pp-card">
-              <header class="pp-card__head">
-                <h2 class="pp-display pp-card__title">Avis des clients</h2>
-              </header>
-              <div class="pp-empty pp-empty--illustrated">
-                <MessageSquareQuote class="pp-empty__icon" :stroke-width="1.5" />
-                <p class="pp-empty__title pp-display">Aucun avis pour le moment</p>
-                <p class="pp-empty__text">Les retours des clients apparaîtront ici après leurs prestations.</p>
+            <!-- Avis -->
+            <section class="rounded-[24px] border border-mimosy-border bg-mimosy-surface p-6 sm:p-8">
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <h2 class="font-serif text-2xl text-mimosy-text">Avis clients</h2>
               </div>
+              <p class="mt-5 font-sans text-sm text-mimosy-secondary">Aucun avis pour le moment.</p>
             </section>
           </div>
 
-          <!-- Colonne latérale : actions, catégories, localisation -->
-          <aside class="pp-aside">
-            <!-- Actions : mises en avant, collées en haut au défilement -->
-            <section class="pp-card pp-cta">
-              <p class="pp-cta__kicker">Travailler avec {{ displayName }}</p>
-              <button type="button" class="pp-btn pp-btn--primary" @click="demanderPrestation">
-                Demander une prestation
-              </button>
-              <button type="button" class="pp-btn pp-btn--ghost" @click="demanderDevis">
-                Demander un devis
-              </button>
-              <p class="pp-cta__note">Réponse directe du prestataire. Aucun engagement avant validation.</p>
+          <!-- Colonne latérale -->
+          <div class="flex flex-col gap-6">
+            <!-- Actions -->
+            <section class="rounded-[24px] border border-mimosy-border bg-mimosy-surface p-6">
+              <p class="font-sans text-[11px] font-bold uppercase tracking-[0.06em] text-mimosy-secondary">Travailler avec {{ displayName }}</p>
+              <div class="mt-3 flex flex-col gap-2.5">
+                <!-- <button type="button" class="rounded-xl bg-mimosy-primary px-4 py-2.5 font-sans text-sm font-bold text-white transition hover:opacity-90" @click="demanderPrestation">
+                  Demander une prestation
+                </button> -->
+                <button type="button" class="rounded-xl border bg-mimosy-primary px-4 py-2.5 font-sans text-sm font-bold text-white transition hover:opacity-90" @click="demanderDevis">
+                  Demander un devis
+                </button>
+                <button type="button" class="rounded-xl border border-mimosy-border bg-mimosy-surface px-4 py-2.5 font-sans text-sm font-bold text-mimosy-text transition hover:border-mimosy-primary hover:text-mimosy-primary" @click="prendreRendezVous">
+                  Prendre rendez-vous
+                </button>
+              </div>
+              <p class="mt-3 text-center font-sans text-xs text-mimosy-secondary">Réponse directe du prestataire. Aucun engagement avant validation.</p>
             </section>
 
-            <!-- Catégories : affichage repensé en liste de vignettes -->
-            <section class="pp-card">
-              <header class="pp-card__head">
-                <h2 class="pp-display pp-card__title pp-card__title--sm">Catégories</h2>
-                <span v-if="categories.length" class="pp-count">{{ categories.length }}</span>
-              </header>
+            <!-- Disponibilités -->
+            <section class="rounded-[24px] border border-mimosy-border bg-mimosy-surface p-6">
+              <h2 class="font-sans text-[11px] font-bold uppercase tracking-[0.4px] text-mimosy-secondary">Disponibilité</h2>
+              <p class="mt-4 flex items-center gap-2 font-sans text-sm font-bold" :class="prestataire.disponibilite ? 'text-mimosy-primary' : 'text-mimosy-secondary'">
+                <span class="h-2 w-2 rounded-full" :class="prestataire.disponibilite ? 'bg-mimosy-primary' : 'bg-mimosy-secondary'" />
+                {{ prestataire.disponibilite ? 'Disponible actuellement' : 'Indisponible actuellement' }}
+              </p>
+            </section>
 
-              <ul v-if="categories.length" class="pp-cats">
-                <li v-for="category in categories" :key="category.id" class="pp-cat">
-                  <img v-if="category.image" :src="category.image" :alt="category.nom" class="pp-cat__img" />
-                  <div v-else class="pp-cat__img pp-cat__img--fallback pp-display" aria-hidden="true">
-                    {{ category.nom?.charAt(0) }}
-                  </div>
-                  <div class="pp-cat__body">
-                    <p class="pp-display pp-cat__name">{{ category.nom }}</p>
-                    <p class="pp-cat__desc">{{ category.description || 'Catégorie active' }}</p>
+            <!-- Catégories -->
+            <section v-if="categories.length" class="rounded-[24px] border border-mimosy-border bg-mimosy-surface p-6">
+              <h2 class="font-sans text-[11px] font-bold uppercase tracking-[0.4px] text-mimosy-secondary">Catégories</h2>
+              <ul class="mt-4 flex flex-col gap-2.5">
+                <li v-for="category in categories" :key="category.id" class="flex items-center gap-3 rounded-xl border border-mimosy-border p-2.5">
+                  <img v-if="category.image" :src="category.image" :alt="category.nom" class="h-11 w-11 shrink-0 rounded-lg object-cover" />
+                  <div v-else class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-mimosy-primary font-serif text-mimosy-surface">{{ category.nom?.charAt(0) }}</div>
+                  <div class="min-w-0">
+                    <p class="truncate font-sans text-sm font-bold text-mimosy-text">{{ category.nom }}</p>
                   </div>
                 </li>
               </ul>
-              <p v-else class="pp-empty">Aucune catégorie disponible.</p>
             </section>
 
             <!-- Localisation -->
-            <section class="pp-card">
-              <header class="pp-card__head">
-                <h2 class="pp-display pp-card__title pp-card__title--sm">Localisation</h2>
-              </header>
-              <p class="pp-aside__muted">
-                <MapPin class="pp-icon-sm" :stroke-width="2" />
+            <section class="rounded-[24px] border border-mimosy-border bg-mimosy-surface p-6">
+              <h2 class="font-sans text-[11px] font-bold uppercase tracking-[0.4px] text-mimosy-secondary">Localisation</h2>
+              <p class="mt-4 flex items-center gap-2 font-sans text-sm text-mimosy-secondary">
+                <MapPin :size="16" :stroke-width="1.8" />
                 Localisation non renseignée.
               </p>
             </section>
-          </aside>
+          </div>
         </div>
+      </template>
+
+      <div v-else class="rounded-2xl border border-dashed border-mimosy-border bg-mimosy-surface p-12 text-center font-sans text-sm text-mimosy-secondary">
+        Profil introuvable.
       </div>
+    </section>
 
-      <div v-else class="pp-state pp-state--empty">Profil introuvable.</div>
-    </div>
-
-    <!-- ============================================================ -->
-    <!-- Modales (téléportées dans <body>)                             -->
-    <!-- ============================================================ -->
+    <!-- Modales (téléportées dans <body>) -->
     <Teleport to="body">
       <!-- Modale : Demander une prestation -->
-      <Transition name="pp-modal">
-        <div v-if="demandeModalOpen" class="pp-overlay" role="dialog" aria-modal="true" aria-labelledby="pp-titre-prestation" @click.self="fermerDemandeModal">
-          <form class="pp-modal" @submit.prevent="envoyerDemande">
-            <header class="pp-modal__head">
+      <Transition
+        enter-active-class="transition duration-200 ease-out"
+        enter-from-class="opacity-0"
+        leave-active-class="transition duration-150 ease-in"
+        leave-to-class="opacity-0"
+      >
+        <div v-if="demandeModalOpen" class="fixed inset-0 z-[1000] flex items-center justify-center bg-mimosy-text/55 p-4" role="dialog" aria-modal="true" aria-labelledby="titre-prestation" @click.self="fermerDemandeModal">
+          <form class="flex max-h-[calc(100vh-2rem)] w-full max-w-lg flex-col overflow-hidden rounded-[24px] bg-mimosy-surface shadow-xl" @submit.prevent="envoyerDemande">
+            <header class="flex items-start justify-between gap-4 border-b border-mimosy-border px-6 py-5">
               <div>
-                <h2 id="pp-titre-prestation" class="pp-display pp-modal__title">Demander une prestation</h2>
-                <p class="pp-modal__sub">Votre demande sera envoyée à {{ displayName }}.</p>
+                <h2 id="titre-prestation" class="font-serif text-lg text-mimosy-text">Demander une prestation</h2>
+                <p class="mt-1 font-sans text-sm text-mimosy-secondary">Votre demande sera envoyée à {{ displayName }}.</p>
               </div>
-              <button type="button" class="pp-close" aria-label="Fermer" @click="fermerDemandeModal">
-                <X class="pp-icon-sm" :stroke-width="2.5" />
+              <button type="button" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-mimosy-secondary transition hover:bg-mimosy-page" aria-label="Fermer" @click="fermerDemandeModal">
+                <X :size="16" :stroke-width="2.5" />
               </button>
             </header>
 
-            <div class="pp-modal__body">
-              <div v-if="demandeEnvoyee" class="pp-success">
-                <BadgeCheck class="pp-icon-md" :stroke-width="2" />
-                <span>Votre demande a été envoyée avec succès.</span>
+            <div class="overflow-y-auto p-6">
+              <div v-if="demandeEnvoyee" class="flex items-center gap-2.5 rounded-xl border border-mimosy-primary bg-mimosy-primaryBg p-4 font-sans text-sm font-bold text-mimosy-primary">
+                <BadgeCheck :size="20" :stroke-width="2" />
+                Votre demande a été envoyée avec succès.
               </div>
 
-              <div v-else class="pp-form">
-                <label class="pp-field">
-                  <span class="pp-label">Service</span>
-                  <select v-model="demandeForm.service" required class="pp-input">
+              <div v-else class="grid gap-[1.125rem]">
+                <label class="grid gap-2">
+                  <span class="font-sans text-xs font-bold uppercase tracking-[0.04em] text-mimosy-secondary">Service</span>
+                  <select v-model="demandeForm.service" required class="w-full rounded-lg border border-mimosy-border bg-mimosy-surface px-3.5 py-3 font-sans text-[15px] text-mimosy-text outline-none focus:border-mimosy-primary">
                     <option value="">Choisir un service</option>
-                    <option v-for="offer in servicesDisponibles" :key="offer.id" :value="offer.service?.id">
-                      {{ offer.service?.nom }}
-                    </option>
+                    <option v-for="offer in servicesDisponibles" :key="offer.id" :value="offer.service?.id">{{ offer.service?.nom }}</option>
                   </select>
                 </label>
 
-                <label class="pp-field">
-                  <span class="pp-label">Description</span>
-                  <textarea v-model="demandeForm.description" rows="4" required class="pp-input" placeholder="Décrivez votre besoin"></textarea>
+                <label class="grid gap-2">
+                  <span class="font-sans text-xs font-bold uppercase tracking-[0.04em] text-mimosy-secondary">Description</span>
+                  <textarea v-model="demandeForm.description" rows="4" required placeholder="Décrivez votre besoin" class="w-full resize-y rounded-lg border border-mimosy-border bg-mimosy-surface px-3.5 py-3 font-sans text-[15px] text-mimosy-text outline-none focus:border-mimosy-primary" />
                 </label>
 
-                <div class="pp-field-row">
-                  <label class="pp-field">
-                    <span class="pp-label">Date souhaitée</span>
-                    <input v-model="demandeForm.date_souhaitee" type="datetime-local" required class="pp-input" />
+                <div class="grid gap-[1.125rem] sm:grid-cols-2">
+                  <label class="grid gap-2">
+                    <span class="font-sans text-xs font-bold uppercase tracking-[0.04em] text-mimosy-secondary">Date souhaitée</span>
+                    <input v-model="demandeForm.date_souhaitee" type="datetime-local" required class="w-full rounded-lg border border-mimosy-border bg-mimosy-surface px-3.5 py-3 font-sans text-[15px] text-mimosy-text outline-none focus:border-mimosy-primary" />
                   </label>
-                  <label class="pp-field">
-                    <span class="pp-label">Budget (FCFA)</span>
-                    <input v-model="demandeForm.budget" type="number" min="0.01" step="0.01" required class="pp-input" placeholder="Ex. 15000" />
+                  <label class="grid gap-2">
+                    <span class="font-sans text-xs font-bold uppercase tracking-[0.04em] text-mimosy-secondary">Budget (FCFA)</span>
+                    <input v-model="demandeForm.budget" type="number" min="0.01" step="0.01" required placeholder="Ex. 15000" class="w-full rounded-lg border border-mimosy-border bg-mimosy-surface px-3.5 py-3 font-sans text-[15px] text-mimosy-text outline-none focus:border-mimosy-primary" />
                   </label>
                 </div>
 
-                <p v-if="demandeStore.errorMessage" class="pp-error">{{ demandeStore.errorMessage }}</p>
+                <p v-if="demandeStore.errorMessage" class="rounded-lg border border-[#a85148] bg-[#fbeeec] px-3.5 py-3 font-sans text-sm text-[#a85148]">{{ demandeStore.errorMessage }}</p>
               </div>
             </div>
 
-            <footer class="pp-modal__foot">
-              <button type="button" class="pp-btn pp-btn--ghost" @click="fermerDemandeModal">
+            <footer class="flex justify-end gap-2.5 border-t border-mimosy-border bg-mimosy-page px-6 py-4">
+              <button type="button" class="rounded-xl border border-mimosy-border bg-mimosy-surface px-4 py-2.5 font-sans text-sm font-bold text-mimosy-text transition hover:border-mimosy-primary hover:text-mimosy-primary" @click="fermerDemandeModal">
                 {{ demandeEnvoyee ? 'Fermer' : 'Annuler' }}
               </button>
-              <button v-if="!demandeEnvoyee" type="submit" :disabled="demandeStore.isLoading" class="pp-btn pp-btn--primary">
+              <button v-if="!demandeEnvoyee" type="submit" :disabled="demandeStore.isLoading" class="rounded-xl bg-mimosy-primary px-4 py-2.5 font-sans text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-55">
                 {{ demandeStore.isLoading ? 'Envoi…' : 'Envoyer la demande' }}
               </button>
             </footer>
@@ -481,725 +556,149 @@ function fermerDevisModal() {
       </Transition>
 
       <!-- Modale : Demander un devis -->
-      <Transition name="pp-modal">
-        <div v-if="devisModalOpen" class="pp-overlay" role="dialog" aria-modal="true" aria-labelledby="pp-titre-devis" @click.self="fermerDevisModal">
-          <form class="pp-modal" @submit.prevent="envoyerDevis">
-            <header class="pp-modal__head">
+      <Transition
+        enter-active-class="transition duration-200 ease-out"
+        enter-from-class="opacity-0"
+        leave-active-class="transition duration-150 ease-in"
+        leave-to-class="opacity-0"
+      >
+        <div v-if="devisModalOpen" class="fixed inset-0 z-[1000] flex items-center justify-center bg-mimosy-text/55 p-4" role="dialog" aria-modal="true" aria-labelledby="titre-devis" @click.self="fermerDevisModal">
+          <form class="flex max-h-[calc(100vh-2rem)] w-full max-w-lg flex-col overflow-hidden rounded-[24px] bg-mimosy-surface shadow-xl" @submit.prevent="envoyerDevis">
+            <header class="flex items-start justify-between gap-4 border-b border-mimosy-border px-6 py-5">
               <div>
-                <h2 id="pp-titre-devis" class="pp-display pp-modal__title">Demander un devis</h2>
-                <p class="pp-modal__sub">Estimation gratuite, sans engagement.</p>
+                <h2 id="titre-devis" class="font-serif text-lg text-mimosy-text">Demander un devis</h2>
+                <p class="mt-1 font-sans text-sm text-mimosy-secondary">Estimation gratuite, sans engagement.</p>
               </div>
-              <button type="button" class="pp-close" aria-label="Fermer" @click="fermerDevisModal">
-                <X class="pp-icon-sm" :stroke-width="2.5" />
+              <button type="button" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-mimosy-secondary transition hover:bg-mimosy-page" aria-label="Fermer" @click="fermerDevisModal">
+                <X :size="16" :stroke-width="2.5" />
               </button>
             </header>
 
-            <div class="pp-modal__body">
-              <div v-if="devisEnvoye" class="pp-success">
-                <BadgeCheck class="pp-icon-md" :stroke-width="2" />
-                <span>Votre demande de devis a été envoyée.</span>
+            <div class="overflow-y-auto p-6">
+              <div v-if="devisEnvoye" class="flex items-center gap-2.5 rounded-xl border border-mimosy-primary bg-mimosy-primaryBg p-4 font-sans text-sm font-bold text-mimosy-primary">
+                <BadgeCheck :size="20" :stroke-width="2" />
+                Votre demande de devis a été envoyée.
               </div>
 
-              <div v-else class="pp-form">
-                <label class="pp-field">
-                  <span class="pp-label">Service</span>
-                  <select v-model="devisForm.service" required class="pp-input">
+              <div v-else class="grid gap-[1.125rem]">
+                <label class="grid gap-2">
+                  <span class="font-sans text-xs font-bold uppercase tracking-[0.04em] text-mimosy-secondary">Service</span>
+                  <select v-model="devisForm.service" required class="w-full rounded-lg border border-mimosy-border bg-mimosy-surface px-3.5 py-3 font-sans text-[15px] text-mimosy-text outline-none focus:border-mimosy-primary">
                     <option value="">Choisir un service</option>
-                    <option v-for="offer in servicesDisponibles" :key="offer.id" :value="offer.service?.id">
-                      {{ offer.service?.nom }}
-                    </option>
+                    <option v-for="offer in servicesDisponibles" :key="offer.id" :value="offer.service?.id">{{ offer.service?.nom }}</option>
                   </select>
                 </label>
 
-                <label class="pp-field">
-                  <span class="pp-label">Description</span>
-                  <textarea v-model="devisForm.description" rows="4" required class="pp-input" placeholder="Décrivez les travaux à chiffrer"></textarea>
+                <label class="grid gap-2">
+                  <span class="font-sans text-xs font-bold uppercase tracking-[0.04em] text-mimosy-secondary">Description</span>
+                  <textarea v-model="devisForm.description" rows="4" required placeholder="Décrivez les travaux à chiffrer" class="w-full resize-y rounded-lg border border-mimosy-border bg-mimosy-surface px-3.5 py-3 font-sans text-[15px] text-mimosy-text outline-none focus:border-mimosy-primary" />
                 </label>
 
-                <div class="pp-field-row">
-                  <label class="pp-field">
-                    <span class="pp-label">Date souhaitée</span>
-                    <input v-model="devisForm.date_souhaitee" type="datetime-local" required class="pp-input" />
+                <div class="grid gap-[1.125rem] sm:grid-cols-2">
+                  <label class="grid gap-2">
+                    <span class="font-sans text-xs font-bold uppercase tracking-[0.04em] text-mimosy-secondary">Date souhaitée</span>
+                    <input v-model="devisForm.date_souhaitee" type="datetime-local" required class="w-full rounded-lg border border-mimosy-border bg-mimosy-surface px-3.5 py-3 font-sans text-[15px] text-mimosy-text outline-none focus:border-mimosy-primary" />
                   </label>
-                  <label class="pp-field">
-                    <span class="pp-label">Budget estimé (FCFA)</span>
-                    <input v-model="devisForm.budget_estime" type="number" min="0.01" step="0.01" required class="pp-input" placeholder="Ex. 25000" />
+                  <label class="grid gap-2">
+                    <span class="font-sans text-xs font-bold uppercase tracking-[0.04em] text-mimosy-secondary">Budget estimé (FCFA)</span>
+                    <input v-model="devisForm.budget_estime" type="number" min="0.01" step="0.01" required placeholder="Ex. 25000" class="w-full rounded-lg border border-mimosy-border bg-mimosy-surface px-3.5 py-3 font-sans text-[15px] text-mimosy-text outline-none focus:border-mimosy-primary" />
                   </label>
                 </div>
 
-                <p v-if="devisError" class="pp-error">{{ devisError }}</p>
+                <p v-if="devisError" class="rounded-lg border border-[#a85148] bg-[#fbeeec] px-3.5 py-3 font-sans text-sm text-[#a85148]">{{ devisError }}</p>
               </div>
             </div>
 
-            <footer class="pp-modal__foot">
-              <button type="button" class="pp-btn pp-btn--ghost" @click="fermerDevisModal">
+            <footer class="flex justify-end gap-2.5 border-t border-mimosy-border bg-mimosy-page px-6 py-4">
+              <button type="button" class="rounded-xl border border-mimosy-border bg-mimosy-surface px-4 py-2.5 font-sans text-sm font-bold text-mimosy-text transition hover:border-mimosy-primary hover:text-mimosy-primary" @click="fermerDevisModal">
                 {{ devisEnvoye ? 'Fermer' : 'Annuler' }}
               </button>
-              <button v-if="!devisEnvoye" type="submit" :disabled="devisLoading" class="pp-btn pp-btn--primary">
+              <button v-if="!devisEnvoye" type="submit" :disabled="devisLoading" class="rounded-xl bg-mimosy-primary px-4 py-2.5 font-sans text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-55">
                 {{ devisLoading ? 'Envoi…' : 'Envoyer la demande' }}
               </button>
             </footer>
           </form>
         </div>
       </Transition>
+
+      <!-- Modale : Prendre rendez-vous -->
+      <Transition
+        enter-active-class="transition duration-200 ease-out"
+        enter-from-class="opacity-0"
+        leave-active-class="transition duration-150 ease-in"
+        leave-to-class="opacity-0"
+      >
+        <div v-if="rendezVousModalOpen" class="fixed inset-0 z-[1000] flex items-center justify-center bg-mimosy-text/55 p-4" role="dialog" aria-modal="true" aria-labelledby="titre-rdv" @click.self="fermerRendezVousModal">
+          <form class="flex max-h-[calc(100vh-2rem)] w-full max-w-lg flex-col overflow-hidden rounded-[24px] bg-mimosy-surface shadow-xl" @submit.prevent="envoyerRendezVous">
+            <header class="flex items-start justify-between gap-4 border-b border-mimosy-border px-6 py-5">
+              <div>
+                <h2 id="titre-rdv" class="font-serif text-lg text-mimosy-text">Prendre rendez-vous</h2>
+                <p class="mt-1 font-sans text-sm text-mimosy-secondary">Choisissez un créneau réellement disponible chez {{ displayName }}.</p>
+              </div>
+              <button type="button" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-mimosy-secondary transition hover:bg-mimosy-page" aria-label="Fermer" @click="fermerRendezVousModal">
+                <X :size="16" :stroke-width="2.5" />
+              </button>
+            </header>
+
+            <div class="overflow-y-auto p-6">
+              <div v-if="rendezVousEnvoye" class="flex items-center gap-2.5 rounded-xl border border-mimosy-primary bg-mimosy-primaryBg p-4 font-sans text-sm font-bold text-mimosy-primary">
+                <BadgeCheck :size="20" :stroke-width="2" />
+                Votre demande de rendez-vous a été envoyée.
+              </div>
+
+              <div v-else class="grid gap-[1.125rem]">
+                <label class="grid gap-2">
+                  <span class="font-sans text-xs font-bold uppercase tracking-[0.04em] text-mimosy-secondary">Service</span>
+                  <select v-model="rendezVousForm.service" required class="w-full rounded-lg border border-mimosy-border bg-mimosy-surface px-3.5 py-3 font-sans text-[15px] text-mimosy-text outline-none focus:border-mimosy-primary">
+                    <option value="">Choisir un service</option>
+                    <option v-for="offer in servicesDisponibles" :key="offer.id" :value="offer.service?.id">{{ offer.service?.nom }}</option>
+                  </select>
+                </label>
+
+                <label class="grid gap-2">
+                  <span class="font-sans text-xs font-bold uppercase tracking-[0.04em] text-mimosy-secondary">Date</span>
+                  <input v-model="rendezVousForm.date" type="date" required :min="new Date().toISOString().slice(0, 10)" class="w-full rounded-lg border border-mimosy-border bg-mimosy-surface px-3.5 py-3 font-sans text-[15px] text-mimosy-text outline-none focus:border-mimosy-primary" />
+                </label>
+
+                <div v-if="rendezVousForm.date" class="grid gap-2">
+                  <span class="font-sans text-xs font-bold uppercase tracking-[0.04em] text-mimosy-secondary">Créneaux disponibles</span>
+                  <p v-if="creneauxLoading" class="font-sans text-sm text-mimosy-secondary">Recherche des créneaux…</p>
+                  <p v-else-if="creneauxError" class="font-sans text-sm text-[#a85148]">{{ creneauxError }}</p>
+                  <p v-else-if="!creneauxDisponibles.length" class="font-sans text-sm text-mimosy-secondary">Aucun créneau disponible à cette date.</p>
+                  <div v-else class="flex flex-wrap gap-2">
+                    <button
+                      v-for="(creneau, index) in creneauxDisponibles"
+                      :key="index"
+                      type="button"
+                      class="rounded-lg border px-3.5 py-2 font-sans text-sm font-bold transition"
+                      :class="rendezVousForm.creneau === creneau ? 'border-mimosy-primary bg-mimosy-primary text-white' : 'border-mimosy-border bg-mimosy-surface text-mimosy-text hover:border-mimosy-primary hover:bg-mimosy-primaryBg'"
+                      @click="rendezVousForm.creneau = creneau"
+                    >
+                      {{ formaterHeure(creneau.heure_debut) }} - {{ formaterHeure(creneau.heure_fin) }}
+                    </button>
+                  </div>
+                </div>
+
+                <label class="grid gap-2">
+                  <span class="font-sans text-xs font-bold uppercase tracking-[0.04em] text-mimosy-secondary">Notes (optionnel)</span>
+                  <textarea v-model="rendezVousForm.notes" rows="3" placeholder="Précisions utiles pour le prestataire" class="w-full resize-y rounded-lg border border-mimosy-border bg-mimosy-surface px-3.5 py-3 font-sans text-[15px] text-mimosy-text outline-none focus:border-mimosy-primary" />
+                </label>
+
+                <p v-if="rendezVousError" class="rounded-lg border border-[#a85148] bg-[#fbeeec] px-3.5 py-3 font-sans text-sm text-[#a85148]">{{ rendezVousError }}</p>
+              </div>
+            </div>
+
+            <footer class="flex justify-end gap-2.5 border-t border-mimosy-border bg-mimosy-page px-6 py-4">
+              <button type="button" class="rounded-xl border border-mimosy-border bg-mimosy-surface px-4 py-2.5 font-sans text-sm font-bold text-mimosy-text transition hover:border-mimosy-primary hover:text-mimosy-primary" @click="fermerRendezVousModal">
+                {{ rendezVousEnvoye ? 'Fermer' : 'Annuler' }}
+              </button>
+              <button v-if="!rendezVousEnvoye" type="submit" :disabled="rendezVousLoading || !rendezVousForm.creneau" class="rounded-xl bg-mimosy-primary px-4 py-2.5 font-sans text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-55">
+                {{ rendezVousLoading ? 'Envoi…' : 'Confirmer le rendez-vous' }}
+              </button>
+            </footer>
+          </form>
+        </div>
+      </Transition>
     </Teleport>
-  </AppLayout>
+  </ClientLayout>
 </template>
-
-<!--
-  Feuille de style NON scopée, volontairement.
-  ------------------------------------------------------------------
-  Les modales sont téléportées dans <body> : elles doivent hériter des
-  mêmes jetons que la page. Tous les noms (variables et classes) sont
-  préfixés "pp-" pour rester isolés du reste de l'application.
--->
-<style>
-/* ------------------------------------------------------------------ *
- * 1. Typographie
- *    - Newsreader (serif) : titres, chiffres, prix -> ton institutionnel
- *    - Inter (sans-serif) : texte courant, formulaires -> lisibilité
- * ------------------------------------------------------------------ */
-@import url('https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600;6..72,700&family=Inter:wght@400;500;600;700&display=swap');
-
-:root {
-  /* Texte */
-  --pp-ink: #14261f;
-  --pp-ink-soft: #57655c;
-  --pp-ink-faint: #8a978f;
-
-  /* Surfaces */
-  --pp-surface: #ffffff;
-  --pp-canvas: #f6f8f6;
-
-  /* Identité de marque (vert profond, une seule teinte primaire) */
-  --pp-primary: #234b3d;
-  --pp-primary-dark: #16302a;
-  --pp-primary-tint: #eaf3ee;
-
-  /* Bordures */
-  --pp-border: #dce1db;
-  --pp-border-strong: #b7c2ba;
-
-  /* États */
-  --pp-danger: #a85148;
-  --pp-danger-tint: #fbeeec;
-
-  /* Rayons */
-  --pp-radius-sm: 8px;
-  --pp-radius-md: 12px;
-  --pp-radius-lg: 16px;
-
-  /* Ombres */
-  --pp-shadow-sm: 0 1px 2px rgba(20, 38, 31, 0.05);
-  --pp-shadow-md: 0 8px 24px -12px rgba(20, 38, 31, 0.18);
-  --pp-shadow-lg: 0 32px 64px -24px rgba(20, 38, 31, 0.35);
-
-  /* Échelle typographique (soutenance : tailles fixes et cohérentes) */
-  --pp-text-xs: 0.75rem;    /* 12px - méta, badges          */
-  --pp-text-sm: 0.875rem;   /* 14px - texte secondaire      */
-  --pp-text-base: 0.9375rem;/* 15px - corps de texte        */
-  --pp-text-md: 1.0625rem;  /* 17px - sous-titres           */
-  --pp-text-lg: 1.25rem;    /* 20px - titres de section     */
-  --pp-text-xl: 1.75rem;    /* 28px - titre de page (mobile)*/
-  --pp-text-2xl: 2.25rem;   /* 36px - titre de page         */
-}
-
-.pp-page,
-.pp-overlay {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  color: var(--pp-ink);
-  -webkit-font-smoothing: antialiased;
-}
-
-.pp-display {
-  font-family: 'Newsreader', Georgia, 'Times New Roman', serif;
-  font-optical-sizing: auto;
-  letter-spacing: -0.01em;
-}
-
-/* ------------------------------------------------------------------ *
- * 2. Structure de page
- * ------------------------------------------------------------------ */
-.pp-shell {
-  width: 100%;
-  max-width: 1120px;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 1.75rem;
-}
-
-.pp-grid {
-  display: grid;
-  gap: 1.5rem;
-}
-
-@media (min-width: 1024px) {
-  .pp-grid {
-    grid-template-columns: minmax(0, 1fr) 320px;
-    align-items: start;
-  }
-}
-
-.pp-main,
-.pp-aside {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-  min-width: 0;
-}
-
-@media (min-width: 1024px) {
-  .pp-aside {
-    position: sticky;
-    top: 1.5rem;
-  }
-}
-
-/* Fil d'ariane */
-.pp-breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: var(--pp-text-sm);
-}
-.pp-breadcrumb__link {
-  color: var(--pp-ink-soft);
-  background: none;
-  border: 0;
-  padding: 0;
-  cursor: pointer;
-  transition: color 0.18s ease;
-}
-.pp-breadcrumb__link:hover { color: var(--pp-primary); }
-.pp-breadcrumb__sep { width: 0.875rem; height: 0.875rem; color: var(--pp-border-strong); }
-.pp-breadcrumb__current { font-weight: 600; color: var(--pp-ink); }
-
-/* ------------------------------------------------------------------ *
- * 3. En-tête du profil
- * ------------------------------------------------------------------ */
-.pp-hero {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-  padding: 1.5rem;
-  background: var(--pp-surface);
-  border: 1px solid var(--pp-border);
-  border-left: 3px solid var(--pp-primary);
-  border-radius: var(--pp-radius-lg);
-  box-shadow: var(--pp-shadow-sm);
-}
-
-@media (min-width: 640px) {
-  .pp-hero { flex-direction: row; padding: 2rem; gap: 2rem; }
-}
-
-.pp-hero__avatar {
-  width: 96px;
-  height: 96px;
-  flex-shrink: 0;
-  overflow: hidden;
-  border-radius: var(--pp-radius-md);
-  border: 1px solid var(--pp-border);
-}
-.pp-hero__avatar img { width: 100%; height: 100%; object-fit: cover; }
-.pp-hero__avatar--initial {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--pp-primary-tint);
-  color: var(--pp-primary);
-  font-size: 2.25rem;
-  font-weight: 600;
-}
-@media (min-width: 640px) {
-  .pp-hero__avatar { width: 128px; height: 128px; }
-}
-
-.pp-hero__body { flex: 1; min-width: 0; }
-
-.pp-hero__titleRow {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.pp-hero__name {
-  font-size: var(--pp-text-xl);
-  font-weight: 600;
-  line-height: 1.15;
-  margin: 0;
-}
-@media (min-width: 640px) {
-  .pp-hero__name { font-size: var(--pp-text-2xl); }
-}
-
-.pp-hero__desc {
-  margin: 0.875rem 0 0;
-  max-width: 62ch;
-  font-size: var(--pp-text-base);
-  line-height: 1.7;
-  color: var(--pp-ink-soft);
-}
-
-.pp-hero__stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  margin: 1.25rem 0 0;
-  padding-top: 1.25rem;
-  border-top: 1px solid var(--pp-border);
-}
-
-.pp-stat {
-  flex: 1 1 140px;
-  padding: 0.75rem 1rem;
-  background: var(--pp-canvas);
-  border-radius: var(--pp-radius-sm);
-}
-.pp-stat__label {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  font-size: var(--pp-text-xs);
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--pp-ink-faint);
-}
-.pp-stat__value {
-  margin: 0.25rem 0 0;
-  font-size: var(--pp-text-md);
-  font-weight: 600;
-  color: var(--pp-ink);
-}
-.pp-stat__value--text { font-family: 'Inter', sans-serif; font-size: var(--pp-text-sm); }
-
-/* ------------------------------------------------------------------ *
- * 4. Cartes de contenu
- * ------------------------------------------------------------------ */
-.pp-card {
-  background: var(--pp-surface);
-  border: 1px solid var(--pp-border);
-  border-radius: var(--pp-radius-lg);
-  padding: 1.5rem;
-  box-shadow: var(--pp-shadow-sm);
-}
-
-.pp-card__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid var(--pp-border);
-}
-
-.pp-card__title {
-  margin: 0;
-  font-size: var(--pp-text-lg);
-  font-weight: 600;
-}
-.pp-card__title--sm { font-size: var(--pp-text-md); }
-
-.pp-count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 1.5rem;
-  height: 1.5rem;
-  padding: 0 0.5rem;
-  border-radius: 999px;
-  background: var(--pp-primary-tint);
-  color: var(--pp-primary);
-  font-size: var(--pp-text-xs);
-  font-weight: 600;
-}
-
-/* Offres de service */
-.pp-offers { display: grid; gap: 1rem; margin-top: 1.25rem; }
-
-.pp-offer {
-  padding: 1.25rem;
-  border: 1px solid var(--pp-border);
-  border-radius: var(--pp-radius-md);
-  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
-}
-.pp-offer:hover {
-  border-color: var(--pp-primary);
-  box-shadow: var(--pp-shadow-md);
-  transform: translateY(-2px);
-}
-
-.pp-offer__top {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-}
-.pp-offer__info { min-width: 0; flex: 1 1 60%; }
-.pp-offer__name { margin: 0; font-size: var(--pp-text-md); font-weight: 600; }
-.pp-offer__desc {
-  margin: 0.375rem 0 0;
-  font-size: var(--pp-text-sm);
-  line-height: 1.6;
-  color: var(--pp-ink-soft);
-}
-.pp-offer__price {
-  margin: 0;
-  white-space: nowrap;
-  font-size: var(--pp-text-lg);
-  font-weight: 600;
-  color: var(--pp-primary);
-}
-.pp-offer__unit {
-  font-family: 'Inter', sans-serif;
-  font-size: var(--pp-text-xs);
-  font-weight: 500;
-  color: var(--pp-ink-faint);
-}
-
-/* Compétences */
-.pp-chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1.25rem; }
-.pp-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.4375rem 0.75rem;
-  border: 1px solid var(--pp-border);
-  border-radius: 999px;
-  background: var(--pp-canvas);
-  font-size: var(--pp-text-sm);
-  color: var(--pp-ink);
-  transition: border-color 0.18s ease, background 0.18s ease;
-}
-.pp-chip:hover { border-color: var(--pp-primary); background: var(--pp-primary-tint); }
-.pp-chip svg { color: var(--pp-primary); }
-
-/* Catégories (affichage repensé) */
-.pp-cats { list-style: none; margin: 1.25rem 0 0; padding: 0; display: grid; gap: 0.625rem; }
-.pp-cat {
-  display: flex;
-  align-items: center;
-  gap: 0.875rem;
-  padding: 0.625rem;
-  border: 1px solid var(--pp-border);
-  border-radius: var(--pp-radius-md);
-  background: var(--pp-surface);
-  transition: border-color 0.18s ease, background 0.18s ease;
-}
-.pp-cat:hover { border-color: var(--pp-primary); background: var(--pp-primary-tint); }
-.pp-cat__img {
-  width: 44px;
-  height: 44px;
-  flex-shrink: 0;
-  object-fit: cover;
-  border-radius: var(--pp-radius-sm);
-  border: 1px solid var(--pp-border);
-}
-.pp-cat__img--fallback {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--pp-primary);
-  color: #fff;
-  font-size: var(--pp-text-md);
-  font-weight: 600;
-  border-color: var(--pp-primary);
-}
-.pp-cat__body { min-width: 0; }
-.pp-cat__name {
-  margin: 0;
-  font-size: var(--pp-text-base);
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.pp-cat__desc {
-  margin: 0.125rem 0 0;
-  font-size: var(--pp-text-xs);
-  line-height: 1.45;
-  color: var(--pp-ink-soft);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-/* Bloc d'appel à l'action */
-.pp-cta { display: flex; flex-direction: column; gap: 0.75rem; }
-.pp-cta__kicker {
-  margin: 0;
-  font-size: var(--pp-text-xs);
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--pp-ink-faint);
-}
-.pp-cta__note {
-  margin: 0.25rem 0 0;
-  font-size: var(--pp-text-xs);
-  line-height: 1.5;
-  color: var(--pp-ink-faint);
-  text-align: center;
-}
-
-.pp-aside__muted {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin: 1rem 0 0;
-  font-size: var(--pp-text-sm);
-  color: var(--pp-ink-soft);
-}
-
-/* ------------------------------------------------------------------ *
- * 5. Éléments partagés : badges, boutons, états vides
- * ------------------------------------------------------------------ */
-.pp-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.3125rem 0.625rem;
-  border: 1px solid var(--pp-border);
-  border-radius: 999px;
-  font-size: var(--pp-text-xs);
-  font-weight: 600;
-}
-.pp-badge--verified {
-  border-color: var(--pp-primary);
-  background: var(--pp-primary-tint);
-  color: var(--pp-primary);
-}
-.pp-badge--on { margin-top: 1rem; border-color: var(--pp-primary); color: var(--pp-primary); }
-.pp-badge--off { margin-top: 1rem; border-color: var(--pp-border-strong); color: var(--pp-ink-faint); }
-
-.pp-dot { width: 0.4375rem; height: 0.4375rem; border-radius: 999px; display: inline-block; }
-.pp-dot--on { background: var(--pp-primary); box-shadow: 0 0 0 3px var(--pp-primary-tint); }
-.pp-dot--off { background: var(--pp-border-strong); }
-
-.pp-icon-xs { width: 0.75rem; height: 0.75rem; }
-.pp-icon-sm { width: 1rem; height: 1rem; }
-.pp-icon-md { width: 1.25rem; height: 1.25rem; }
-
-.pp-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 0.8125rem 1.125rem;
-  border-radius: var(--pp-radius-md);
-  border: 1px solid transparent;
-  font-family: inherit;
-  font-size: var(--pp-text-sm);
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.12s ease;
-}
-.pp-btn:active { transform: translateY(1px); }
-.pp-btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
-
-.pp-btn--primary {
-  background: var(--pp-primary);
-  border-color: var(--pp-primary);
-  color: #fff;
-}
-.pp-btn--primary:hover:not(:disabled) { background: var(--pp-primary-dark); border-color: var(--pp-primary-dark); }
-
-.pp-btn--ghost {
-  background: var(--pp-surface);
-  border-color: var(--pp-border-strong);
-  color: var(--pp-ink);
-}
-.pp-btn--ghost:hover:not(:disabled) { border-color: var(--pp-primary); color: var(--pp-primary); background: var(--pp-primary-tint); }
-
-/* États vides et globaux */
-.pp-empty {
-  margin-top: 1.25rem;
-  padding: 1.5rem;
-  border: 1px dashed var(--pp-border);
-  border-radius: var(--pp-radius-md);
-  text-align: center;
-  font-size: var(--pp-text-sm);
-  color: var(--pp-ink-soft);
-}
-.pp-empty--illustrated { padding: 2.25rem 1.5rem; }
-.pp-empty__icon { width: 2rem; height: 2rem; margin: 0 auto 0.75rem; color: var(--pp-border-strong); display: block; }
-.pp-empty__title { margin: 0; font-size: var(--pp-text-md); font-weight: 600; color: var(--pp-ink); }
-.pp-empty__text { margin: 0.25rem 0 0; font-size: var(--pp-text-sm); color: var(--pp-ink-soft); }
-
-.pp-state {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.625rem;
-  padding: 3rem 1.5rem;
-  max-width: 1120px;
-  margin: 0 auto;
-  border: 1px solid var(--pp-border);
-  border-radius: var(--pp-radius-lg);
-  background: var(--pp-surface);
-  color: var(--pp-ink-soft);
-  font-size: var(--pp-text-sm);
-}
-.pp-state--error { border-color: var(--pp-danger); background: var(--pp-danger-tint); color: var(--pp-danger); }
-.pp-state--empty { border-style: dashed; }
-
-.pp-spinner {
-  width: 1rem;
-  height: 1rem;
-  border: 2px solid var(--pp-border);
-  border-top-color: var(--pp-primary);
-  border-radius: 999px;
-  animation: pp-spin 0.7s linear infinite;
-}
-@keyframes pp-spin { to { transform: rotate(360deg); } }
-
-/* ------------------------------------------------------------------ *
- * 6. Modales
- *    Point clé : ce bloc n'est PAS scopé et les variables viennent de
- *    :root, donc le contenu téléporté dans <body> est stylé correctement.
- * ------------------------------------------------------------------ */
-.pp-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-  background: rgba(20, 38, 31, 0.55);
-  backdrop-filter: blur(3px);
-  overflow-y: auto;
-}
-
-.pp-modal {
-  width: 100%;
-  max-width: 34rem;
-  max-height: calc(100vh - 2rem);
-  display: flex;
-  flex-direction: column;
-  background: var(--pp-surface);
-  border: 1px solid var(--pp-border);
-  border-radius: var(--pp-radius-lg);
-  box-shadow: var(--pp-shadow-lg);
-  overflow: hidden;
-}
-
-.pp-modal__head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 1.5rem 1.5rem 1.125rem;
-  border-bottom: 1px solid var(--pp-border);
-}
-.pp-modal__title { margin: 0; font-size: var(--pp-text-lg); font-weight: 600; }
-.pp-modal__sub { margin: 0.25rem 0 0; font-size: var(--pp-text-sm); color: var(--pp-ink-soft); }
-
-.pp-modal__body { padding: 1.5rem; overflow-y: auto; }
-
-.pp-modal__foot {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.625rem;
-  padding: 1.125rem 1.5rem;
-  border-top: 1px solid var(--pp-border);
-  background: var(--pp-canvas);
-}
-
-.pp-close {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 2rem;
-  height: 2rem;
-  flex-shrink: 0;
-  border: 1px solid var(--pp-border);
-  border-radius: var(--pp-radius-sm);
-  background: var(--pp-surface);
-  color: var(--pp-ink-soft);
-  cursor: pointer;
-  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
-}
-.pp-close:hover { background: var(--pp-canvas); color: var(--pp-ink); border-color: var(--pp-border-strong); }
-
-/* Formulaires */
-.pp-form { display: grid; gap: 1.125rem; }
-.pp-field { display: grid; gap: 0.5rem; }
-.pp-field-row { display: grid; gap: 1.125rem; }
-@media (min-width: 520px) {
-  .pp-field-row { grid-template-columns: 1fr 1fr; }
-}
-
-.pp-label {
-  font-size: var(--pp-text-xs);
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--pp-ink-soft);
-}
-
-.pp-input {
-  width: 100%;
-  font-family: inherit;
-  font-size: var(--pp-text-base);
-  color: var(--pp-ink);
-  background: var(--pp-surface);
-  border: 1px solid var(--pp-border);
-  border-radius: var(--pp-radius-sm);
-  padding: 0.75rem 0.875rem;
-  outline: none;
-  transition: border-color 0.18s ease, box-shadow 0.18s ease;
-}
-.pp-input::placeholder { color: var(--pp-ink-faint); }
-.pp-input:focus {
-  border-color: var(--pp-primary);
-  box-shadow: 0 0 0 3px var(--pp-primary-tint);
-}
-textarea.pp-input { resize: vertical; min-height: 6rem; line-height: 1.6; }
-select.pp-input { appearance: none; background-image: none; cursor: pointer; }
-
-.pp-success {
-  display: flex;
-  align-items: center;
-  gap: 0.625rem;
-  padding: 1rem;
-  border: 1px solid var(--pp-primary);
-  border-radius: var(--pp-radius-md);
-  background: var(--pp-primary-tint);
-  color: var(--pp-primary);
-  font-size: var(--pp-text-sm);
-  font-weight: 600;
-}
-
-.pp-error {
-  margin: 0;
-  padding: 0.75rem 0.875rem;
-  border: 1px solid var(--pp-danger);
-  border-radius: var(--pp-radius-sm);
-  background: var(--pp-danger-tint);
-  color: var(--pp-danger);
-  font-size: var(--pp-text-sm);
-}
-
-/* Animations d'ouverture / fermeture */
-.pp-modal-enter-active,
-.pp-modal-leave-active { transition: opacity 0.2s ease; }
-.pp-modal-enter-from,
-.pp-modal-leave-to { opacity: 0; }
-
-.pp-modal-enter-active .pp-modal { animation: pp-pop 0.24s cubic-bezier(0.22, 1, 0.36, 1); }
-@keyframes pp-pop {
-  from { opacity: 0; transform: translateY(12px) scale(0.98); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .pp-offer:hover { transform: none; }
-  .pp-modal-enter-active .pp-modal { animation: none; }
-}
-</style>

@@ -67,7 +67,18 @@ export async function apiFetch(endpoint, options = {}) {
 
   if (response.status === 401 && token && !endpoint.includes('/token/refresh/')) {
     const newToken = await refreshAccessToken()
-    if (newToken) ({ response, data } = await request(endpoint, options, newToken))
+    if (newToken) {
+      ({ response, data } = await request(endpoint, options, newToken))
+    } else {
+      // Le refresh a échoué (jeton expiré ou révoqué) : la session
+      // n'est plus valide nulle part ailleurs qu'ici, donc on la
+      // nettoie et on renvoie vers la connexion plutôt que de laisser
+      // chaque page gérer elle-même un 401 muet.
+      clearAuthStorage()
+      if (!window.location.pathname.startsWith('/login')) {
+        window.location.assign('/login')
+      }
+    }
   }
 
   if (!response.ok) {

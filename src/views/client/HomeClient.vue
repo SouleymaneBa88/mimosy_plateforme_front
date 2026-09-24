@@ -1,491 +1,596 @@
 <script setup>
 /**
- * ClientDashboard.vue
+ * HomeClient.vue — Accueil CLIENT.
  * ------------------------------------------------------------------
- * Page d'accueil de l'espace client.
+ * Disposition reprise de front_mimosy/src/views/clients/Accueil.vue :
+ * recherche en hero, catégories en filtres (pas une page séparée),
+ * prestataires en cartes disposées "en vagues", carte géographique à
+ * côté sur desktop. La page "Trouver un service" séparée n'est plus le
+ * point d'entrée principal : toute la recherche se fait ici.
  *
- * RÉSOLUTION DES PRESTATAIRES
- * ------------------------------------------------------------------
- * L'API des demandes renvoie `prestataire` sous forme d'identifiant.
- * Afficher cet identifiant brut n'a aucun sens pour le client, donc :
- *   1. on indexe les prestataires déjà chargés (id -> profil) ;
- *   2. chaque demande récupère le nom et la photo correspondants ;
- *   3. si l'API sérialise déjà le prestataire en objet, cet objet est
- *      utilisé tel quel — les deux formats sont acceptés.
+ * Toute la logique (recherche classique, recherche en langage naturel,
+ * géolocalisation "Autour de moi", filtres avancés, pagination) vient de
+ * TrouverService.vue — reprise telle quelle, rien n'est perdu — la seule
+ * différence est la disposition visuelle, alignée sur front_mimosy.
  * ------------------------------------------------------------------
  */
-
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { AlertTriangle, RotateCcw } from 'lucide-vue-next'
+import { useRoute, useRouter } from 'vue-router'
+import { CheckCircle2, Circle, LocateFixed, MapPin, RotateCcw, Search, SlidersHorizontal } from 'lucide-vue-next'
 
-import AppLayout from '@/components/layout/AppLayout.vue'
-import ClientHeader from '@/components/client/ClientHeader.vue'
+import ClientLayout from '@/components/layout/ClientLayout.vue'
 import ServiceSearch from '@/components/client/ServiceSearch.vue'
-import ServiceCategories from '@/components/client/ServiceCategories.vue'
-import NearbyProviders from '@/components/client/NearbyProviders.vue'
-import RecentRequests from '@/components/client/RecentRequests.vue'
-
-import { useCatalogueStore } from '@/stores/catalogue'
+import PrestataireCard from '@/components/client/PrestataireCard.vue'
+import SearchFilters from '@/components/client/SearchFilters.vue'
+import ProvidersMap from '@/components/client/ProvidersMap.vue'
+import Modal from '@/components/common/Modal.vue'
+import { useLocation } from '@/composables/useLocation'
 import { usePrestataireStore } from '@/stores/prestataire'
-import { useDemandePrestationStore } from '@/stores/demandePrestation'
+import { useCatalogueStore } from '@/stores/catalogue'
 
+const route = useRoute()
 const router = useRouter()
-const catalogueStore = useCatalogueStore()
 const prestataireStore = usePrestataireStore()
-const demandeStore = useDemandePrestationStore()
+const catalogueStore = useCatalogueStore()
+const { requestLocation, loading: positionLoading, error: positionError } = useLocation()
 
 /* ---------------------------------------------------------------- *
- * Utilitaires d'identité (nom, initiales, photo)
+ * Recherche : une seule barre (voir ServiceSearch.vue). Le texte saisi
+ * passe par la recherche intelligente MIMOSY (interprétation service /
+ * catégorie / localisation / urgence), avec repli automatique sur la
+ * recherche classique si l'interprétation échoue ou si le champ est vide.
  * ---------------------------------------------------------------- */
+const searchService = ref('')
+const selectedPrestataireId = ref(null)
+const rechercheNaturelleActive = ref(false)
 
-/** Construit "Prénom Nom" à partir d'un profil, avec replis successifs. */
-function nomComplet(profile) {
-  if (!profile) return ''
-  const complet = [profile.user_first_name, profile.user_last_name].filter(Boolean).join(' ').trim()
-  return complet || profile.nom_complet || profile.user_email || ''
-}
+/* ---------------------------------------------------------------- *
+ * Catégories = filtres (voir front_mimosy : chips sous la recherche,
+ * pas une page indépendante). "Toutes" + catégories réelles du catalogue.
+ * ---------------------------------------------------------------- */
+const categorieActive = ref('')
 
-/** Deux initiales maximum, utilisées quand aucune photo n'est disponible. */
-function initiales(nom) {
-  if (!nom) return '?'
-  return nom
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((mot) => mot.charAt(0).toUpperCase())
-    .join('')
-}
+const chipsCategories = computed(() => [
+  { id: '', nom: 'Toutes' },
+  ...catalogueStore.categories.map((categorie) => ({ id: categorie.nom, nom: categorie.nom })),
+])
 
-/** Récupère l'URL de photo quel que soit le nom de champ utilisé par l'API. */
-function photoDe(profile) {
-  if (!profile) return ''
-  return profile.photo || profile.avatar || profile.image || profile.user_photo || ''
+function choisirCategorie(id) {
+  categorieActive.value = id
+  filtres.value = { ...filtres.value, categorie: id }
+  lancerRecherche()
 }
 
 /* ---------------------------------------------------------------- *
- * Index des prestataires : id -> profil complet
+ * Filtres avancés : catégorie, compétence, ville, disponibilité.
  * ---------------------------------------------------------------- */
-const prestataireIndex = computed(() => {
-  const index = new Map()
-  prestataireStore.prestataires.forEach((profile) => {
-    if (profile?.id !== undefined && profile?.id !== null) index.set(String(profile.id), profile)
-  })
-  return index
+const filtres = ref({
+  categorie: '',
+  competence: '',
+  ville: '',
+  disponible: false,
+  rayon_km: 10,
 })
+const filtresOuverts = ref(false)
 
-/**
- * Retrouve le profil derrière la valeur `prestataire` d'une demande.
- * Accepte un objet sérialisé, un identifiant, ou des champs aplatis.
- */
-function resoudrePrestataire(demande) {
-  const reference = demande?.prestataire
+/* ---------------------------------------------------------------- *
+ * Recherche « Autour de moi » : position du navigateur, activée
+ * explicitement par l'utilisateur.
+ * ---------------------------------------------------------------- */
+const positionActive = ref(false)
+const latitude = ref(null)
+const longitude = ref(null)
+const providersMapRef = ref(null)
 
-  // Cas 1 : l'API a déjà sérialisé l'objet prestataire.
-  if (reference && typeof reference === 'object') return reference
+const clientLocation = computed(() =>
+  positionActive.value && latitude.value != null && longitude.value != null
+    ? { lat: latitude.value, lng: longitude.value }
+    : null,
+)
 
-  // Cas 2 : identifiant simple -> on cherche dans les prestataires chargés.
-  if (reference !== undefined && reference !== null && reference !== '') {
-    const trouve = prestataireIndex.value.get(String(reference))
-    if (trouve) return trouve
+async function activerRechercheAutourDeMoi() {
+  try {
+    const position = await requestLocation()
+    latitude.value = position.latitude
+    longitude.value = position.longitude
+    positionActive.value = true
+    lancerRecherche()
+  } catch {
+    // positionError (retourné par useLocation) porte déjà un message clair.
   }
+}
 
-  // Cas 3 : certains sérialiseurs exposent des champs aplatis.
-  if (demande?.prestataire_nom || demande?.prestataire_user_first_name) {
-    return {
-      user_first_name: demande.prestataire_user_first_name,
-      user_last_name: demande.prestataire_user_last_name,
-      nom_complet: demande.prestataire_nom,
-      photo: demande.prestataire_photo,
-    }
-  }
+function desactiverRechercheAutourDeMoi() {
+  positionActive.value = false
+  latitude.value = null
+  longitude.value = null
+  lancerRecherche()
+}
 
-  return null
+function basculerAutourDeMoi() {
+  if (positionActive.value) desactiverRechercheAutourDeMoi()
+  else activerRechercheAutourDeMoi()
+}
+
+const nombreFiltresActifs = computed(
+  () => Object.values(filtres.value).filter((valeur) => valeur === true || (typeof valeur === 'string' && valeur.trim())).length,
+)
+
+const filtreVerifies = ref(false)
+function basculerVerifies() {
+  filtreVerifies.value = !filtreVerifies.value
+}
+
+function basculerDisponibles() {
+  filtres.value = { ...filtres.value, disponible: !filtres.value.disponible }
+  lancerRecherche()
 }
 
 /* ---------------------------------------------------------------- *
- * Données normalisées pour les composants enfants
+ * Résultats : chaque entrée de l'API est une offre, mise à la forme
+ * attendue par PrestataireCard.
  * ---------------------------------------------------------------- */
-
-const categories = computed(() =>
-  catalogueStore.categories.map((category) => ({
-    id: category.id,
-    name: category.nom,
-    description: category.description,
-    icon: category.image || '',
+const resultats = computed(() =>
+  prestataireStore.resultatsRecherche.map((item) => ({
+    id: item.prestataire_id,
+    offreId: item.id,
+    nom: item.prestataire_nom || 'Prestataire',
+    image: item.prestataire_photo || '',
+    service: item.service_nom,
+    entreprise: item.categorie_nom,
+    verifie: item.statut_verification === 'VERIFIE',
+    note: null,
+    avis: null,
+    zone: undefined,
+    distance: item.distance_km ?? null,
+    disponible: item.disponible,
+    prix: item.prix != null ? Number(item.prix) : null,
+    latitude: item.latitude != null ? Number(item.latitude) : null,
+    longitude: item.longitude != null ? Number(item.longitude) : null,
   })),
 )
 
-const providers = computed(() =>
-  prestataireStore.prestataires.map((profile) => {
-    const name = nomComplet(profile) || 'Prestataire'
-    return {
-      id: profile.id,
-      name,
-      profession: profile.description || 'Profil prestataire',
-      // Photo réelle du prestataire + repli en initiales pour la carte.
-      avatar: photoDe(profile),
-      photo: photoDe(profile),
-      initials: initiales(name),
-      verified: profile.statut_verification === 'VERIFIE',
-      available: Boolean(profile.disponibilite),
-      rating: null,
-      reviews: null,
-      distance: null,
-      latitude: null,
-      longitude: null,
-    }
-  }),
-)
+const resultatsAffiches = computed(() => resultats.value.filter((item) => !filtreVerifies.value || item.verifie))
+const totalResultats = computed(() => prestataireStore.paginationRecherche.count)
+const peutVoirPlus = computed(() => Boolean(prestataireStore.paginationRecherche.next))
 
-// Libellés lisibles des statuts de demande.
-const STATUTS = {
-  EN_ATTENTE: 'En attente',
-  ACCEPTEE: 'Acceptée',
-  REFUSEE: 'Refusée',
-  TERMINEE: 'Terminée',
-  ANNULEE: 'Annulée',
+function pluriel(n) {
+  return n > 1 ? 's' : ''
 }
 
-const requests = computed(() =>
-  demandeStore.demandes.slice(0, 5).map((request) => {
-    const profile = resoudrePrestataire(request)
-    const providerName = nomComplet(profile) || 'Prestataire'
-
-    return {
-      id: request.id,
-      // Nom du service si l'API le fournit, sinon repli sur la description.
-      service: request.service?.nom || request.service_nom || request.description,
-      description: request.description,
-
-      // Nom affiché (jamais l'identifiant).
-      provider: providerName,
-      providerName,
-      providerId: profile?.id ?? request.prestataire ?? null,
-
-      // Visuel de la carte : photo réelle, initiales en repli.
-      providerAvatar: photoDe(profile),
-      avatar: photoDe(profile),
-      initials: initiales(providerName),
-      verified: profile?.statut_verification === 'VERIFIE',
-
-      date: request.date_creation ? new Date(request.date_creation).toLocaleDateString('fr-FR') : '',
-      status: STATUTS[request.statut] || request.statut,
-      statusCode: request.statut,
-    }
-  }),
-)
-
 /* ---------------------------------------------------------------- *
- * États globaux
+ * Actions
  * ---------------------------------------------------------------- */
-const isLoading = computed(() => catalogueStore.isLoading || prestataireStore.isLoading || demandeStore.isLoading)
-const errorMessage = computed(() => catalogueStore.errorMessage || prestataireStore.errorMessage || demandeStore.errorMessage)
+function parametresRecherche() {
+  const params = {
+    q: searchService.value,
+    categorie: filtres.value.categorie,
+    competence: filtres.value.competence,
+    ville: filtres.value.ville,
+    disponible: filtres.value.disponible ? 'true' : '',
+  }
 
-// Compteur de tentatives : force le remontage des squelettes au réessai.
-const retryCount = ref(0)
+  if (positionActive.value && latitude.value != null && longitude.value != null) {
+    params.latitude = latitude.value
+    params.longitude = longitude.value
+    params.rayon_km = filtres.value.rayon_km
+  }
 
-/* ---------------------------------------------------------------- *
- * Chargement des données
- * ---------------------------------------------------------------- */
-function chargerDonnees() {
-  return Promise.all([
-    catalogueStore.chargerCatalogue(),
-    prestataireStore.chargerPrestataires(),
-    demandeStore.chargerDemandes(),
-  ]).catch(() => {
-    // Les messages d'erreur détaillés restent dans les stores.
+  return params
+}
+
+function lancerRecherche() {
+  rechercheNaturelleActive.value = false
+  return prestataireStore.rechercher(parametresRecherche()).catch(() => {})
+}
+
+/**
+ * Une seule barre de recherche, intelligente : un texte saisi passe par
+ * /api/recherche/intelligente/ (interprétation service/catégorie/
+ * localisation/urgence, voir prestataireStore.rechercherIntelligente) ;
+ * un champ vide relance simplement la recherche classique avec les
+ * filtres/catégorie déjà actifs. Aucun faux système IA : c'est le vrai
+ * endpoint MIMOSY, avec repli automatique sur la recherche classique en
+ * cas d'échec.
+ */
+function handleSearch({ service }) {
+  searchService.value = service || ''
+
+  if (!searchService.value) {
+    lancerRecherche()
+    return
+  }
+
+  const position = positionActive.value && latitude.value != null && longitude.value != null
+    ? { lat: latitude.value, lng: longitude.value }
+    : null
+
+  rechercheNaturelleActive.value = true
+
+  prestataireStore.rechercherIntelligente(searchService.value, position).catch(() => {
+    lancerRecherche()
   })
 }
 
-function reessayer() {
-  retryCount.value += 1
-  chargerDonnees()
+function appliquerFiltres() {
+  filtresOuverts.value = false
+  lancerRecherche()
+}
+
+function reinitialiser() {
+  searchService.value = ''
+  rechercheNaturelleActive.value = false
+  categorieActive.value = ''
+  filtres.value = { categorie: '', competence: '', ville: '', disponible: false, rayon_km: 10 }
+  filtreVerifies.value = false
+  filtresOuverts.value = false
+  positionActive.value = false
+  latitude.value = null
+  longitude.value = null
+  lancerRecherche()
+}
+
+function voirPlus() {
+  prestataireStore.chargerPageSuivante().catch(() => {})
+}
+
+function selectPrestataire(id) {
+  selectedPrestataireId.value = id
+  providersMapRef.value?.centrerSur(id)
+}
+
+function voirProfil(prestataire) {
+  router.push({ name: 'client.prestataire', params: { id: prestataire.id } })
+}
+
+function surClicMarqueur(provider) {
+  selectedPrestataireId.value = provider.id
+  voirProfil(provider)
+}
+
+/* ---------------------------------------------------------------- *
+ * Chargement initial : catalogue (catégories réelles) + première
+ * recherche. Si l'accueil est ouvert avec une recherche déjà déterminée
+ * (ex. depuis Diagnostic.vue, ?q=...&categorie=...), on la pré-remplit
+ * au lieu de charger tous les prestataires puis de forcer l'utilisateur
+ * à ressaisir sa recherche.
+ * ---------------------------------------------------------------- */
+function chargerDonnees() {
+  if (typeof route.query.q === 'string' && route.query.q) {
+    searchService.value = route.query.q
+  }
+  if (typeof route.query.categorie === 'string' && route.query.categorie) {
+    categorieActive.value = route.query.categorie
+    filtres.value = { ...filtres.value, categorie: route.query.categorie }
+  }
+
+  return Promise.all([
+    catalogueStore.chargerCatalogue().catch(() => {}),
+    lancerRecherche(),
+  ])
 }
 
 onMounted(chargerDonnees)
-
-/* ---------------------------------------------------------------- *
- * Navigation
- * ---------------------------------------------------------------- */
-function afficherCategorie(category) {
-  router.push({ name: 'trouver-service', query: { categorie: category.id } })
-}
-
-function afficherPrestataire(provider) {
-  router.push({ name: 'client.prestataire', params: { id: provider.id } })
-}
-
-function afficherDemande(request) {
-  router.push({ name: 'detais.demande', params: { id: request.id } })
-}
-
-function afficherToutesLesDemandes() {
-  router.push({ name: 'demandes' })
-}
 </script>
 
 <template>
-  <AppLayout>
-    <div class="cd-page">
-      <!-- En-tête et recherche : toujours visibles, même pendant le
-           chargement, pour que la page ne paraisse jamais vide. -->
-      <ClientHeader />
-      <ServiceSearch />
+  <ClientLayout>
+    <div class="hc-page">
+      <ServiceSearch
+        title="Trouver un prestataire"
+        placeholder="Service, prestataire, quartier… ou décrivez votre besoin"
+        :service="searchService"
+        @search="handleSearch"
+      />
 
-      <!-- ============================================================ -->
-      <!-- État : chargement (squelettes plutôt qu'un simple texte)      -->
-      <!-- ============================================================ -->
-      <div v-if="isLoading" :key="retryCount" class="cd-sections" aria-busy="true" aria-live="polite">
-        <span class="cd-sr">Chargement de vos données…</span>
-
-        <section class="cd-skel-card">
-          <div class="cd-skel cd-skel--title"></div>
-          <div class="cd-skel-grid cd-skel-grid--cats">
-            <div v-for="n in 6" :key="`cat-${n}`" class="cd-skel-tile">
-              <div class="cd-skel cd-skel--icon"></div>
-              <div class="cd-skel cd-skel--line"></div>
-              <div class="cd-skel cd-skel--line cd-skel--short"></div>
-            </div>
-          </div>
-        </section>
-
-        <section class="cd-skel-card">
-          <div class="cd-skel cd-skel--title"></div>
-          <div class="cd-skel-grid cd-skel-grid--providers">
-            <div v-for="n in 3" :key="`prov-${n}`" class="cd-skel-tile cd-skel-tile--row">
-              <div class="cd-skel cd-skel--avatar"></div>
-              <div class="cd-skel-tile__body">
-                <div class="cd-skel cd-skel--line"></div>
-                <div class="cd-skel cd-skel--line cd-skel--short"></div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section class="cd-skel-card">
-          <div class="cd-skel cd-skel--title"></div>
-          <div class="cd-skel-rows">
-            <div v-for="n in 3" :key="`req-${n}`" class="cd-skel cd-skel--row"></div>
-          </div>
-        </section>
+      <!-- Résultat de l'interprétation de la recherche intelligente (même barre que ci-dessus) -->
+      <div v-if="rechercheNaturelleActive && prestataireStore.interpretationRecherche" class="hc-nl__comprehension">
+        <span class="hc-nl__comprehension-label">Recherche comprise :</span>
+        <span v-if="prestataireStore.interpretationRecherche.categorie" class="hc-nl__chip">{{ prestataireStore.interpretationRecherche.categorie }}</span>
+        <span v-if="prestataireStore.interpretationRecherche.service" class="hc-nl__chip">{{ prestataireStore.interpretationRecherche.service }}</span>
+        <span v-if="prestataireStore.interpretationRecherche.localisation" class="hc-nl__chip">{{ prestataireStore.interpretationRecherche.localisation }}</span>
+        <span v-if="prestataireStore.interpretationRecherche.urgence" class="hc-nl__chip hc-nl__chip--urgent">Urgent</span>
       </div>
 
-      <!-- ============================================================ -->
-      <!-- État : erreur                                                 -->
-      <!-- ============================================================ -->
-      <div v-else-if="errorMessage" class="cd-error" role="alert">
-        <AlertTriangle class="cd-error__icon" :stroke-width="1.75" />
-        <div class="cd-error__body">
-          <p class="cd-display cd-error__title">Impossible de charger vos données</p>
-          <p class="cd-error__text">{{ errorMessage }}</p>
-        </div>
-        <button type="button" class="cd-btn" @click="reessayer">
-          <RotateCcw class="cd-btn__icon" :stroke-width="2.25" />
-          Réessayer
+      <!-- Catégories = filtres (comme dans front_mimosy, pas une page séparée) -->
+      <div class="hc-categories">
+        <button
+          v-for="chip in chipsCategories"
+          :key="chip.id"
+          type="button"
+          class="hc-chip"
+          :class="categorieActive === chip.id ? 'hc-chip--active' : ''"
+          @click="choisirCategorie(chip.id)"
+        >
+          {{ chip.nom }}
+        </button>
+
+        <span class="hc-categories__sep" aria-hidden="true" />
+
+        <button type="button" class="hc-filter" :class="{ 'hc-filter--active': positionActive }" :disabled="positionLoading" @click="basculerAutourDeMoi">
+          <LocateFixed class="hc-icon-xs" :stroke-width="2.25" />
+          {{ positionLoading ? 'Localisation…' : 'Autour de moi' }}
+        </button>
+        <button type="button" class="hc-filter" :class="{ 'hc-filter--active': filtreVerifies }" @click="basculerVerifies">
+          <CheckCircle2 class="hc-icon-xs" :stroke-width="2.25" />
+          Vérifiés
+        </button>
+        <button type="button" class="hc-filter" :class="{ 'hc-filter--active': filtres.disponible }" @click="basculerDisponibles">
+          <Circle class="hc-icon-xs" :stroke-width="2.25" fill="currentColor" />
+          Disponibles
+        </button>
+        <button type="button" class="hc-filter" :class="{ 'hc-filter--active': nombreFiltresActifs > 0 }" @click="filtresOuverts = true">
+          <SlidersHorizontal class="hc-icon-xs" :stroke-width="2.25" />
+          Filtres
+          <span v-if="nombreFiltresActifs" class="hc-filter__badge">{{ nombreFiltresActifs }}</span>
         </button>
       </div>
 
-      <!-- ============================================================ -->
-      <!-- État : contenu                                                -->
-      <!-- ============================================================ -->
-      <div v-else class="cd-sections">
-        <ServiceCategories :categories="categories" @select="afficherCategorie" />
-        <NearbyProviders :providers="providers" @view-profile="afficherPrestataire" />
-        <RecentRequests :requests="requests" @view-all="afficherToutesLesDemandes" @view-details="afficherDemande" />
+      <p v-if="positionActive" class="hc-position-note">
+        <LocateFixed class="hc-icon-xs" :stroke-width="2.25" />
+        Recherche dans un rayon de {{ filtres.rayon_km }} km autour de votre position.
+      </p>
+      <p v-else-if="positionError" class="hc-position-note hc-position-note--error" role="alert">{{ positionError }}</p>
+
+      <!-- En-tête résultats -->
+      <div class="hc-results__head">
+        <div>
+          <h2 class="font-serif hc-results__count">
+            {{ totalResultats }} prestataire{{ pluriel(totalResultats) }} trouvé{{ pluriel(totalResultats) }}
+          </h2>
+          <p class="hc-results__sub">
+            <MapPin class="hc-icon-xs" :stroke-width="1.8" />
+            {{ filtres.ville || 'Dakar, Sénégal' }}
+          </p>
+        </div>
+        <button
+          v-if="searchService || nombreFiltresActifs || filtreVerifies || positionActive"
+          type="button"
+          class="hc-reset"
+          @click="reinitialiser"
+        >
+          <RotateCcw class="hc-icon-xs" :stroke-width="2.25" />
+          Réinitialiser
+        </button>
+      </div>
+
+      <!-- Prestataires + carte -->
+      <div class="hc-layout">
+        <section class="hc-results">
+          <!-- Chargement -->
+          <div v-if="prestataireStore.isSearching && resultatsAffiches.length === 0" class="hc-grid" aria-busy="true" aria-live="polite">
+            <div v-for="n in 4" :key="n" class="hc-skel-card">
+              <div class="hc-skel hc-skel--photo"></div>
+              <div class="hc-skel-lines">
+                <div class="hc-skel hc-skel--line"></div>
+                <div class="hc-skel hc-skel--line hc-skel--short"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Erreur -->
+          <div v-else-if="prestataireStore.searchErrorMessage" class="hc-state hc-state--error" role="alert">
+            <h3 class="font-serif hc-state__title">Impossible de charger les prestataires</h3>
+            <p class="hc-state__text">{{ prestataireStore.searchErrorMessage }}</p>
+            <button type="button" class="hc-btn" @click="lancerRecherche">
+              <RotateCcw class="hc-icon-sm" :stroke-width="2.25" />
+              Réessayer
+            </button>
+          </div>
+
+          <!-- Vide -->
+          <div v-else-if="resultatsAffiches.length === 0" class="hc-state hc-state--empty">
+            <div class="hc-state__icon"><Search class="hc-icon-md" :stroke-width="1.75" /></div>
+            <h3 class="font-serif hc-state__title">Aucun prestataire trouvé</h3>
+            <p class="hc-state__text">
+              {{ positionActive ? `Aucun prestataire trouvé dans ce rayon de ${filtres.rayon_km} km. Essayez un rayon plus large.` : 'Essayez avec un autre service, une autre catégorie ou une autre zone.' }}
+            </p>
+            <button
+              v-if="searchService || nombreFiltresActifs || filtreVerifies || positionActive"
+              type="button"
+              class="hc-btn hc-btn--ghost"
+              @click="reinitialiser"
+            >
+              Réinitialiser la recherche
+            </button>
+          </div>
+
+          <!-- Cartes, disposition "en vagues" (reprise de front_mimosy/Accueil.vue) -->
+          <template v-else>
+            <div class="hc-grid">
+              <PrestataireCard
+                v-for="(prestataire, index) in resultatsAffiches"
+                :key="prestataire.offreId"
+                :prestataire="prestataire"
+                class="hc-card-anim"
+                :class="index % 2 === 1 ? 'hc-card--decalee' : ''"
+                @view-profile="voirProfil"
+              />
+            </div>
+
+            <div v-if="peutVoirPlus" class="hc-more">
+              <button type="button" class="hc-btn hc-btn--ghost" :disabled="prestataireStore.isSearching" @click="voirPlus">
+                {{ prestataireStore.isSearching ? 'Chargement…' : 'Voir plus de prestataires' }}
+              </button>
+              <p class="hc-more__note">{{ totalResultats }} résultat{{ pluriel(totalResultats) }} au total</p>
+            </div>
+          </template>
+        </section>
+
+        <!-- Carte géographique : toujours visible, comme dans front_mimosy — la vraie carte ProvidersMap, pas une version simplifiée -->
+        <aside class="hc-map">
+          <ProvidersMap
+            ref="providersMapRef"
+            :client-location="clientLocation"
+            client-label="Votre position"
+            :providers="resultatsAffiches"
+            :rayon-km="positionActive ? filtres.rayon_km : null"
+            class="h-full"
+            @view-profile="surClicMarqueur"
+          />
+          <div class="hc-map__badge">
+            <p class="hc-map__count">{{ resultatsAffiches.length }} prestataire{{ pluriel(resultatsAffiches.length) }}</p>
+            <p v-if="positionActive" class="hc-map__radius">rayon de {{ filtres.rayon_km }} km</p>
+          </div>
+        </aside>
       </div>
     </div>
-  </AppLayout>
+
+    <!-- Panneau de filtres avancés (fonctionnalité MIMOSY réelle) -->
+    <Modal v-model="filtresOuverts" title="Filtres de recherche">
+      <SearchFilters
+        v-model="filtres"
+        :categories="catalogueStore.categories"
+        :position-active="positionActive"
+        @apply="appliquerFiltres"
+        @reset="reinitialiser"
+      />
+    </Modal>
+  </ClientLayout>
 </template>
 
 <style scoped>
-/*
- * Mise en page du tableau de bord.
- * Les jetons (--pp-*) viennent de :root ; les valeurs de repli après
- * la virgule garantissent un rendu correct si cette page est ouverte
- * avant le profil prestataire.
- */
-@import url('https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&family=Inter:wght@400;500;600&display=swap');
-
-.cd-page {
+/* Conteneur "large" (grille commune CLIENT, voir ClientLayout.vue) : pas de
+   max-width, Accueil a besoin de toute la largeur pour cartes + carte géo. */
+.hc-page {
   width: 100%;
-  max-width: 1120px;
   margin: 0 auto;
+  padding: 2.5rem 1rem;
   display: flex;
   flex-direction: column;
-  gap: 1.75rem;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  color: var(--pp-ink, #14261f);
-  -webkit-font-smoothing: antialiased;
+  gap: 1.5rem;
 }
-
-@media (min-width: 1024px) {
-  .cd-page { gap: 2.25rem; }
-}
-
-.cd-sections {
-  display: flex;
-  flex-direction: column;
-  gap: 1.75rem;
-}
-
-@media (min-width: 1024px) {
-  .cd-sections { gap: 2.25rem; }
-}
-
-.cd-display {
-  font-family: 'Newsreader', Georgia, 'Times New Roman', serif;
-  font-optical-sizing: auto;
-  letter-spacing: -0.01em;
-}
-
-.cd-sr {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-/* ------------------------------------------------------------------ *
- * Squelettes de chargement
- * ------------------------------------------------------------------ */
-.cd-skel-card {
-  background: var(--pp-surface, #ffffff);
-  border: 1px solid var(--pp-border, #dce1db);
-  border-radius: var(--pp-radius-lg, 16px);
-  padding: 1.5rem;
-  box-shadow: var(--pp-shadow-sm, 0 1px 2px rgba(20, 38, 31, 0.05));
-}
-
-.cd-skel-grid {
-  display: grid;
-  gap: 0.875rem;
-  margin-top: 1.25rem;
-}
-.cd-skel-grid--cats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.cd-skel-grid--providers { grid-template-columns: repeat(1, minmax(0, 1fr)); }
-
 @media (min-width: 640px) {
-  .cd-skel-grid--cats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .cd-skel-grid--providers { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-@media (min-width: 1024px) {
-  .cd-skel-grid--cats { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-  .cd-skel-grid--providers { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .hc-page { padding: 3rem 2rem; gap: 2rem; }
 }
 
-.cd-skel-tile {
-  display: grid;
-  gap: 0.5rem;
-  padding: 1rem;
-  border: 1px solid var(--pp-border, #dce1db);
-  border-radius: var(--pp-radius-md, 12px);
-}
-.cd-skel-tile--row {
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 0.875rem;
-}
-.cd-skel-tile__body { display: grid; gap: 0.5rem; }
+.hc-icon-xs { width: 0.8125rem; height: 0.8125rem; }
+.hc-icon-sm { width: 1rem; height: 1rem; }
+.hc-icon-md { width: 1.375rem; height: 1.375rem; }
 
-.cd-skel-rows { display: grid; gap: 0.75rem; margin-top: 1.25rem; }
+/* Résultat de l'interprétation de la recherche intelligente */
+.hc-nl__comprehension { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; font-size: 0.75rem; }
+.hc-nl__comprehension-label { color: var(--color-mimosy-secondary); font-weight: 600; }
+.hc-nl__chip { padding: 0.25rem 0.625rem; border-radius: 999px; background: var(--color-mimosy-primaryBg); color: var(--color-mimosy-primary); font-weight: 600; }
+.hc-nl__chip--urgent { background: #fff0ee; color: #a85148; }
 
-.cd-skel {
-  border-radius: 6px;
-  background: linear-gradient(
-    90deg,
-    var(--pp-canvas, #f6f8f6) 25%,
-    #eceff0 37%,
-    var(--pp-canvas, #f6f8f6) 63%
-  );
-  background-size: 400% 100%;
-  animation: cd-shimmer 1.4s ease infinite;
+/* Catégories / filtres rapides */
+.hc-categories { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.hc-chip {
+  border-radius: 999px;
+  padding: 0.5rem 1.25rem;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 700;
+  border: 1px solid var(--color-mimosy-border);
+  background: var(--color-mimosy-surface);
+  color: var(--color-mimosy-secondary);
+  transition: all 0.18s ease;
 }
+.hc-chip:hover:not(.hc-chip--active) { border-color: var(--color-mimosy-primary); color: var(--color-mimosy-text); }
+.hc-chip--active { background: var(--color-mimosy-text); border-color: var(--color-mimosy-text); color: #fff; }
+.hc-categories__sep { width: 1px; height: 1.5rem; background: var(--color-mimosy-border); margin: 0 0.25rem; }
 
-.cd-skel--title { height: 1.25rem; width: 11rem; }
-.cd-skel--line { height: 0.75rem; width: 100%; }
-.cd-skel--short { width: 60%; }
-.cd-skel--icon { height: 2.5rem; width: 2.5rem; border-radius: var(--pp-radius-sm, 8px); }
-.cd-skel--avatar { height: 3rem; width: 3rem; border-radius: 999px; }
-.cd-skel--row { height: 4.25rem; border-radius: var(--pp-radius-md, 12px); }
-
-@keyframes cd-shimmer {
-  0% { background-position: 100% 50%; }
-  100% { background-position: 0 50%; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .cd-skel { animation: none; }
-}
-
-/* ------------------------------------------------------------------ *
- * État d'erreur
- * ------------------------------------------------------------------ */
-.cd-error {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 1rem;
-  padding: 2.5rem 1.5rem;
-  border: 1px solid var(--pp-danger, #a85148);
-  border-radius: var(--pp-radius-lg, 16px);
-  background: var(--pp-danger-tint, #fbeeec);
-}
-
-@media (min-width: 640px) {
-  .cd-error {
-    flex-direction: row;
-    align-items: center;
-    text-align: left;
-    padding: 1.5rem 1.75rem;
-  }
-}
-
-.cd-error__icon {
-  width: 1.75rem;
-  height: 1.75rem;
-  flex-shrink: 0;
-  color: var(--pp-danger, #a85148);
-}
-.cd-error__body { flex: 1; min-width: 0; }
-.cd-error__title {
-  margin: 0;
-  font-size: 1.0625rem;
-  font-weight: 600;
-  color: var(--pp-danger, #a85148);
-}
-.cd-error__text {
-  margin: 0.25rem 0 0;
-  font-size: 0.875rem;
-  line-height: 1.6;
-  color: var(--pp-danger, #a85148);
-  opacity: 0.85;
-}
-
-.cd-btn {
+.hc-filter {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  flex-shrink: 0;
-  padding: 0.6875rem 1.125rem;
-  border: 1px solid var(--pp-danger, #a85148);
-  border-radius: var(--pp-radius-md, 12px);
-  background: var(--pp-surface, #ffffff);
-  color: var(--pp-danger, #a85148);
-  font-family: inherit;
-  font-size: 0.875rem;
-  font-weight: 600;
+  gap: 0.375rem;
+  padding: 0.5rem 0.875rem;
+  border: 1px solid var(--color-mimosy-border);
+  border-radius: 999px;
+  background: var(--color-mimosy-surface);
+  color: var(--color-mimosy-secondary);
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  font-weight: 700;
   cursor: pointer;
-  transition: background 0.18s ease, color 0.18s ease, transform 0.12s ease;
+  transition: all 0.18s ease;
 }
-.cd-btn:hover { background: var(--pp-danger, #a85148); color: #fff; }
-.cd-btn:active { transform: translateY(1px); }
-.cd-btn__icon { width: 0.9375rem; height: 0.9375rem; }
+.hc-filter:hover:not(:disabled):not(.hc-filter--active) { border-color: var(--color-mimosy-primary); color: var(--color-mimosy-text); }
+.hc-filter:disabled { opacity: 0.6; cursor: default; }
+.hc-filter--active { background: var(--color-mimosy-primaryBg); border-color: var(--color-mimosy-primary); color: var(--color-mimosy-primary); }
+.hc-filter__badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 1.125rem; height: 1.125rem; padding: 0 0.25rem;
+  border-radius: 999px; background: var(--color-mimosy-primary); color: #fff;
+  font-size: 0.625rem; font-weight: 700;
+}
+
+.hc-position-note { display: flex; align-items: center; gap: 0.375rem; margin-top: -1rem; font-size: 0.8125rem; color: var(--color-mimosy-primary); }
+.hc-position-note--error { color: #a85148; }
+
+/* En-tête résultats */
+.hc-results__head { display: flex; flex-direction: column; gap: 0.75rem; }
+@media (min-width: 640px) { .hc-results__head { flex-direction: row; align-items: center; justify-content: space-between; } }
+.hc-results__count { margin: 0; font-size: 1.5rem; font-weight: 400; color: var(--color-mimosy-text); }
+.hc-results__sub { display: flex; align-items: center; gap: 0.375rem; margin: 0.25rem 0 0; font-family: var(--font-sans); font-size: 0.875rem; color: var(--color-mimosy-secondary); }
+.hc-reset {
+  display: inline-flex; align-items: center; gap: 0.375rem; flex-shrink: 0;
+  padding: 0.5rem 0.75rem; border: 1px solid var(--color-mimosy-border); border-radius: 8px;
+  background: var(--color-mimosy-surface); color: var(--color-mimosy-secondary);
+  font-family: var(--font-sans); font-size: 0.8125rem; font-weight: 600; cursor: pointer;
+  transition: border-color 0.18s ease, color 0.18s ease;
+}
+.hc-reset:hover { border-color: var(--color-mimosy-primary); color: var(--color-mimosy-text); }
+
+/* Disposition : prestataires + carte */
+.hc-layout { display: grid; gap: 1.5rem; }
+@media (min-width: 1280px) {
+  .hc-layout { grid-template-columns: minmax(0, 1fr) 380px; align-items: start; gap: 2rem; }
+}
+
+.hc-results { min-width: 0; }
+
+/* Grille en "vagues" : cartes paires décalées vers le bas, comme dans front_mimosy/Accueil.vue */
+.hc-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.5rem; }
+@media (min-width: 640px) { .hc-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.hc-card--decalee { transition: transform 0.2s; }
+@media (min-width: 640px) {
+  .hc-card--decalee { margin-top: 3rem; }
+}
+
+.hc-more { margin-top: 1.5rem; display: flex; flex-direction: column; align-items: center; gap: 0.5rem; }
+.hc-more__note { margin: 0; font-size: 0.8125rem; color: var(--color-mimosy-secondary); }
+
+/* États */
+.hc-skel-card { display: flex; flex-direction: column; overflow: hidden; border-radius: 24px; border: 1px solid var(--color-mimosy-border); background: var(--color-mimosy-surface); }
+.hc-skel-lines { display: grid; gap: 0.625rem; padding: 1.25rem; }
+.hc-skel { border-radius: 6px; background: linear-gradient(90deg, var(--color-mimosy-page) 25%, #eceff0 37%, var(--color-mimosy-page) 63%); background-size: 400% 100%; animation: hc-shimmer 1.4s ease infinite; }
+.hc-skel--photo { height: 200px; border-radius: 0; }
+.hc-skel--line { height: 0.75rem; width: 80%; }
+.hc-skel--short { width: 45%; }
+@keyframes hc-shimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+@media (prefers-reduced-motion: reduce) { .hc-skel { animation: none; } }
+
+.hc-state { padding: 2.5rem 1.5rem; border-radius: 24px; text-align: center; }
+.hc-state--error { border: 1px solid #a85148; background: #fbeeec; }
+.hc-state--error .hc-state__title, .hc-state--error .hc-state__text { color: #a85148; }
+.hc-state--empty { border: 1px dashed var(--color-mimosy-border); background: var(--color-mimosy-surface); }
+.hc-state__icon { margin: 0 auto 1rem; width: 3rem; height: 3rem; display: flex; align-items: center; justify-content: center; border-radius: 12px; background: var(--color-mimosy-primaryBg); color: var(--color-mimosy-primary); }
+.hc-state__title { margin: 0; font-size: 1.0625rem; font-weight: 400; color: var(--color-mimosy-text); }
+.hc-state__text { margin: 0.5rem auto 0; max-width: 34rem; font-family: var(--font-sans); font-size: 0.875rem; line-height: 1.6; color: var(--color-mimosy-secondary); }
+
+.hc-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+  margin-top: 1.25rem; padding: 0.6875rem 1.125rem; border: 1px solid var(--color-mimosy-primary);
+  border-radius: 12px; background: var(--color-mimosy-primary); color: #fff;
+  font-family: var(--font-sans); font-size: 0.875rem; font-weight: 600; cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, opacity 0.18s ease;
+}
+.hc-btn:hover:not(:disabled) { opacity: 0.9; }
+.hc-btn:disabled { opacity: 0.6; cursor: default; }
+.hc-btn--ghost { background: var(--color-mimosy-surface); color: var(--color-mimosy-primary); }
+.hc-btn--ghost:hover:not(:disabled) { background: var(--color-mimosy-primaryBg); opacity: 1; }
+
+/* Carte géographique */
+.hc-map { position: relative; height: 320px; border-radius: 24px; overflow: hidden; border: 1px solid var(--color-mimosy-border); }
+@media (min-width: 640px) { .hc-map { height: 420px; } }
+@media (min-width: 1280px) { .hc-map { height: 100%; min-height: 560px; position: sticky; top: 1.5rem; } }
+.hc-map__badge {
+  position: absolute; bottom: 0.75rem; left: 0.75rem; z-index: 1000;
+  padding: 0.5rem 0.75rem; border-radius: 0.75rem; border: 1px solid rgba(255,255,255,0.7);
+  background: rgba(255,255,255,0.92); pointer-events: none;
+}
+.hc-map__count { margin: 0; font-size: 0.75rem; font-weight: 700; color: var(--color-mimosy-text); }
+.hc-map__radius { margin: 0.125rem 0 0; font-size: 0.6875rem; color: var(--color-mimosy-secondary); }
 </style>

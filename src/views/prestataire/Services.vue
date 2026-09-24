@@ -1,63 +1,102 @@
+```vue
 <script setup>
-/**
- * MesPrestations.vue
- * ─────────────────────────────────────────────────────────────
- * Page de gestion des offres de service d'un prestataire.
- *
- * Fonctionnalités :
- *  - Lister les offres déjà créées par le prestataire connecté
- *  - Créer / modifier une offre via ServiceModal (le catalogue de
- *    services disponibles vient du store `catalogue`)
- *  - Supprimer une offre
- *
- * Choix de design (voir <style> en bas) :
- *  - Aucune ombre portée (box-shadow) : la hiérarchie visuelle se fait
- *    uniquement par la couleur de fond, la bordure et l'épaisseur du texte.
- *  - Aucun emoji : les statuts et actions utilisent des puces de couleur
- *    ou des icônes SVG sobres, pas de pictogrammes emoji.
- *  - Les couleurs passent par les jetons --pp-*, cohérents avec le reste
- *    de l'espace prestataire (tableau de bord, etc.).
- */
 import { computed, onMounted, ref } from 'vue'
+import { Plus, Pencil, Trash2, Check, X, AlertCircle } from 'lucide-vue-next'
+import { useRouter } from 'vue-router'
+
 import AppLayout from '@/components/layout/AppLayout.vue'
 import ClientHeader from '@/components/client/ClientHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import Loader from '@/components/common/Loader.vue'
 import ServiceModal from '@/components/prestataire/services/ServiceModal.vue'
+
 import { useCatalogueStore } from '@/stores/catalogue'
 import { useAuthStore } from '@/stores/auth'
 import * as prestataireService from '@/services/prestataireService'
 
+const router = useRouter()
 const catalogueStore = useCatalogueStore()
 const authStore = useAuthStore()
 
-// État de la modale de création / édition
+/* -------------------------------------------------------------------------- */
+/* État de la modale                                                          */
+/* -------------------------------------------------------------------------- */
+
 const showModal = ref(false)
 const editing = ref(null)
 const saving = ref(false)
 const modalError = ref('')
 
-// Données de la page
+/* -------------------------------------------------------------------------- */
+/* Messages                                                                    */
+/* -------------------------------------------------------------------------- */
+
+const messageBrouillon = ref('')
+
+/* -------------------------------------------------------------------------- */
+/* Données                                                                     */
+/* -------------------------------------------------------------------------- */
+
 const services = ref([])
 const loading = ref(false)
 const errorMessage = ref('')
 
+/* -------------------------------------------------------------------------- */
+/* Suppression                                                                 */
+/* -------------------------------------------------------------------------- */
+
+const confirmingId = ref(null)
+const deletingId = ref(null)
+
+/* -------------------------------------------------------------------------- */
+/* Données calculées                                                           */
+/* -------------------------------------------------------------------------- */
+
 const catalogue = computed(() => catalogueStore.services)
+
 const userName = computed(() => {
-  const parts = [authStore.user?.first_name, authStore.user?.last_name].filter(Boolean)
+  const parts = [
+    authStore.user?.first_name,
+    authStore.user?.last_name,
+  ].filter(Boolean)
+
   return parts.join(' ') || 'Prestataire'
 })
+
+const countLabel = computed(() => {
+  const total = services.value.length
+
+  if (total === 0) return 'Aucune offre'
+  if (total === 1) return '1 offre'
+
+  return `${total} offres`
+})
+
+const offresDisponibles = computed(() =>
+  services.value.filter((service) => service.disponible).length,
+)
+
+const offresNonPubliees = computed(() =>
+  services.value.filter((service) => !service.est_publiable).length,
+)
+
+/* -------------------------------------------------------------------------- */
+/* Chargement                                                                  */
+/* -------------------------------------------------------------------------- */
 
 async function chargerServices() {
   loading.value = true
   errorMessage.value = ''
+
   try {
-    // Le catalogue (liste des services proposés par MIMOSY) et les offres
-    // du prestataire sont deux ressources indépendantes : on les charge
-    // en parallèle plutôt qu'en série pour réduire le temps d'attente.
-    await catalogueStore.chargerCatalogue()
-    const data = await prestataireService.listMyServiceOffers()
-    services.value = Array.isArray(data) ? data : data?.results || []
+    const [, data] = await Promise.all([
+      catalogueStore.chargerCatalogue(),
+      prestataireService.listMyServiceOffers(),
+    ])
+
+    services.value = Array.isArray(data)
+      ? data
+      : data?.results || []
   } catch (error) {
     errorMessage.value = error.message
   } finally {
@@ -67,7 +106,10 @@ async function chargerServices() {
 
 onMounted(chargerServices)
 
-/** Ouvre la modale. Sans argument : mode création. Avec un service : mode édition. */
+/* -------------------------------------------------------------------------- */
+/* Création / modification                                                     */
+/* -------------------------------------------------------------------------- */
+
 function open(service = null) {
   editing.value = service
   modalError.value = ''
@@ -77,18 +119,32 @@ function open(service = null) {
 async function save(payload) {
   saving.value = true
   modalError.value = ''
+  messageBrouillon.value = ''
+
   try {
     const saved = editing.value
-      ? await prestataireService.updateServiceOffer(editing.value.id, payload)
+      ? await prestataireService.updateServiceOffer(
+          editing.value.id,
+          payload,
+        )
       : await prestataireService.createServiceOffer(payload)
 
-    // Mise à jour optimiste de la liste locale : on évite un rechargement
-    // complet depuis l'API après chaque sauvegarde.
-    const index = services.value.findIndex((item) => item.id === saved.id)
-    if (index >= 0) services.value[index] = saved
-    else services.value.unshift(saved)
+    const index = services.value.findIndex(
+      (item) => item.id === saved.id,
+    )
+
+    if (index >= 0) {
+      services.value[index] = saved
+    } else {
+      services.value.unshift(saved)
+    }
 
     showModal.value = false
+
+    if (!saved.est_publiable) {
+      messageBrouillon.value =
+        "Votre service a été enregistré. Pour le rendre visible aux clients, vous devez d'abord faire vérifier votre pièce d'identité par MIMOSY."
+    }
   } catch (error) {
     modalError.value = error.message
   } finally {
@@ -96,285 +152,1015 @@ async function save(payload) {
   }
 }
 
+/* -------------------------------------------------------------------------- */
+/* Suppression                                                                 */
+/* -------------------------------------------------------------------------- */
+
+function askRemove(id) {
+  errorMessage.value = ''
+  confirmingId.value = id
+}
+
+function cancelRemove() {
+  confirmingId.value = null
+}
+
 async function remove(id) {
   errorMessage.value = ''
+  deletingId.value = id
+
   try {
     await prestataireService.deleteServiceOffer(id)
-    services.value = services.value.filter((service) => service.id !== id)
+
+    services.value = services.value.filter(
+      (service) => service.id !== id,
+    )
+
+    confirmingId.value = null
   } catch (error) {
     errorMessage.value = error.message
+  } finally {
+    deletingId.value = null
   }
 }
 
-/** Formate un prix numérique en FCFA avec séparateur de milliers français. */
+/* -------------------------------------------------------------------------- */
+/* Formatage                                                                   */
+/* -------------------------------------------------------------------------- */
+
 function formaterPrix(valeur) {
-  return Number(valeur).toLocaleString('fr-FR')
+  return Number(valeur || 0).toLocaleString('fr-FR')
+}
+
+function allerAuProfil() {
+  router.push('/prestataire/profil')
 }
 </script>
 
 <template>
-  <AppLayout role="prestataire">
-    <div class="pp-page mx-auto flex w-full flex-col gap-7">
-      <ClientHeader
+  <AppLayout role="prestataire" background="#F2F3F0">
+    <template #header>
+      <hearderPrestataire />
+    </template>
+    <div class="mimosy-page">
+
+      <!-- En-tête -->
+      <!-- <ClientHeader
         title="Mes prestations"
         subtitle="Présentez les services que vous proposez."
         :user-name="userName"
         profile-path="/prestataire/profil"
-      />
+      /> -->
 
-      <div class="flex items-center justify-between">
-        <p class="pp-count">
-          {{ services.length }} offre<span v-if="services.length > 1">s</span> publiée<span v-if="services.length > 1">s</span>
-        </p>
-        <button type="button" class="pp-btn-primary" @click="open()">
-          <span class="pp-plus" aria-hidden="true">+</span>
-          Ajouter un service
-        </button>
-      </div>
+      <main class="mimosy-content">
 
-      <Loader v-if="loading" />
+        <!-- Introduction -->
+        <section class="page-intro">
+          <div>
+            <p class="page-eyebrow">
+              Mon activité
+            </p>
 
-      <div v-else-if="errorMessage" class="pp-error-box">
-        <p>{{ errorMessage }}</p>
-        <button type="button" class="pp-btn-retry" @click="chargerServices">Réessayer</button>
-      </div>
+            <h1 class="page-title">
+              Mes prestations
+            </h1>
 
-      <EmptyState
-        v-else-if="!services.length"
-        title="Aucune prestation"
-        message="Ajoutez vos offres à partir du catalogue de services MIMOSY."
-      />
+            <p class="page-description">
+              Gérez les services que vous proposez aux clients sur MIMOSY.
+            </p>
+          </div>
 
-      <div v-else class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <article v-for="service in services" :key="service.id" class="pp-card">
-          <div class="flex items-start justify-between gap-3">
+          <button
+            type="button"
+            class="primary-button"
+            @click="open()"
+          >
+            <Plus
+              :size="18"
+              stroke-width="2"
+              aria-hidden="true"
+            />
+
+            <span>Ajouter un service</span>
+          </button>
+        </section>
+
+        <!-- Résumé -->
+
+
+        <!-- Message brouillon -->
+        <div
+          v-if="messageBrouillon"
+          class="notice notice--warning"
+          role="status"
+        >
+          <div class="notice-content">
+            <AlertCircle
+              :size="19"
+              aria-hidden="true"
+            />
+
+            <p>
+              {{ messageBrouillon }}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            class="notice-close"
+            @click="messageBrouillon = ''"
+          >
+            Fermer
+          </button>
+        </div>
+
+        <!-- Chargement -->
+        <Loader v-if="loading" />
+
+        <!-- Erreur -->
+        <div
+          v-else-if="errorMessage"
+          class="notice notice--error"
+          role="alert"
+        >
+          <div class="notice-content">
+            <AlertCircle
+              :size="19"
+              aria-hidden="true"
+            />
+
+            <p>
+              {{ errorMessage }}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            class="notice-close"
+            @click="chargerServices"
+          >
+            Réessayer
+          </button>
+        </div>
+
+        <!-- Aucun service -->
+        <EmptyState
+          v-else-if="!services.length"
+          title="Aucune prestation"
+          message="Ajoutez vos offres à partir du catalogue de services MIMOSY."
+        />
+
+        <!-- Liste -->
+        <section
+          v-else
+          class="services-section"
+        >
+          <div class="section-heading">
             <div>
-              <h2 class="pp-card-title">{{ service.service_nom }}</h2>
-              <p class="pp-card-category">{{ service.categorie_nom }}</p>
+              <h2>
+                Vos offres
+              </h2>
+
+              <p>
+                Les services que les clients peuvent découvrir sur votre profil.
+              </p>
             </div>
-            <span class="pp-status" :class="service.disponible ? 'pp-status--on' : 'pp-status--off'">
-              <span class="pp-status-dot" aria-hidden="true" />
-              {{ service.disponible ? 'Disponible' : 'Indisponible' }}
-            </span>
+
+
           </div>
 
-          <p class="pp-card-desc">
-            {{ service.description || 'Aucune description renseignée.' }}
-          </p>
+          <div class="services-grid">
 
-          <p class="pp-card-price">
-            {{ formaterPrix(service.prix) }} FCFA
-            <span class="pp-card-unit">/ {{ service.unite }}</span>
-          </p>
+            <article
+              v-for="service in services"
+              :key="service.id"
+              class="service-card"
+            >
 
-          <div class="pp-card-actions">
-            <button type="button" class="pp-btn-secondary" @click="open(service)">Modifier</button>
-            <button type="button" class="pp-btn-danger" @click="remove(service.id)">Supprimer</button>
+              <!-- En-tête carte -->
+              <div class="service-card-header">
+
+                <div class="service-card-title-area">
+                  <p class="service-category">
+                    {{ service.categorie_nom || 'Service MIMOSY' }}
+                  </p>
+
+                  <h3 class="service-title">
+                    {{ service.service_nom }}
+                  </h3>
+                </div>
+
+                <div class="service-statuses">
+
+                  <span
+                    class="status-badge"
+                    :class="
+                      service.disponible
+                        ? 'status-badge--available'
+                        : 'status-badge--unavailable'
+                    "
+                  >
+                    <span class="status-dot"></span>
+
+                    {{
+                      service.disponible
+                        ? 'Disponible'
+                        : 'Indisponible'
+                    }}
+                  </span>
+
+                  <span
+                    v-if="!service.est_publiable"
+                    class="status-badge status-badge--draft"
+                  >
+                    <span class="status-dot"></span>
+
+                    Non publié
+                  </span>
+
+                </div>
+              </div>
+
+              <!-- Avertissement publication -->
+              <div
+                v-if="!service.est_publiable"
+                class="draft-message"
+              >
+                <AlertCircle
+                  :size="16"
+                  aria-hidden="true"
+                />
+
+                <div>
+                  <p>
+                    Cette offre n'est pas encore visible par les clients.
+                  </p>
+
+                  <button
+                    type="button"
+                    @click="allerAuProfil"
+                  >
+                    Compléter mon profil
+                  </button>
+                </div>
+              </div>
+
+              <!-- Description -->
+              <p
+                class="service-description"
+                :class="{
+                  'service-description--empty': !service.description,
+                }"
+              >
+                {{
+                  service.description ||
+                  'Aucune description renseignée.'
+                }}
+              </p>
+
+              <!-- Prix -->
+              <div class="service-price">
+                <span class="price-value">
+                  {{ formaterPrix(service.prix) }}
+                </span>
+
+                <span class="price-currency">
+                  FCFA
+                </span>
+
+                <span class="price-unit">
+                  / {{ service.unite }}
+                </span>
+              </div>
+
+              <!-- Actions -->
+              <div
+                v-if="confirmingId !== service.id"
+                class="service-actions"
+              >
+                <button
+                  type="button"
+                  class="secondary-button"
+                  @click="open(service)"
+                >
+                  <Pencil
+                    :size="15"
+                    aria-hidden="true"
+                  />
+
+                  Modifier
+                </button>
+
+                <button
+                  type="button"
+                  class="danger-button"
+                  @click="askRemove(service.id)"
+                >
+                  <Trash2
+                    :size="15"
+                    aria-hidden="true"
+                  />
+
+                  Supprimer
+                </button>
+              </div>
+
+              <!-- Confirmation -->
+              <div
+                v-else
+                class="delete-confirmation"
+              >
+                <div class="delete-confirmation-text">
+                  <Trash2
+                    :size="17"
+                    aria-hidden="true"
+                  />
+
+                  <p>
+                    Supprimer cette offre ?
+                  </p>
+                </div>
+
+                <div class="service-actions">
+                  <button
+                    type="button"
+                    class="secondary-button"
+                    @click="cancelRemove"
+                  >
+                    Annuler
+                  </button>
+
+                  <button
+                    type="button"
+                    class="danger-button danger-button--solid"
+                    :disabled="deletingId === service.id"
+                    @click="remove(service.id)"
+                  >
+                    {{
+                      deletingId === service.id
+                        ? 'Suppression…'
+                        : 'Oui, supprimer'
+                    }}
+                  </button>
+                </div>
+              </div>
+
+            </article>
+
           </div>
-        </article>
-      </div>
+        </section>
 
-      <ServiceModal
-        v-model="showModal"
-        :service="editing"
-        :catalogue="catalogue"
-        :is-saving="saving"
-        :error-message="modalError"
-        @save="save"
-      />
+      </main>
+
     </div>
+
+    <!-- Modale création / édition -->
+    <ServiceModal
+      v-model="showModal"
+      :service="editing"
+      :catalogue="catalogue"
+      :is-saving="saving"
+      :error-message="modalError"
+      @save="save"
+    />
   </AppLayout>
 </template>
 
 <style scoped>
-/*
- * Jetons de couleur communs à l'espace prestataire.
- * Aucune propriété box-shadow n'est utilisée dans ce fichier : la
- * hiérarchie visuelle repose sur la couleur de fond et la bordure.
- */
-.pp-page {
-  /*
-   * Ces jetons sont volontairement fixés ici (pas de repli sur une
-   * variable du même nom héritée d'un parent) : la page précédente était
-   * illisible parce qu'un --pp-muted global, probablement pensé pour un
-   * fond sombre ailleurs dans l'appli, écrasait silencieusement notre
-   * valeur de repli. En fixant des couleurs propres à cette page, le
-   * contraste reste garanti quel que soit le thème environnant.
-   * Les gris de texte sont volontairement plus foncés (slate-600/700)
-   * qu'un gris "cosmétique" classique, pour rester lisibles sur fond blanc.
-   */
-  --pp-forest: #051f20;
-  --pp-sage: #2f6250;
-  --pp-sage-dark: #1c3f34;
-  --pp-ink: #0f172a;
-  --pp-muted: #47556a;
-  --pp-border: #dbe2e6;
-  --pp-surface: #ffffff;
-  --pp-bg-soft: #f1f5f4;
-  --pp-danger-border: #e7b8b2;
-  --pp-danger-bg: #fff0ee;
-  --pp-danger-text: #8f342b;
-  --pp-ok-bg: #dcf3e9;
-  --pp-ok-text: #0f6644;
-  color: var(--pp-ink);
-  font-family: 'Inter', system-ui, sans-serif;
+/* -------------------------------------------------------------------------- */
+/* Page                                                                        */
+/* -------------------------------------------------------------------------- */
+
+.mimosy-page {
+  min-height: 100%;
+  background: #f2f3f0;
+  color: #1a1c1a;
+  font-family: 'DM Sans', Inter, system-ui, sans-serif;
 }
 
-.pp-card-title,
-.pp-card-price {
-  font-family: 'Newsreader', Georgia, serif;
+.mimosy-content {
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 10px;
 }
 
-/* ---------- En-tête de liste ---------- */
-.pp-count {
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: var(--pp-muted);
+/* -------------------------------------------------------------------------- */
+/* Introduction                                                                */
+/* -------------------------------------------------------------------------- */
+
+.page-intro {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 32px;
 }
 
-.pp-btn-primary {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  border-radius: 0.75rem;
-  background: var(--pp-sage);
-  padding: 0.65rem 1.1rem;
-  font-size: 0.85rem;
+.page-eyebrow {
+  margin: 0 0 8px;
+  color: #7a847e;
+  font-size: 12px;
   font-weight: 700;
-  color: white;
-  border: 1px solid var(--pp-sage);
-  transition: background-color 0.15s ease;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
-.pp-btn-primary:hover {
-  background: var(--pp-sage-dark);
-}
-.pp-plus {
-  font-size: 1rem;
+
+.page-title {
+  margin: 0;
+  color: #1a1c1a;
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-size: 42px;
+  font-weight: 400;
   line-height: 1;
 }
 
-/* ---------- Carte de service ---------- */
-.pp-card {
-  display: flex;
-  flex-direction: column;
-  border-radius: 1rem;
-  border: 1px solid var(--pp-border);
-  background: var(--pp-surface);
-  padding: 1.25rem;
-  transition: border-color 0.15s ease;
-}
-.pp-card:hover {
-  border-color: var(--pp-sage);
+.page-description {
+  max-width: 620px;
+  margin: 10px 0 0;
+  color: #7a847e;
+  font-size: 15px;
+  line-height: 24px;
 }
 
-.pp-card-title {
-  font-size: 1.05rem;
-  font-weight: 700;
-  color: var(--pp-forest);
-}
-.pp-card-category {
-  margin-top: 0.15rem;
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--pp-muted);
-}
+/* -------------------------------------------------------------------------- */
+/* Bouton principal                                                            */
+/* -------------------------------------------------------------------------- */
 
-/* Statut : un point de couleur plein remplace toute icône ou emoji. */
-.pp-status {
+.primary-button {
   display: inline-flex;
+  min-height: 44px;
   align-items: center;
-  gap: 0.35rem;
+  justify-content: center;
+  gap: 8px;
   flex-shrink: 0;
-  border-radius: 999px;
-  padding: 0.25rem 0.6rem;
-  font-size: 0.65rem;
+  border: 1px solid #2d6a4f;
+  border-radius: 12px;
+  background: #2d6a4f;
+  padding: 0 18px;
+  color: #fafaf8;
+  font-size: 14px;
   font-weight: 700;
-}
-.pp-status-dot {
-  width: 0.4rem;
-  height: 0.4rem;
-  border-radius: 999px;
-  background: currentColor;
-}
-.pp-status--on {
-  background: var(--pp-ok-bg);
-  color: var(--pp-ok-text);
-}
-.pp-status--off {
-  background: #f1f5f9;
-  color: var(--pp-muted);
+  cursor: pointer;
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease;
 }
 
-.pp-card-desc {
-  margin-top: 0.75rem;
-  min-height: 3rem;
-  font-size: 0.875rem;
-  line-height: 1.5rem;
-  color: #334155;
+.primary-button:hover {
+  background: #24573f;
+  border-color: #24573f;
 }
 
-.pp-card-price {
-  margin-top: 1rem;
-  font-size: 1.15rem;
-  font-weight: 700;
-  color: var(--pp-sage);
-}
-.pp-card-unit {
-  font-family: 'Inter', system-ui, sans-serif;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--pp-muted);
+.primary-button:focus-visible,
+.secondary-button:focus-visible,
+.danger-button:focus-visible,
+.notice-close:focus-visible,
+.draft-message button:focus-visible {
+  outline: 2px solid #2d6a4f;
+  outline-offset: 2px;
 }
 
-.pp-card-actions {
-  margin-top: 1.25rem;
+/* -------------------------------------------------------------------------- */
+/* Résumé                                                                      */
+/* -------------------------------------------------------------------------- */
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+.summary-card {
+  min-height: 145px;
+  border: 1px solid #e5e7e2;
+  border-radius: 20px;
+  background: #fafaf8;
+  padding: 20px;
+}
+
+.summary-card-top {
   display: flex;
-  gap: 0.5rem;
-}
-.pp-btn-secondary,
-.pp-btn-danger {
-  border-radius: 0.6rem;
-  padding: 0.45rem 0.8rem;
-  font-size: 0.75rem;
-  font-weight: 700;
-  border: 1px solid transparent;
-  transition: background-color 0.15s ease;
-}
-.pp-btn-secondary {
-  border-color: #d9ddd8;
-  color: #334155;
-}
-.pp-btn-secondary:hover {
-  background: var(--pp-bg-soft);
-}
-.pp-btn-danger {
-  border-color: var(--pp-danger-border);
-  color: var(--pp-danger-text);
-}
-.pp-btn-danger:hover {
-  background: var(--pp-danger-bg);
-}
-
-/* ---------- Erreur ---------- */
-.pp-error-box {
-  display: flex;
-  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  border-radius: 0.9rem;
-  border: 1px solid var(--pp-danger-border);
-  background: var(--pp-danger-bg);
-  color: var(--pp-danger-text);
-  padding: 1rem 1.25rem;
+  gap: 12px;
 }
-.pp-btn-retry {
-  border-radius: 0.6rem;
+
+.summary-label {
+  color: #7a847e;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.summary-icon {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #e2eae4;
+  color: #2d6a4f;
+}
+
+.summary-icon > span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.summary-icon--success {
+  background: #d3eeeb;
+  color: #1a978c;
+}
+
+.summary-icon--warning {
+  background: #fbefcf;
+  color: #d99a0b;
+}
+
+.summary-value {
+  display: block;
+  margin-top: 14px;
+  color: #1a1c1a;
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-size: 32px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.summary-description {
+  margin: 8px 0 0;
+  color: #7a847e;
+  font-size: 12px;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Notices                                                                     */
+/* -------------------------------------------------------------------------- */
+
+.notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 24px;
+  border: 1px solid #e5e7e2;
+  border-radius: 16px;
+  padding: 16px 18px;
+  font-size: 14px;
+}
+
+.notice-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.notice-content p {
+  margin: 0;
+  line-height: 22px;
+}
+
+.notice--warning {
+  border-color: #eadba9;
+  background: #fffaf0;
+  color: #765c16;
+}
+
+.notice--error {
+  border-color: #e7c2bd;
+  background: #fff5f3;
+  color: #8f342b;
+}
+
+.notice-close {
+  flex-shrink: 0;
   border: 1px solid currentColor;
-  padding: 0.35rem 0.9rem;
-  font-size: 0.8rem;
+  border-radius: 9px;
+  background: transparent;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Section                                                                     */
+/* -------------------------------------------------------------------------- */
+
+.services-section {
+  margin-top: 8px;
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 16px;
+}
+
+.section-heading h2 {
+  margin: 0;
+  color: #1a1c1a;
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-size: 26px;
+  font-weight: 400;
+}
+
+.section-heading p {
+  margin: 5px 0 0;
+  color: #7a847e;
+  font-size: 13px;
+}
+
+.section-count {
+  display: inline-flex;
+  min-width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #e2eae4;
+  color: #2d6a4f;
+  font-size: 12px;
   font-weight: 700;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Grille des services                                                         */
+/* -------------------------------------------------------------------------- */
+
+.services-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Carte                                                                       */
+/* -------------------------------------------------------------------------- */
+
+.service-card {
+  display: flex;
+  min-width: 0;
+  min-height: 340px;
+  flex-direction: column;
+  border: 1px solid #e5e7e2;
+  border-radius: 20px;
+  background: #fafaf8;
+  padding: 20px;
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease;
+}
+
+.service-card:hover {
+  border-color: #b9c8bf;
+  background: #ffffff;
+}
+
+.service-card:focus-within {
+  border-color: #2d6a4f;
+}
+
+/* -------------------------------------------------------------------------- */
+/* En-tête carte                                                               */
+/* -------------------------------------------------------------------------- */
+
+.service-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.service-card-title-area {
+  min-width: 0;
+}
+
+.service-category {
+  margin: 0 0 6px;
+  color: #7a847e;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.service-title {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: #1a1c1a;
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-size: 24px;
+  font-weight: 400;
+  line-height: 1.05;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.service-statuses {
+  display: flex;
+  flex-shrink: 0;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  padding: 6px 9px;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.status-badge--available {
+  background: #d3eeeb;
+  color: #176f68;
+}
+
+.status-badge--unavailable {
+  background: #eef0ee;
+  color: #69736d;
+}
+
+.status-badge--draft {
+  background: #fbefcf;
+  color: #8a6714;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Brouillon                                                                   */
+/* -------------------------------------------------------------------------- */
+
+.draft-message {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-top: 16px;
+  border-radius: 12px;
+  background: #fff8e8;
+  padding: 11px 12px;
+  color: #765c16;
+}
+
+.draft-message p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.draft-message button {
+  margin-top: 3px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: #765c16;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Description                                                                 */
+/* -------------------------------------------------------------------------- */
+
+.service-description {
+  display: -webkit-box;
+  min-height: 72px;
+  flex: 1;
+  margin: 20px 0 0;
+  overflow: hidden;
+  color: #5e6862;
+  font-size: 13px;
+  line-height: 21px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.service-description--empty {
+  color: #8a938d;
+  font-style: italic;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Prix                                                                        */
+/* -------------------------------------------------------------------------- */
+
+.service-price {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  margin-top: 18px;
+  border-top: 1px solid #e5e7e2;
+  padding-top: 16px;
+}
+
+.price-value {
+  color: #2d6a4f;
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-size: 28px;
+  line-height: 1;
+}
+
+.price-currency {
+  color: #2d6a4f;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.price-unit {
+  color: #7a847e;
+  font-size: 12px;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Actions                                                                     */
+/* -------------------------------------------------------------------------- */
+
+.service-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.secondary-button,
+.danger-button {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border-radius: 10px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease;
+}
+
+.secondary-button {
+  border: 1px solid #d9ddd8;
+  background: #fafaf8;
+  color: #39433e;
+}
+
+.secondary-button:hover {
+  border-color: #b9c8bf;
+  background: #e2eae4;
+}
+
+.danger-button {
+  border: 1px solid #e7c2bd;
+  background: transparent;
+  color: #9a4037;
+}
+
+.danger-button:hover {
+  background: #fff0ee;
+}
+
+.danger-button--solid {
+  border-color: #a8443a;
+  background: #a8443a;
+  color: #ffffff;
+}
+
+.danger-button--solid:hover {
+  border-color: #84352e;
+  background: #84352e;
+}
+
+.danger-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Confirmation suppression                                                    */
+/* -------------------------------------------------------------------------- */
+
+.delete-confirmation {
+  margin-top: 16px;
+  border: 1px solid #e7c2bd;
+  border-radius: 12px;
+  background: #fff5f3;
+  padding: 12px;
+}
+
+.delete-confirmation-text {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #8f342b;
+}
+
+.delete-confirmation-text p {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.delete-confirmation .service-actions {
+  margin-top: 10px;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Responsive                                                                  */
+/* -------------------------------------------------------------------------- */
+
+@media (max-width: 1100px) {
+  .mimosy-content {
+    padding: 32px;
+  }
+
+  .services-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .summary-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .mimosy-content {
+    padding: 24px 16px 32px;
+  }
+
+  .page-intro {
+    align-items: stretch;
+    flex-direction: column;
+    margin-bottom: 24px;
+  }
+
+  .page-title {
+    font-size: 36px;
+  }
+
+  .primary-button {
+    width: 100%;
+  }
+
+  .services-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .service-card {
+    min-height: 0;
+  }
+
+  .service-card-header {
+    flex-direction: column;
+  }
+
+  .service-statuses {
+    align-items: flex-start;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .service-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .notice {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .notice-close {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mimosy-page * {
+    transition: none !important;
+  }
+}
 </style>
+```
