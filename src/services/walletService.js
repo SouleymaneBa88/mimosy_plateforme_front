@@ -24,11 +24,15 @@ export const listMesPaiements = () => apiFetch(API_ENDPOINTS.mesPaiements)
  * ferait que la deuxième tentative renverrait simplement le même
  * paiement ECHOUE au lieu d'en retenter un nouveau.
  */
-export const payerDemande = (demandePrestationId) =>
+export const payerDemande = (demandePrestationId, { moyen_paiement, telephone }) =>
   apiFetch(API_ENDPOINTS.mesPaiements, {
     method: 'POST',
     body: {
       demande_prestation: demandePrestationId,
+      // Choix faits dans la modal de paiement. Jamais de montant : le
+      // backend le lit dans la demande.
+      moyen_paiement,
+      telephone,
       idempotency_key: `paiement-${demandePrestationId}-${crypto.randomUUID()}`,
     },
   })

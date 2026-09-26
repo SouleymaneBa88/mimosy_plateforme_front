@@ -16,6 +16,7 @@ import { ArrowLeft, MessageCircle, TriangleAlert } from 'lucide-vue-next'
 
 import ClientLayout from '@/components/layout/ClientLayout.vue'
 import NouveauLitigeModal from '@/components/disputes/NouveauLitigeModal.vue'
+import PaiementModal from '@/components/client/PaiementModal.vue'
 import { useDemandePrestationStore } from '@/stores/demandePrestation'
 import { usePrestataireStore } from '@/stores/prestataire'
 import { useToast } from '@/composables/useToast'
@@ -36,44 +37,44 @@ const paiementLoading = ref(false)
 const paiementError = ref('')
 
 /**
- * Un paiement n'a de sens que sur une demande acceptée. Il reste
- * possible tant qu'aucune tentative n'a REUSSI et qu'aucune n'est
- * EN_ATTENTE (déjà transmise à PayDunya, en cours de traitement) : une
- * tentative ECHOUE (ou l'absence de tentative) laisse la porte ouverte
- * à une nouvelle tentative, jamais un blocage définitif (voir
- * apps.wallet.services.initier_paiement, qui autorise explicitement
- * plusieurs tentatives tant qu'une seule aboutit).
+ * Le bouton de paiement reste visible tant que la demande (acceptée)
+ * n'est pas payée. C'est le BACKEND qui décide quoi faire à chaque clic
+ * (voir apps.wallet.services.initier_paiement) :
+ *   - aucune tentative ou ECHOUE → nouvelle facture PayDunya ;
+ *   - EN_ATTENTE                 → la même facture est renvoyée (« Reprendre ») ;
+ *   - INITIE                     → facture en cours de création, rien de nouveau.
  */
-const peutPayer = computed(
-  () => demande.value?.statut === 'ACCEPTEE' && !['REUSSI', 'EN_ATTENTE'].includes(paiement.value?.statut),
-)
+const peutPayer = computed(() => demande.value?.statut === 'ACCEPTEE' && paiement.value?.statut !== 'REUSSI')
+
+const libelleBoutonPaiement = computed(() => {
+  if (paiementLoading.value) return 'Préparation du paiement…'
+  const montant = `${Number(demande.value?.budget || 0).toLocaleString('fr-FR')} FCFA`
+  if (paiement.value?.statut === 'EN_ATTENTE') return 'Reprendre le paiement'
+  if (paiement.value?.statut === 'INITIE') return 'Actualiser'
+  if (paiement.value?.statut === 'ECHOUE') return `Réessayer (${montant})`
+  return `Payer ${montant}`
+})
 
 const verificationLoading = ref(false)
 
 /**
- * Lance une tentative de paiement PayDunya : le backend renvoie
- * immédiatement une URL de checkout (paiement EN_ATTENTE, jamais
- * REUSSI de façon synchrone — voir apps.wallet.providers.paydunya) et
- * le client y est redirigé pour choisir son moyen de paiement.
+ * « Payer » et « Reprendre le paiement » ouvrent la modal de paiement
+ * (components/client/PaiementModal.vue) : le client y choisit Wave ou
+ * Orange Money et son numéro, puis la modal redirige vers la page de
+ * paiement renvoyée par le backend. Aucun montant n'est envoyé.
  */
-async function payer() {
-  if (!demande.value?.id) return
+const modalPaiementOuverte = ref(false)
 
-  paiementLoading.value = true
+function payer() {
+  if (!demande.value?.id) return
   paiementError.value = ''
-  try {
-    paiement.value = await walletService.payerDemande(demande.value.id)
-    if (paiement.value?.statut === 'ECHOUE') {
-      paiementError.value = 'Le paiement a été refusé. Vous pouvez réessayer ou choisir un autre moyen dès que possible.'
-    } else if (paiement.value?.statut === 'EN_ATTENTE' && paiement.value?.url_paiement) {
-      window.location.href = paiement.value.url_paiement
-      return
-    }
-  } catch (error) {
-    paiementError.value = error.message
-  } finally {
-    paiementLoading.value = false
-  }
+  modalPaiementOuverte.value = true
+}
+
+// Résultat sans redirection (ex. fournisseur sandbox MIMOSY : REUSSI immédiat,
+// ou paiement encore en préparation) : on met simplement la carte à jour.
+function onResultatPaiement(resultat) {
+  if (resultat) paiement.value = resultat
 }
 
 /**
@@ -98,8 +99,14 @@ async function verifierPaiement() {
 
 async function chargerPaiement() {
   try {
-    const paiements = await walletService.listMesPaiements()
-    paiement.value = paiements.find((item) => item.demande_prestation === demande.value?.id) || null
+    const paiements = (await walletService.listMesPaiements()).filter(
+      (item) => item.demande_prestation === demande.value?.id,
+    )
+    // Plusieurs tentatives peuvent exister (échouées, payée en double...) :
+    // on affiche la plus significative, pas simplement la plus récente.
+    const priorite = ['REUSSI', 'EN_ATTENTE', 'INITIE', 'A_REMBOURSER']
+    paiement.value =
+      priorite.map((statut) => paiements.find((item) => item.statut === statut)).find(Boolean) || paiements[0] || null
   } catch {
     // Silencieux : l'absence de paiement affiché n'empêche pas de consulter la demande.
   }
@@ -466,8 +473,8 @@ async function envoyerAvis() {
               </div>
             </section>
 
-            <!-- Carte 3 : statut du paiement (si engagée) -->
-            <section v-if="litigeBloquant || paiement" class="rounded-[24px] border border-mimosy-border bg-mimosy-surface p-6 sm:p-8">
+            <!-- Carte 3 : statut du paiement (si engagé, ou premier paiement possible : peutPayer) -->
+            <section v-if="litigeBloquant || paiement || peutPayer" class="rounded-[24px] border border-mimosy-border bg-mimosy-surface p-6 sm:p-8">
               <h2 class="font-sans text-[11px] font-bold uppercase tracking-[0.4px] text-mimosy-secondary">Paiement</h2>
 
               <div v-if="litigeBloquant" class="mt-3 rounded-xl bg-[#FFFBF0] px-4 py-3 font-sans text-sm font-semibold text-[#9A723C]">
@@ -479,12 +486,27 @@ async function envoyerAvis() {
               </div>
               <div v-else-if="paiement?.statut === 'EN_ATTENTE'" class="mt-3 flex items-center gap-3 rounded-xl bg-[#EDF4FF] px-4 py-3 font-sans text-sm font-semibold text-[#3267B1]">
                 <span class="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-[#3267B1]/30 border-t-[#3267B1]" aria-hidden="true" />
-                Paiement en cours de traitement chez PayDunya.
+                Paiement en attente chez PayDunya. Si vous avez quitté la page de paiement, vous pouvez la reprendre.
+              </div>
+              <div v-else-if="paiement?.statut === 'INITIE'" class="mt-3 flex items-center gap-3 rounded-xl bg-[#EDF4FF] px-4 py-3 font-sans text-sm font-semibold text-[#3267B1]">
+                <span class="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-[#3267B1]/30 border-t-[#3267B1]" aria-hidden="true" />
+                Paiement en cours de préparation…
+              </div>
+              <div v-else-if="paiement?.statut === 'A_REMBOURSER'" class="mt-3 rounded-xl bg-[#FFFBF0] px-4 py-3 font-sans text-sm font-semibold text-[#9A723C]">
+                Un paiement en double a été détecté. Il n'a pas été appliqué et vous sera remboursé par l'équipe MIMOSY.
               </div>
               <div v-else-if="paiement?.statut === 'ECHOUE'" class="mt-3 rounded-xl bg-[#FFF0EE] px-4 py-3 font-sans text-sm font-semibold text-[#A85148]">
                 Le paiement n'a pas abouti. Vous pouvez réessayer.
               </div>
               <p v-if="paiementError" class="mt-2 font-sans text-sm font-bold text-[#A85148]">{{ paiementError }}</p>
+
+              <PaiementModal
+                v-if="demande"
+                v-model="modalPaiementOuverte"
+                :demande="demande"
+                :paiement-en-cours="paiement?.statut === 'EN_ATTENTE' ? paiement : null"
+                @resultat="onResultatPaiement"
+              />
 
               <div class="mt-4 flex flex-wrap gap-2.5">
                 <button
@@ -495,7 +517,7 @@ async function envoyerAvis() {
                   @click="payer"
                 >
                   <span v-if="paiementLoading" class="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden="true" />
-                  {{ paiementLoading ? 'Paiement en cours…' : paiement?.statut === 'ECHOUE' ? `Réessayer (${Number(demande.budget || 0).toLocaleString('fr-FR')} FCFA)` : `Payer ${Number(demande.budget || 0).toLocaleString('fr-FR')} FCFA` }}
+                  {{ libelleBoutonPaiement }}
                 </button>
                 <button
                   v-if="paiement?.statut === 'EN_ATTENTE'"
