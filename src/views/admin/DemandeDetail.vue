@@ -33,6 +33,7 @@ const statutLabels = {
   EN_ATTENTE: 'En attente',
   ACCEPTEE: 'Acceptée',
   REFUSEE: 'Refusée',
+  REALISEE: 'Validation en attente',
   TERMINEE: 'Terminée',
   ANNULEE: 'Annulée'
 }
@@ -41,6 +42,7 @@ const statutClasses = {
   EN_ATTENTE: 'border-[#E6E8E3] bg-[#F2F3F0] text-[#1C2420]',
   ACCEPTEE: 'border-[#2D6A4F] bg-[#2D6A4F] text-white',
   REFUSEE: 'border-[#F4C7C2] bg-[#FFF0EE] text-[#A85148]',
+  REALISEE: 'border-[#F1E3C4] bg-[#FFF7E6] text-[#9A723C]',
   TERMINEE: 'border-[#DCEBE4] bg-[#EAF8F2] text-[#16805B]',
   ANNULEE: 'border-[#F4C7C2] bg-[#FFF0EE] text-[#A85148]'
 }

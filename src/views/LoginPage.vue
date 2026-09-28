@@ -178,22 +178,6 @@ const handleLogin = async () => {
       password: password.value,
     });
 
-    // Demander la localisation après une connexion réussie. Si une
-    // localisation existe déjà pour ce compte, ses coordonnées GPS
-    // sont mises à jour ; sinon, on ne crée rien (voir useLocation.js).
-    try {
-      const position = await requestLocation();
-      await memoriserPositionSiLocalisationExiste(
-        position.latitude,
-        position.longitude
-      );
-    } catch (error) {
-      console.warn(
-        "Localisation non disponible :",
-        error
-      );
-    }
-
     const destination = {
       CLIENT: "/client",
       PRESTATAIRE: "/prestataire",
@@ -201,6 +185,20 @@ const handleLogin = async () => {
     }[authStore.role] || "/";
 
     router.push(destination);
+
+    // Demander la localisation après une connexion réussie, SANS bloquer la
+    // redirection : tant que l'utilisateur n'a pas répondu à la demande
+    // d'autorisation du navigateur, getCurrentPosition ne rend pas la main
+    // (le timeout de 10 s ne compte pas ce temps d'attente), et la connexion
+    // semblait figée. Si une localisation existe déjà pour ce compte, ses
+    // coordonnées GPS sont mises à jour ; sinon, on ne crée rien (voir useLocation.js).
+    requestLocation()
+      .then((position) =>
+        memoriserPositionSiLocalisationExiste(position.latitude, position.longitude)
+      )
+      .catch((error) => {
+        console.warn("Localisation non disponible :", error);
+      });
   } catch (error) {
       errorMessage.value = error.message || "Adresse e-mail ou mot de passe incorrect.";
     } finally {
@@ -308,7 +306,7 @@ const handleGoogleLogin = () => {
         <div class="w-full max-w-[420px]">
           <!-- Logo mobile -->
 
-          <button
+          <!-- <button
             type="button"
             class="mx-auto mb-8 flex items-center gap-2 lg:hidden"
             aria-label="Accueil MIMOSY"
@@ -325,7 +323,7 @@ const handleGoogleLogin = () => {
             >
               MIMOSY
             </span>
-          </button>
+          </button> -->
 
           <!-- ================================================= -->
           <!-- EN-TÊTE -->

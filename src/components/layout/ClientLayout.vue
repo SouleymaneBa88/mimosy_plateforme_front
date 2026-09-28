@@ -10,10 +10,13 @@ import ClientNavbar from '@/components/layout/ClientNavbar.vue'
 import ClientFooter from '@/components/layout/ClientFooter.vue'
 import ToastContainer from '@/components/common/ToastContainer.vue'
 import { useClientProfilStore } from '@/stores/clientProfil'
+import { useRealtimeStore } from '@/stores/realtime'
 
 const clientProfilStore = useClientProfilStore()
 
 onMounted(() => {
+  // Connexion temps réel : une seule par onglet (sans effet si déjà ouverte).
+  useRealtimeStore().demarrer()
   if (!clientProfilStore.isLoaded && localStorage.getItem('mimosy_access_token')) {
     clientProfilStore.chargerProfil().catch(() => {})
   }

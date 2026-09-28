@@ -20,7 +20,7 @@ export function useRecherchePrestataires() {
   const router = useRouter()
   const prestataireStore = usePrestataireStore()
   const catalogueStore = useCatalogueStore()
-  const { requestLocation, loading: positionLoading, error: positionError } = useLocation()
+  const { positionPourRecherche, loading: positionLoading, error: positionError } = useLocation()
 
   const searchService = ref('')
   const selectedPrestataireId = ref(null)
@@ -54,6 +54,9 @@ export function useRecherchePrestataires() {
   const positionActive = ref(false)
   const latitude = ref(null)
   const longitude = ref(null)
+  // 'gps' (position du navigateur) ou 'adresse' (localisation enregistrée du profil).
+  const sourcePosition = ref('gps')
+  const libellePosition = ref('')
 
   const clientLocation = computed(() =>
     positionActive.value && latitude.value != null && longitude.value != null
@@ -63,9 +66,11 @@ export function useRecherchePrestataires() {
 
   async function activerRechercheAutourDeMoi() {
     try {
-      const position = await requestLocation()
+      const position = await positionPourRecherche()
       latitude.value = position.latitude
       longitude.value = position.longitude
+      sourcePosition.value = position.source
+      libellePosition.value = position.libelle
       positionActive.value = true
       lancerRecherche()
     } catch {
@@ -253,6 +258,8 @@ export function useRecherchePrestataires() {
     positionLoading,
     positionError,
     clientLocation,
+    sourcePosition,
+    libellePosition,
     nombreFiltresActifs,
     filtreVerifies,
     resultatsAffiches,

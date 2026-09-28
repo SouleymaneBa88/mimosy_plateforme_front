@@ -107,11 +107,54 @@ export function useLocation() {
     }
   }
 
+  /**
+   * Position de référence pour une recherche « Autour de moi » :
+   *   1. la position du navigateur (GPS), si l'utilisateur l'autorise ;
+   *   2. sinon, la localisation qu'il a lui-même enregistrée dans son
+   *      profil (adresse réelle), si elle existe ;
+   *   3. sinon, échec avec un message clair — jamais une coordonnée fixe.
+   *
+   * Renvoie { latitude, longitude, source: 'gps' | 'adresse', libelle }.
+   */
+  async function positionPourRecherche() {
+    try {
+      const position = await requestLocation()
+      return { ...position, source: 'gps', libelle: '' }
+    } catch (erreurGps) {
+      const messageGps = error.value
+      loading.value = true
+      let enregistree = null
+      try {
+        enregistree = await getMyLocation()
+      } catch {
+        // Localisation enregistrée illisible : on reste sur l'erreur GPS.
+      } finally {
+        loading.value = false
+      }
+
+      const latitude = Number(enregistree?.latitude)
+      const longitude = Number(enregistree?.longitude)
+      if (enregistree && Number.isFinite(latitude) && Number.isFinite(longitude)) {
+        error.value = null
+        return {
+          latitude,
+          longitude,
+          source: 'adresse',
+          libelle: [enregistree.quartier, enregistree.ville].filter(Boolean).join(', '),
+        }
+      }
+
+      error.value = `${messageGps} Vous pouvez aussi enregistrer votre adresse dans votre profil pour rechercher autour d’elle.`
+      throw erreurGps
+    }
+  }
+
   return {
     loading,
     error,
     success,
     requestLocation,
+    positionPourRecherche,
     memoriserPositionSiLocalisationExiste,
   }
 }

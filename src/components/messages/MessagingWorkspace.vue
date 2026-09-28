@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { useEvenementTempsReel } from '@/composables/useEvenementTempsReel'
 import { useRoute, useRouter } from 'vue-router'
 
 import {
@@ -421,8 +422,10 @@ const hasNoConversation = computed(
     conversationsToShow.value.length === 0
 )
 
-async function loadMessages() {
-  loading.value = true
+// silencieux : rechargement déclenché par le temps réel, sans afficher le
+// chargement plein écran ni perdre la conversation ouverte.
+async function loadMessages({ silencieux = false } = {}) {
+  if (!silencieux) loading.value = true
   error.value = null
 
   try {
@@ -646,6 +649,7 @@ async function send(payload) {
 }
 
 onMounted(loadMessages)
+useEvenementTempsReel(['message.nouveau'], () => loadMessages({ silencieux: true }))
 
 /* ---------------------------------------------------------------- *
  * Aides d'affichage pour le template ci-dessous (style repris de

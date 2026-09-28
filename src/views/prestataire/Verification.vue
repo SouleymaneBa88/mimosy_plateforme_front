@@ -33,6 +33,7 @@ import {
   etatChampComparaison,
   niveauConfiance as calculerNiveauConfiance,
 } from '@/utils/verification'
+import { useEvenementTempsReel } from '@/composables/useEvenementTempsReel'
 
 const profileStore = useClientProfilStore()
 const { erreur, succes } = useToast()
@@ -256,6 +257,11 @@ onMounted(async () => {
   await profileStore.chargerProfil().catch(() => {})
   await charger()
 })
+
+useEvenementTempsReel(
+  ['verification.analyse', 'verification.a_verifier', 'verification.validee', 'verification.rejetee'],
+  () => charger(),
+)
 </script>
 
 <template>

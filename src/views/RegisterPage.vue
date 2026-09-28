@@ -551,13 +551,13 @@ const handleGoogleSignup = () => {
         <div class="w-full max-w-[460px]">
           <!-- Logo mobile -->
 
-          <button
+          <!-- <button
             type="button"
             class="mx-auto mb-7 flex items-center gap-2 lg:hidden"
             aria-label="Accueil MIMOSY"
             @click="goToHome"
-          >
-            <span
+          > -->
+            <!-- <span
               class="flex h-8 w-8 items-center justify-center rounded-[10px] bg-[#2F6250] font-sans text-[20px] font-[800] text-white"
             >
               M
@@ -568,7 +568,7 @@ const handleGoogleSignup = () => {
             >
               MIMOSY
             </span>
-          </button>
+          </button> -->
 
           <!-- ================================================= -->
           <!-- EN-TÊTE -->

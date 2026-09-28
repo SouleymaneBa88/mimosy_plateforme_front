@@ -3,12 +3,15 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import {
   ChevronLeft,
   ChevronRight,
+  Plus,
   Send,
+  Trash2,
   X,
 } from 'lucide-vue-next'
 
 import AppLayout from '@/components/layout/AppLayout.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import DevisDetail from '@/components/devis/DevisDetail.vue'
 
 import * as devisService from '@/services/devisService'
 
@@ -26,11 +29,46 @@ const activeTab = ref('TOUS')
 const currentPage = ref(1)
 const itemsPerPage = 4
 
-const form = reactive({
-  prix_propose: '',
-  description: '',
-  delai_estime: '',
+// Devis détaillé : le TOTAL n'est jamais envoyé, le backend le calcule
+// (matériaux + main-d'œuvre + frais) et c'est lui que le client paiera.
+function formulaireVide() {
+  return {
+    lignes: [],
+    montant_main_oeuvre: '',
+    montant_frais: '',
+    description_frais: '',
+    delai_estime: '',
+    date_validite: '',
+    conditions: '',
+    description: '',
+  }
+}
+
+const form = reactive(formulaireVide())
+
+function reinitialiserFormulaire() {
+  Object.assign(form, formulaireVide())
+}
+
+function ajouterLigne() {
+  form.lignes.push({ designation: '', quantite: '1', unite: '', prix_unitaire: '' })
+}
+
+function retirerLigne(index) {
+  form.lignes.splice(index, 1)
+}
+
+// Aperçu indicatif pendant la saisie uniquement : le total qui fait foi est
+// celui renvoyé par le backend après l'envoi.
+const apercuTotal = computed(() => {
+  const materiaux = form.lignes.reduce(
+    (somme, ligne) => somme + (Number(ligne.quantite) || 0) * (Number(ligne.prix_unitaire) || 0),
+    0,
+  )
+  return materiaux + (Number(form.montant_main_oeuvre) || 0) + (Number(form.montant_frais) || 0)
 })
+
+const dateMinValidite = new Date().toISOString().slice(0, 10)
 
 /* -------------------------------------------------------------------------- */
 /* Données                                                                    */
@@ -233,9 +271,7 @@ function pageSuivante() {
 function ouvrirReponse(demande) {
   selectedDemande.value = demande
 
-  form.prix_propose = ''
-  form.description = ''
-  form.delai_estime = ''
+  reinitialiserFormulaire()
 
   errorMessage.value = ''
   showResponseModal.value = true
@@ -249,19 +285,23 @@ function fermerReponse() {
   showResponseModal.value = false
   selectedDemande.value = null
 
-  form.prix_propose = ''
-  form.description = ''
-  form.delai_estime = ''
+  reinitialiserFormulaire()
 }
 
 async function envoyerReponse() {
   if (
     !selectedDemande.value ||
-    !form.prix_propose ||
+    form.montant_main_oeuvre === '' ||
     !form.delai_estime
   ) {
     errorMessage.value =
-      'Veuillez renseigner le montant et le délai.'
+      'Veuillez renseigner la main-d’œuvre (0 si tout est dans les matériaux) et le délai.'
+    return
+  }
+
+  if (form.lignes.some((ligne) => !ligne.designation.trim() || !(Number(ligne.quantite) > 0) || ligne.prix_unitaire === '')) {
+    errorMessage.value =
+      'Chaque matériau doit avoir une désignation, une quantité et un prix unitaire.'
     return
   }
 
@@ -271,7 +311,17 @@ async function envoyerReponse() {
   try {
     await devisService.createQuoteResponse({
       demande: selectedDemande.value.id,
-      prix_propose: form.prix_propose,
+      lignes_materiaux: form.lignes.map((ligne) => ({
+        designation: ligne.designation.trim(),
+        quantite: ligne.quantite,
+        unite: ligne.unite.trim(),
+        prix_unitaire: ligne.prix_unitaire,
+      })),
+      montant_main_oeuvre: form.montant_main_oeuvre,
+      montant_frais: form.montant_frais === '' ? '0' : form.montant_frais,
+      description_frais: form.description_frais.trim(),
+      conditions: form.conditions.trim(),
+      date_validite: form.date_validite || null,
       description: form.description.trim(),
       delai_estime: form.delai_estime,
     })
@@ -700,7 +750,7 @@ function statutClasses(demande) {
         @click.self="fermerReponse"
       >
         <div
-          class="max-h-[90vh] w-full max-w-xl overflow-y-auto bg-[#FAFAF8] p-6 sm:p-8"
+          class="max-h-[90vh] w-full max-w-2xl overflow-y-auto bg-[#FAFAF8] p-6 sm:p-8"
         >
           <div class="flex items-start justify-between gap-4">
             <div>
@@ -735,90 +785,128 @@ function statutClasses(demande) {
             </button>
           </div>
 
-          <!-- Réponse déjà envoyée -->
-          <div
-            v-if="selectedDemande.reponse"
-            class="mt-8 bg-[#EAF8F2] p-5"
-          >
+          <!-- Devis déjà envoyé : montants tels que calculés par le backend -->
+          <div v-if="selectedDemande.reponse" class="mt-8 grid gap-3">
             <p class="text-sm font-bold text-[#16805B]">
-              Réponse envoyée
+              Devis envoyé
+              <span v-if="selectedDemande.reponse.statut === 'ACCEPTEE'"> · accepté par le client</span>
+              <span v-else-if="selectedDemande.reponse.statut === 'REFUSEE'" class="text-[#A85148]"> · refusé par le client</span>
             </p>
-
             <p
-              class="mt-3 text-2xl font-normal text-[#2D6A4F]"
+              v-if="selectedDemande.reponse.statut === 'ACCEPTEE'"
+              class="bg-[#EAF8F2] p-3 text-sm text-[#16805B]"
             >
               {{
-                formatMontant(
-                  selectedDemande.reponse.prix_propose,
-                )
-              }}
-              <span class="text-sm">FCFA</span>
-            </p>
-
-            <p class="mt-2 text-sm text-[#64748B]">
-              Délai :
-              {{ selectedDemande.reponse.delai_estime }}
-              jour(s)
-            </p>
-
-            <p
-              class="mt-3 text-sm leading-6 text-[#64748B]"
-            >
-              {{
-                selectedDemande.reponse.description ||
-                'Aucune précision fournie.'
+                selectedDemande.reponse.paiement?.statut === 'REUSSI'
+                  ? 'Paiement reçu et sécurisé : la prestation est à réaliser (voir « Demandes »).'
+                  : 'En attente du paiement du client.'
               }}
             </p>
+            <DevisDetail :reponse="selectedDemande.reponse" :service="selectedDemande.service_nom" />
           </div>
 
-          <!-- Formulaire -->
+          <!-- Formulaire de devis détaillé -->
           <form
             v-else
-            class="mt-8 grid gap-5"
+            class="mt-8 grid gap-6"
             @submit.prevent="envoyerReponse"
           >
-            <label
-              class="grid gap-2 text-sm font-bold text-[#1A1C1A]"
-            >
-              Montant proposé (FCFA)
+            <!-- Matériaux -->
+            <fieldset class="grid gap-3">
+              <legend class="text-xs font-bold uppercase tracking-[1.2px] text-[#1A1C1A]/60">
+                Matériaux (prix estimés)
+              </legend>
 
-              <input
-                v-model="form.prix_propose"
-                type="number"
-                min="0.01"
-                step="0.01"
-                required
-                class="w-full border border-[#E5E7E2] bg-white px-4 py-3 font-normal text-[#1A1C1A] outline-none transition focus:border-[#2D6A4F] focus:ring-2 focus:ring-[#2D6A4F]/10"
-              />
+              <p v-if="!form.lignes.length" class="text-sm text-[#1A1C1A]/60">
+                Aucun matériau : ajoutez-en si la prestation en nécessite.
+              </p>
+
+              <div
+                v-for="(ligne, index) in form.lignes"
+                :key="index"
+                class="grid gap-2 border border-[#E5E7E2] bg-white p-3 sm:grid-cols-[1fr_72px_72px_110px_36px] sm:items-end"
+              >
+                <label class="grid gap-1 text-xs font-bold text-[#1A1C1A]/70">
+                  Désignation
+                  <input v-model="ligne.designation" type="text" maxlength="200" required placeholder="Ex. Robinet mitigeur" class="w-full border border-[#E5E7E2] px-3 py-2 text-sm font-normal text-[#1A1C1A] outline-none focus:border-[#2D6A4F]" />
+                </label>
+                <div class="grid grid-cols-3 gap-2 sm:contents">
+                  <label class="grid gap-1 text-xs font-bold text-[#1A1C1A]/70">
+                    Qté
+                    <input v-model="ligne.quantite" type="number" min="0.01" step="0.01" required class="w-full border border-[#E5E7E2] px-2 py-2 text-sm font-normal text-[#1A1C1A] outline-none focus:border-[#2D6A4F]" />
+                  </label>
+                  <label class="grid gap-1 text-xs font-bold text-[#1A1C1A]/70">
+                    Unité
+                    <input v-model="ligne.unite" type="text" maxlength="30" placeholder="m, sac…" class="w-full border border-[#E5E7E2] px-2 py-2 text-sm font-normal text-[#1A1C1A] outline-none focus:border-[#2D6A4F]" />
+                  </label>
+                  <label class="grid gap-1 text-xs font-bold text-[#1A1C1A]/70">
+                    Prix unit. (FCFA)
+                    <input v-model="ligne.prix_unitaire" type="number" min="0" step="1" required class="w-full border border-[#E5E7E2] px-2 py-2 text-sm font-normal text-[#1A1C1A] outline-none focus:border-[#2D6A4F]" />
+                  </label>
+                </div>
+                <button
+                  type="button"
+                  class="flex h-9 w-full items-center justify-center gap-1 text-xs font-bold text-[#A85148] transition hover:bg-[#FFF0EE] sm:w-9"
+                  :aria-label="`Retirer ${ligne.designation || 'ce matériau'}`"
+                  @click="retirerLigne(index)"
+                >
+                  <Trash2 :size="16" />
+                  <span class="sm:hidden">Retirer</span>
+                </button>
+              </div>
+
+              <button
+                type="button"
+                class="inline-flex items-center justify-center gap-2 justify-self-start border border-dashed border-[#2D6A4F] px-4 py-2.5 text-sm font-bold text-[#2D6A4F] transition hover:bg-[#EAF8F2]"
+                @click="ajouterLigne"
+              >
+                <Plus :size="16" />
+                Ajouter un matériau
+              </button>
+            </fieldset>
+
+            <div class="grid gap-5 sm:grid-cols-2">
+              <label class="grid gap-2 text-sm font-bold text-[#1A1C1A]">
+                Main-d'œuvre (FCFA)
+                <input v-model="form.montant_main_oeuvre" type="number" min="0" step="1" required class="w-full border border-[#E5E7E2] bg-white px-4 py-3 font-normal text-[#1A1C1A] outline-none transition focus:border-[#2D6A4F] focus:ring-2 focus:ring-[#2D6A4F]/10" />
+              </label>
+
+              <label class="grid gap-2 text-sm font-bold text-[#1A1C1A]">
+                Autres frais (FCFA)
+                <input v-model="form.montant_frais" type="number" min="0" step="1" placeholder="0" class="w-full border border-[#E5E7E2] bg-white px-4 py-3 font-normal text-[#1A1C1A] outline-none transition focus:border-[#2D6A4F] focus:ring-2 focus:ring-[#2D6A4F]/10" />
+              </label>
+
+              <label v-if="Number(form.montant_frais) > 0" class="grid gap-2 text-sm font-bold text-[#1A1C1A] sm:col-span-2">
+                Nature des frais
+                <input v-model="form.description_frais" type="text" maxlength="255" placeholder="Ex. déplacement, location de matériel" class="w-full border border-[#E5E7E2] bg-white px-4 py-3 font-normal text-[#1A1C1A] outline-none transition focus:border-[#2D6A4F] focus:ring-2 focus:ring-[#2D6A4F]/10" />
+              </label>
+
+              <label class="grid gap-2 text-sm font-bold text-[#1A1C1A]">
+                Délai estimé (jours)
+                <input v-model="form.delai_estime" type="number" min="1" step="1" required class="w-full border border-[#E5E7E2] bg-white px-4 py-3 font-normal text-[#1A1C1A] outline-none transition focus:border-[#2D6A4F] focus:ring-2 focus:ring-[#2D6A4F]/10" />
+              </label>
+
+              <label class="grid gap-2 text-sm font-bold text-[#1A1C1A]">
+                Devis valable jusqu'au
+                <input v-model="form.date_validite" type="date" :min="dateMinValidite" class="w-full border border-[#E5E7E2] bg-white px-4 py-3 font-normal text-[#1A1C1A] outline-none transition focus:border-[#2D6A4F] focus:ring-2 focus:ring-[#2D6A4F]/10" />
+              </label>
+            </div>
+
+            <label class="grid gap-2 text-sm font-bold text-[#1A1C1A]">
+              Précisions
+              <textarea v-model="form.description" rows="3" placeholder="Ce qui est inclus dans votre proposition." class="w-full resize-none border border-[#E5E7E2] bg-white px-4 py-3 font-normal text-[#1A1C1A] outline-none transition placeholder:text-[#1A1C1A]/30 focus:border-[#2D6A4F] focus:ring-2 focus:ring-[#2D6A4F]/10" />
             </label>
 
-            <label
-              class="grid gap-2 text-sm font-bold text-[#1A1C1A]"
-            >
-              Délai estimé (jours)
-
-              <input
-                v-model="form.delai_estime"
-                type="number"
-                min="1"
-                step="1"
-                required
-                class="w-full border border-[#E5E7E2] bg-white px-4 py-3 font-normal text-[#1A1C1A] outline-none transition focus:border-[#2D6A4F] focus:ring-2 focus:ring-[#2D6A4F]/10"
-              />
+            <label class="grid gap-2 text-sm font-bold text-[#1A1C1A]">
+              Conditions (facultatif)
+              <textarea v-model="form.conditions" rows="2" placeholder="Garantie, exclusions…" class="w-full resize-none border border-[#E5E7E2] bg-white px-4 py-3 font-normal text-[#1A1C1A] outline-none transition placeholder:text-[#1A1C1A]/30 focus:border-[#2D6A4F] focus:ring-2 focus:ring-[#2D6A4F]/10" />
             </label>
 
-            <label
-              class="grid gap-2 text-sm font-bold text-[#1A1C1A]"
-            >
-              Réponse
-
-              <textarea
-                v-model="form.description"
-                rows="5"
-                placeholder="Décrivez ce qui est inclus dans votre proposition."
-                class="w-full resize-none border border-[#E5E7E2] bg-white px-4 py-3 font-normal text-[#1A1C1A] outline-none transition placeholder:text-[#1A1C1A]/30 focus:border-[#2D6A4F] focus:ring-2 focus:ring-[#2D6A4F]/10"
-              />
-            </label>
+            <div class="flex items-center justify-between gap-3 bg-[#EAF8F2] px-4 py-3">
+              <span class="text-xs font-bold uppercase tracking-[1.2px] text-[#2D6A4F]">Total estimé</span>
+              <span class="font-serif text-2xl text-[#2D6A4F]">{{ formatMontant(apercuTotal) }} FCFA</span>
+            </div>
+            <p class="-mt-4 text-xs text-[#1A1C1A]/50">Le total définitif est calculé par MIMOSY à l'envoi : c'est le montant que le client paiera.</p>
 
             <p
               v-if="errorMessage"
@@ -850,7 +938,7 @@ function statutClasses(demande) {
                 {{
                   isSubmitting
                     ? 'Envoi...'
-                    : 'Envoyer la réponse'
+                    : 'Envoyer le devis'
                 }}
               </button>
             </div>

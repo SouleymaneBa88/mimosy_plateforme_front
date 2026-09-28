@@ -27,7 +27,18 @@ const paiement = ref(null)
 const erreur = ref('')
 let intervalle = null
 
-const paiementId = computed(() => route.query.payment_id)
+// PayDunya ajoute « ?token=... » à return_url (documentation officielle),
+// qui contient déjà « ?payment_id=... ». Selon la façon dont il l'ajoute,
+// on reçoit « payment_id=<uuid>&token=... » ou « payment_id=<uuid>?token=... ».
+// On extrait donc uniquement l'UUID, quels que soient les paramètres ajoutés.
+const paiementId = computed(() => {
+  const brut = [].concat(route.query.payment_id || '')[0] || ''
+  const uuid = String(brut).match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)
+  return uuid ? uuid[0] : null
+})
+
+// Statuts encore « en cours » : on continue d'interroger le backend.
+const STATUTS_EN_COURS = ['EN_ATTENTE', 'INITIE']
 
 async function verifier() {
   if (!paiementId.value) {
@@ -40,7 +51,7 @@ async function verifier() {
     // encore reçu, confirmation encore "pending" chez PayDunya), on
     // continue de vérifier périodiquement plutôt que de laisser le
     // client sur un état figé — sans jamais dépasser un délai raisonnable.
-    if (paiement.value?.statut !== 'EN_ATTENTE' && intervalle) {
+    if (!STATUTS_EN_COURS.includes(paiement.value?.statut) && intervalle) {
       clearInterval(intervalle)
       intervalle = null
     }
@@ -94,7 +105,7 @@ function voirLaDemande() {
         <p class="mt-4 font-sans text-sm font-bold text-mimosy-secondary">Vérification du paiement…</p>
       </div>
 
-      <div v-else-if="paiement.statut === 'EN_ATTENTE'" class="w-full rounded-[24px] border border-[#BFD7EE] bg-[#EDF4FF] p-10">
+      <div v-else-if="STATUTS_EN_COURS.includes(paiement.statut)" class="w-full rounded-[24px] border border-[#BFD7EE] bg-[#EDF4FF] p-10">
         <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-white text-[#3267B1]">
           <Clock3 class="h-6 w-6" />
         </div>
@@ -112,10 +123,34 @@ function voirLaDemande() {
         <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-mimosy-primary text-white">
           <CheckCircle2 class="h-7 w-7" />
         </div>
-        <h1 class="mt-5 font-serif text-lg text-mimosy-text">Paiement réussi</h1>
+        <h1 class="mt-5 font-serif text-lg text-mimosy-text">Paiement confirmé</h1>
         <p class="mt-2 font-sans text-sm text-mimosy-secondary">
-          Votre demande est confirmée. Les fonds sont bloqués et seront reversés au prestataire une fois la
-          prestation terminée.
+          Votre paiement de <strong class="text-mimosy-text">{{ Number(paiement.montant || 0).toLocaleString('fr-FR') }} FCFA</strong> a été confirmé.
+        </p>
+        <p class="mt-1 font-sans text-sm text-mimosy-secondary">
+          Les fonds sont sécurisés par MIMOSY jusqu'à la finalisation de la prestation.
+        </p>
+        <div class="mt-6 flex flex-col justify-center gap-2.5 sm:flex-row">
+          <router-link
+            :to="{ name: 'client-facture', params: { id: paiement.id } }"
+            class="rounded-xl bg-mimosy-primary px-5 py-2.5 font-sans text-sm font-bold text-white transition hover:opacity-90"
+          >
+            Voir la facture
+          </router-link>
+          <button type="button" class="rounded-xl border border-mimosy-primary bg-white px-5 py-2.5 font-sans text-sm font-bold text-mimosy-primary transition hover:bg-mimosy-primaryBg" @click="voirLaDemande">
+            Voir la demande
+          </button>
+        </div>
+      </div>
+
+      <div v-else-if="paiement.statut === 'A_REMBOURSER'" class="w-full rounded-[24px] border border-[#E8D7B5] bg-[#FFFBF0] p-10">
+        <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-white text-[#9A723C]">
+          <TriangleAlert class="h-6 w-6" />
+        </div>
+        <h1 class="mt-5 font-serif text-lg text-mimosy-text">Paiement en double</h1>
+        <p class="mt-2 font-sans text-sm text-[#9A723C]">
+          Cette demande était déjà payée : ce second paiement n'a pas été appliqué. L'équipe MIMOSY va vous le
+          rembourser.
         </p>
         <button type="button" class="mt-6 rounded-xl bg-mimosy-primary px-5 py-2.5 font-sans text-sm font-bold text-white transition hover:opacity-90" @click="voirLaDemande">
           Voir ma demande
@@ -126,7 +161,7 @@ function voirLaDemande() {
         <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-white text-[#A85148]">
           <XCircle class="h-6 w-6" />
         </div>
-        <h1 class="mt-5 font-serif text-lg text-mimosy-text">Paiement échoué</h1>
+        <h1 class="mt-5 font-serif text-lg text-mimosy-text">{{ paiement.statut === 'ANNULE' ? 'Paiement annulé' : 'Paiement échoué' }}</h1>
         <p class="mt-2 font-sans text-sm text-[#A85148]">
           Le paiement n'a pas abouti. Votre demande n'est pas confirmée mais reste enregistrée : vous pouvez
           réessayer depuis la page de la demande.

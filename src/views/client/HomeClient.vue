@@ -32,7 +32,7 @@ const route = useRoute()
 const router = useRouter()
 const prestataireStore = usePrestataireStore()
 const catalogueStore = useCatalogueStore()
-const { requestLocation, loading: positionLoading, error: positionError } = useLocation()
+const { positionPourRecherche, loading: positionLoading, error: positionError } = useLocation()
 
 /* ---------------------------------------------------------------- *
  * Recherche : une seule barre (voir ServiceSearch.vue). Le texte saisi
@@ -80,6 +80,9 @@ const filtresOuverts = ref(false)
 const positionActive = ref(false)
 const latitude = ref(null)
 const longitude = ref(null)
+// 'gps' (position du navigateur) ou 'adresse' (localisation enregistrée du profil).
+const sourcePosition = ref('gps')
+const libellePosition = ref('')
 const providersMapRef = ref(null)
 
 const clientLocation = computed(() =>
@@ -90,9 +93,11 @@ const clientLocation = computed(() =>
 
 async function activerRechercheAutourDeMoi() {
   try {
-    const position = await requestLocation()
+    const position = await positionPourRecherche()
     latitude.value = position.latitude
     longitude.value = position.longitude
+    sourcePosition.value = position.source
+    libellePosition.value = position.libelle
     positionActive.value = true
     lancerRecherche()
   } catch {
@@ -328,7 +333,10 @@ onMounted(chargerDonnees)
 
       <p v-if="positionActive" class="hc-position-note">
         <LocateFixed class="hc-icon-xs" :stroke-width="2.25" />
-        Recherche dans un rayon de {{ filtres.rayon_km }} km autour de votre position.
+        <template v-if="sourcePosition === 'adresse'">
+          Position du navigateur indisponible : recherche dans un rayon de {{ filtres.rayon_km }} km autour de votre adresse enregistrée<span v-if="libellePosition"> ({{ libellePosition }})</span>.
+        </template>
+        <template v-else>Recherche dans un rayon de {{ filtres.rayon_km }} km autour de votre position.</template>
       </p>
       <p v-else-if="positionError" class="hc-position-note hc-position-note--error" role="alert">{{ positionError }}</p>
 
@@ -340,7 +348,7 @@ onMounted(chargerDonnees)
           </h2>
           <p class="hc-results__sub">
             <MapPin class="hc-icon-xs" :stroke-width="1.8" />
-            {{ filtres.ville || 'Dakar, Sénégal' }}
+            {{ filtres.ville || (positionActive ? (sourcePosition === 'adresse' ? 'Autour de votre adresse enregistrée' : 'Autour de votre position') : 'Toutes les zones') }}
           </p>
         </div>
         <button
@@ -422,7 +430,7 @@ onMounted(chargerDonnees)
           <ProvidersMap
             ref="providersMapRef"
             :client-location="clientLocation"
-            client-label="Votre position"
+            :client-label="sourcePosition === 'adresse' ? 'Votre adresse enregistrée' : 'Votre position'"
             :providers="resultatsAffiches"
             :rayon-km="positionActive ? filtres.rayon_km : null"
             class="h-full"

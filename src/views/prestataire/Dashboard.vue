@@ -121,6 +121,7 @@ const statutLabels = {
   EN_ATTENTE: 'En attente',
   ACCEPTEE: 'Acceptée',
   REFUSEE: 'Refusée',
+  REALISEE: 'Validation en attente',
   TERMINEE: 'Terminée',
   ANNULEE: 'Annulée',
 }
@@ -129,6 +130,7 @@ const statutClasses = {
   EN_ATTENTE: 'bg-[#F2F3F0] text-[#1A1C1A]',
   ACCEPTEE: 'bg-[#2D6A4F] text-white',
   REFUSEE: 'bg-[#F2F3F0] text-[#1A1C1A]',
+  REALISEE: 'bg-[#FFF7E6] text-[#9A723C]',
   TERMINEE: 'bg-[#F2F3F0] text-[#1A1C1A]',
   ANNULEE: 'bg-[#FEE2E2] text-[#991B1B]',
 }

@@ -8,6 +8,7 @@ import ErrorState from '@/components/common/ErrorState.vue'
 import Loader from '@/components/common/Loader.vue'
 import LitigeCard from '@/components/disputes/LitigeCard.vue'
 import * as disputeService from '@/services/disputeService'
+import { useEvenementTempsReel } from '@/composables/useEvenementTempsReel'
 
 const litiges = ref([])
 const loading = ref(false)
@@ -27,6 +28,7 @@ async function charger() {
 }
 
 onMounted(charger)
+useEvenementTempsReel(['litige.nouveau', 'litige.statut', 'litige.preuve'], () => charger())
 </script>
 
 <template>

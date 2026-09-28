@@ -46,3 +46,10 @@ export const payerDemande = (demandePrestationId, { moyen_paiement, telephone })
  * redirection, uniquement sur ce que cet endpoint renvoie.
  */
 export const getStatutPaiement = (paiementId) => apiFetch(API_ENDPOINTS.statutPaiement(paiementId))
+
+/**
+ * Facture d'un paiement confirmé (REUSSI) : construite par le backend à
+ * partir du paiement réellement encaissé et du devis accepté. Refusée
+ * (400) tant que PayDunya n'a pas confirmé le paiement.
+ */
+export const getFacture = (paiementId) => apiFetch(API_ENDPOINTS.facturePaiement(paiementId))
