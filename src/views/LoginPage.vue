@@ -2,10 +2,10 @@
 import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
-import { useLocation } from "@/components/composables/useLocation";
+import { useLocation } from "@/composables/useLocation";
 const router = useRouter();
 const authStore = useAuthStore();
-const { requestLocation } = useLocation();
+const { requestLocation, memoriserPositionSiLocalisationExiste } = useLocation();
 
 /*
 |--------------------------------------------------------------------------
@@ -178,16 +178,6 @@ const handleLogin = async () => {
       password: password.value,
     });
 
-    // Demander la localisation après une connexion réussie
-    try {
-      await requestLocation();
-    } catch (error) {
-      console.warn(
-        "Localisation non disponible :",
-        error
-      );
-    }
-
     const destination = {
       CLIENT: "/client",
       PRESTATAIRE: "/prestataire",
@@ -195,6 +185,20 @@ const handleLogin = async () => {
     }[authStore.role] || "/";
 
     router.push(destination);
+
+    // Demander la localisation après une connexion réussie, SANS bloquer la
+    // redirection : tant que l'utilisateur n'a pas répondu à la demande
+    // d'autorisation du navigateur, getCurrentPosition ne rend pas la main
+    // (le timeout de 10 s ne compte pas ce temps d'attente), et la connexion
+    // semblait figée. Si une localisation existe déjà pour ce compte, ses
+    // coordonnées GPS sont mises à jour ; sinon, on ne crée rien (voir useLocation.js).
+    requestLocation()
+      .then((position) =>
+        memoriserPositionSiLocalisationExiste(position.latitude, position.longitude)
+      )
+      .catch((error) => {
+        console.warn("Localisation non disponible :", error);
+      });
   } catch (error) {
       errorMessage.value = error.message || "Adresse e-mail ou mot de passe incorrect.";
     } finally {
@@ -245,7 +249,9 @@ const handleGoogleLogin = () => {
         <!-- Overlay -->
 
         <div class="absolute inset-0 bg-[#0F172A]/65"></div>
-
+        <h1 class="mt-2 font-['Instrument_Serif'] text-[28px] text-[#1C2420]">
+          Content de vous revoir
+        </h1>
         <!-- Contenu -->
 
         <div
@@ -253,30 +259,27 @@ const handleGoogleLogin = () => {
         >
           <!-- Logo -->
 
-          <button
-            type="button"
-            class="flex w-fit items-center gap-2"
-            aria-label="Accueil MIMOSY"
-            @click="goToHome"
-          >
-            <span
-              class="flex h-8 w-8 items-center justify-center rounded-[10px] bg-[#2F6250] font-['Plus_Jakarta_Sans'] text-[20px] font-[800] text-white"
-            >
-              M
-            </span>
-
-            <span
-              class="font-['Plus_Jakarta_Sans'] text-[22px] font-[800] text-white"
-            >
-              MIMOSY
-            </span>
-          </button>
+          <div class="flex items-center justify-between px-8 py-8">
+      <button
+        type="button"
+        class="flex items-center rounded-md transition hover:opacity-80"
+        aria-label="Retour à l'accueil"
+        title="Retour à l'accueil"
+        @click="goHome"
+      >
+        <img
+          src="/images/mimosy_logo_transparent.png"
+          alt="MIMOSY"
+          class="h-auto w-[175px] object-contain"
+        />
+      </button>
+    </div>
 
           <!-- Message -->
 
           <div class="max-w-[520px]">
             <h1
-              class="font-['Plus_Jakarta_Sans'] text-4xl font-[800] leading-[1.2] text-white"
+              class="font-sans text-4xl font-[800] leading-[1.2] text-white"
             >
               La clé d'un service réussi et sans tracas au Sénégal.
             </h1>
@@ -303,38 +306,48 @@ const handleGoogleLogin = () => {
         <div class="w-full max-w-[420px]">
           <!-- Logo mobile -->
 
-          <button
+          <!-- <button
             type="button"
             class="mx-auto mb-8 flex items-center gap-2 lg:hidden"
             aria-label="Accueil MIMOSY"
             @click="goToHome"
           >
             <span
-              class="flex h-8 w-8 items-center justify-center rounded-[10px] bg-[#2F6250] font-['Plus_Jakarta_Sans'] text-[20px] font-[800] text-white"
+              class="flex h-8 w-8 items-center justify-center rounded-[10px] bg-[#2F6250] font-sans text-[20px] font-[800] text-white"
             >
               M
             </span>
 
             <span
-              class="font-['Plus_Jakarta_Sans'] text-[22px] font-[800] text-[#051F20]"
+              class="font-sans text-[22px] font-[800] text-[#051F20]"
             >
               MIMOSY
             </span>
-          </button>
+          </button> -->
 
           <!-- ================================================= -->
           <!-- EN-TÊTE -->
           <!-- ================================================= -->
 
           <div class="flex flex-col items-center text-center">
-            <div
-              class="flex h-12 w-12 items-center justify-center rounded-[14px] bg-[#2F6250] font-['Plus_Jakarta_Sans'] text-[26px] font-[800] text-white"
-            >
-              M
-            </div>
+            <div class="flex items-center justify-between px-8 py-8">
+      <button
+        type="button"
+        class="flex items-center rounded-md transition hover:opacity-80"
+        aria-label="Retour à l'accueil"
+        title="Retour à l'accueil"
+        @click=""
+      >
+        <img
+          src="/images/mimosy_logo_transparent.png"
+          alt="MIMOSY"
+          class="h-auto w-[175px] object-contain"
+        />
+      </button>
+    </div>
 
             <h2
-              class="mt-3 font-['Plus_Jakarta_Sans'] text-[28px] font-[800] text-[#051F20]"
+              class="mt-3 font-sans text-[28px] font-[800] text-[#051F20]"
             >
               Se connecter
             </h2>
@@ -489,24 +502,24 @@ const handleGoogleLogin = () => {
           <!-- SÉPARATEUR -->
           <!-- ================================================= -->
 
-          <div class="my-7 flex items-center gap-4">
+          <!-- <div class="my-7 flex items-center gap-4">
             <div class="h-px flex-1 bg-[#E2E8F0]"></div>
 
             <span class="text-sm text-[#64748B]"> ou </span>
 
             <div class="h-px flex-1 bg-[#E2E8F0]"></div>
-          </div>
+          </div> -->
 
           <!-- ================================================= -->
           <!-- GOOGLE -->
           <!-- ================================================= -->
 
-          <button
+          <!-- <button
             type="button"
             class="flex h-12 w-full items-center justify-center gap-3 rounded-[10px] border border-[#EFE5E0] bg-[#FFFDF9] px-4 text-sm font-bold text-[#051F20] transition hover:border-[#2F6250] hover:bg-white"
             @click="handleGoogleLogin"
           >
-            <!-- Google -->
+            <!-- Google
 
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
               <path
@@ -531,7 +544,7 @@ const handleGoogleLogin = () => {
             </svg>
 
             Continuer avec Google
-          </button>
+          </button> -->
 
           <!-- ================================================= -->
           <!-- INSCRIPTION -->

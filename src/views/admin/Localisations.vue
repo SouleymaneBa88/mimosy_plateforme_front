@@ -1,0 +1,112 @@
+<script setup>
+/**
+ * Carte admin des localisations réelles (clients et prestataires).
+ *
+ * N'affiche que des coordonnées réellement enregistrées par les
+ * utilisateurs (voir apps.adminpanel.LocalisationAdminViewSet) :
+ * aucune position n'est jamais devinée ni générée côté frontend.
+ */
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
+
+import AppLayout from '@/components/layout/AppLayout.vue'
+import ClientHeader from '@/components/client/ClientHeader.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
+import ErrorState from '@/components/common/ErrorState.vue'
+import Loader from '@/components/common/Loader.vue'
+import * as adminService from '@/services/adminService'
+
+const localisations = ref([])
+const loading = ref(true)
+const errorMessage = ref('')
+const filtreRole = ref('')
+
+const mapContainer = ref(null)
+let map = null
+const marqueurs = []
+
+const couleurParRole = { CLIENT: '#3267B1', PRESTATAIRE: '#2F6250' }
+
+function creerIcone(role) {
+  const couleur = couleurParRole[role] || '#64748B'
+  return L.divIcon({
+    className: 'mimosy-admin-marker',
+    html: `<div style="width:16px;height:16px;border-radius:50%;background:${couleur};border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.3);"></div>`,
+    iconSize: [16, 16],
+    iconAnchor: [8, 8],
+  })
+}
+
+function dessiner() {
+  if (!map) return
+
+  marqueurs.forEach((marker) => map.removeLayer(marker))
+  marqueurs.length = 0
+
+  localisations.value.forEach((loc) => {
+    const marker = L.marker([Number(loc.latitude), Number(loc.longitude)], { icon: creerIcone(loc.role) })
+      .addTo(map)
+      .bindPopup(`<strong>${loc.nom_complet}</strong><br>${loc.role}<br>${[loc.quartier, loc.ville].filter(Boolean).join(', ')}`)
+    marqueurs.push(marker)
+  })
+
+  if (marqueurs.length) {
+    map.fitBounds(marqueurs.map((marker) => marker.getLatLng()), { padding: [40, 40], maxZoom: 14 })
+  }
+}
+
+async function charger() {
+  loading.value = true
+  errorMessage.value = ''
+  try {
+    const data = await adminService.listLocalisationsAdmin({ role: filtreRole.value, page_size: 500 })
+    localisations.value = Array.isArray(data) ? data : data?.results || []
+    await nextTick()
+    dessiner()
+  } catch (error) {
+    errorMessage.value = error.message
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(() => {
+  map = L.map(mapContainer.value).setView([14.6928, -17.4467], 11) // Dakar, ajusté par fitBounds dès que des points existent
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  }).addTo(map)
+  charger()
+})
+
+watch(filtreRole, charger)
+
+onBeforeUnmount(() => {
+  map?.remove()
+  map = null
+})
+</script>
+
+<template>
+  <AppLayout role="admin" background="#F2F3F0">
+    <div class="mx-auto flex w-full  flex-col gap-6">
+      <ClientHeader title="Carte des localisations" subtitle="Répartition géographique réelle des clients et prestataires." />
+
+      <select v-model="filtreRole" class="w-fit rounded-xl border border-[#E2E8F0] px-3 py-2 text-sm text-black">
+        <option value="">Tous les rôles</option>
+        <option value="CLIENT">Clients</option>
+        <option value="PRESTATAIRE">Prestataires</option>
+      </select>
+
+      <ErrorState v-if="errorMessage" :message="errorMessage" @retry="charger" />
+      <Loader v-else-if="loading && !localisations.length" />
+      <EmptyState v-else-if="!loading && !localisations.length" title="Aucune localisation" message="Aucun utilisateur n'a encore renseigné de localisation." />
+
+      <div ref="mapContainer" class="h-[520px] w-full overflow-hidden rounded-2xl border border-[#E2E8F0]"></div>
+
+      <p class="text-sm text-[#64748B]">{{ localisations.length }} localisation(s) affichée(s).</p>
+    </div>
+  </AppLayout>
+</template>

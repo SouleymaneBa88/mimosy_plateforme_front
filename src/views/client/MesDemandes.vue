@@ -18,12 +18,13 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 
-import AppLayout from '@/components/layout/AppLayout.vue'
-import ClientHeader from '@/components/client/ClientHeader.vue'
-import FilterTabs from '@/components/client/FilterTabs.vue'
+import { Inbox, Clock, CheckCircle2, XCircle } from 'lucide-vue-next'
+
+import ClientLayout from '@/components/layout/ClientLayout.vue'
 import RequestCard from '@/components/client/RequestCard.vue'
 import { useDemandePrestationStore } from '@/stores/demandePrestation'
 import { usePrestataireStore } from '@/stores/prestataire'
+import { useEvenementTempsReel } from '@/composables/useEvenementTempsReel'
 
 const router = useRouter()
 const demandeStore = useDemandePrestationStore()
@@ -32,12 +33,23 @@ const prestataireStore = usePrestataireStore()
 /* ---------------------------------------------------------------- *
  * Résolution du prestataire (id -> nom lisible)
  * ---------------------------------------------------------------- */
+
+/**
+ * Construit un nom affichable à partir d'un profil prestataire.
+ * Ordre de repli : prénom+nom → nom_complet → email → chaîne vide.
+ * @param {object|null} profile
+ * @returns {string}
+ */
 function nomComplet(profile) {
   if (!profile) return ''
   const complet = [profile.user_first_name, profile.user_last_name].filter(Boolean).join(' ').trim()
   return complet || profile.nom_complet || profile.user_email || ''
 }
 
+/**
+ * Index Map(id → profil) construit une seule fois par changement de liste,
+ * pour retrouver un prestataire en O(1) plutôt qu'avec un .find() répété.
+ */
 const prestataireIndex = computed(() => {
   const index = new Map()
   prestataireStore.prestataires.forEach((profile) => {
@@ -49,6 +61,8 @@ const prestataireIndex = computed(() => {
 /**
  * Retrouve le profil derrière `demande.prestataire`.
  * Accepte un objet déjà sérialisé, un identifiant, ou des champs aplatis.
+ * @param {object} demande
+ * @returns {object|null}
  */
 function resoudrePrestataire(demande) {
   const reference = demande?.prestataire
@@ -74,6 +88,13 @@ function resoudrePrestataire(demande) {
 /* ---------------------------------------------------------------- *
  * Demandes normalisées
  * ---------------------------------------------------------------- */
+
+/**
+ * Transforme les demandes brutes du store en objets prêts à afficher :
+ * statut regroupé (en_cours / terminee / annulee), nom du prestataire
+ * résolu, date formatée, et identifiant brut du prestataire conservé
+ * séparément pour la navigation.
+ */
 const demandes = computed(() =>
   demandeStore.demandes.map((demande) => {
     const profile = resoudrePrestataire(demande)
@@ -87,6 +108,7 @@ const demandes = computed(() =>
         {
           EN_ATTENTE: 'en_cours',
           ACCEPTEE: 'en_cours',
+          REALISEE: 'en_cours',
           REFUSEE: 'annulee',
           TERMINEE: 'terminee',
           ANNULEE: 'annulee',
@@ -96,20 +118,37 @@ const demandes = computed(() =>
       prestataireId,
       date: demande.date_creation ? new Date(demande.date_creation).toLocaleString('fr-FR') : '',
       icon: '•',
-      iconBackground: '#EAF8F2',
+      iconBackground: 'var(--color-mimosy-primaryBg)',
     }
   }),
 )
 
-const tabs = [
-  { id: 'toutes', label: 'Toutes' },
-  { id: 'en_cours', label: 'En cours' },
-  { id: 'terminee', label: 'Terminées' },
-  { id: 'annulee', label: 'Annulées' },
-]
+/** Compte les demandes normalisées correspondant à un statut donné (ou toutes). */
+function compterParFiltre(valeur) {
+  if (valeur === 'toutes') return demandes.value.length
+  return demandes.value.filter((demande) => demande.statut === valeur).length
+}
 
+/** Tuiles de statistiques (reprises de front_mimosy/StatistiquesDemandes.vue), calculées à partir des vraies demandes. */
+const statistiques = computed(() => [
+  { id: 'total', label: 'Total', valeur: demandes.value.length, icone: Inbox, fond: 'var(--color-mimosy-page)', texte: 'var(--color-mimosy-text)' },
+  { id: 'en_cours', label: 'En cours', valeur: compterParFiltre('en_cours'), icone: Clock, fond: 'var(--color-mimosy-page)', texte: 'var(--color-mimosy-secondary)' },
+  { id: 'terminee', label: 'Terminées', valeur: compterParFiltre('terminee'), icone: CheckCircle2, fond: 'var(--color-mimosy-primaryBg)', texte: 'var(--color-mimosy-primary)' },
+  { id: 'annulee', label: 'Annulées', valeur: compterParFiltre('annulee'), icone: XCircle, fond: '#FFF0EE', texte: '#C53B35' },
+])
+
+/** Onglets de filtrage affichés au-dessus de la liste, avec compteurs réels. */
+const tabs = computed(() => [
+  { id: 'toutes', label: 'Toutes', nombre: compterParFiltre('toutes') },
+  { id: 'en_cours', label: 'En cours', nombre: compterParFiltre('en_cours') },
+  { id: 'terminee', label: 'Terminées', nombre: compterParFiltre('terminee') },
+  { id: 'annulee', label: 'Annulées', nombre: compterParFiltre('annulee') },
+])
+
+/** Onglet actuellement sélectionné. */
 const activeTab = ref('toutes')
 
+/** Charge en parallèle les demandes et les prestataires au montage. */
 function chargerDonnees() {
   return Promise.all([
     demandeStore.chargerDemandes(),
@@ -118,7 +157,9 @@ function chargerDonnees() {
 }
 
 onMounted(chargerDonnees)
+useEvenementTempsReel(['demande.nouvelle', 'demande.statut'], () => demandeStore.chargerDemandes(true))
 
+/** Liste affichée : toutes les demandes, ou seulement celles de l'onglet actif. */
 const demandesFiltrees = computed(() => {
   if (activeTab.value === 'toutes') {
     return demandes.value
@@ -127,10 +168,12 @@ const demandesFiltrees = computed(() => {
   return demandes.value.filter((demande) => demande.statut === activeTab.value)
 })
 
+/** Action "Suivre" (alias de voirDetails, gardé distinct pour la lisibilité des configs). */
 function suivreDemande(id) {
   voirDetails(id)
 }
 
+/** Navigue vers la page de détail d'une demande. */
 function voirDetails(id) {
   if (!id) {
     return
@@ -140,99 +183,6 @@ function voirDetails(id) {
     name: 'detais.demande',
     params: { id: String(id) },
   })
-}
-
-function accepterDevis(id) {
-  console.log('Accepter le devis', id)
-}
-
-function voirOffre(id) {
-  console.log("Voir l'offre", id)
-}
-
-/**
- * --------------------------------------------------------------------------
- * MODAL AVIS
- * --------------------------------------------------------------------------
- */
-
-const isAvisModalOpen = ref(false)
-
-const demandeAvis = ref(null)
-
-const noteAvis = ref(0)
-
-const commentaireAvis = ref('')
-
-/**
- * Ouvre le modal pour laisser un avis
- */
-function laisserAvis(id) {
-  const demande = demandes.value.find((item) => item.id === id)
-
-  if (!demande) {
-    return
-  }
-
-  demandeAvis.value = demande
-
-  // Réinitialisation du formulaire
-  noteAvis.value = 0
-  commentaireAvis.value = ''
-
-  isAvisModalOpen.value = true
-}
-
-/**
- * Ferme le modal
- */
-function fermerAvis() {
-  isAvisModalOpen.value = false
-  demandeAvis.value = null
-  noteAvis.value = 0
-  commentaireAvis.value = ''
-}
-
-/**
- * Sélectionne une note
- */
-function selectionnerNote(note) {
-  noteAvis.value = note
-}
-
-/**
- * Envoie l'avis
- */
-function envoyerAvis() {
-  if (!demandeAvis.value) {
-    return
-  }
-
-  if (noteAvis.value === 0) {
-    return
-  }
-
-  if (!commentaireAvis.value.trim()) {
-    return
-  }
-
-  const avis = {
-    demandeId: demandeAvis.value.id,
-    prestataire: demandeAvis.value.prestataire,
-    note: noteAvis.value,
-    commentaire: commentaireAvis.value.trim(),
-  }
-
-  /**
-   * À remplacer plus tard par :
-   *
-   * POST /avis
-   *
-   * avec les données de l'avis.
-   */
-  console.log('Avis envoyé', avis)
-
-  fermerAvis()
 }
 
 /**
@@ -259,9 +209,7 @@ const totalFacture = computed(() => {
   )
 })
 
-/**
- * Ouvre le modal facture pour la demande correspondante.
- */
+/** Ouvre le modal facture pour la demande correspondante. */
 function voirFacture(id) {
   const demande = demandes.value.find((item) => item.id === id)
 
@@ -273,14 +221,13 @@ function voirFacture(id) {
   isFactureModalOpen.value = true
 }
 
-/**
- * Ferme le modal facture et réinitialise l'état
- */
+/** Ferme le modal facture et réinitialise l'état. */
 function fermerFacture() {
   isFactureModalOpen.value = false
   demandeFacture.value = null
 }
 
+/** Relance une demande annulée : vers le prestataire d'origine, ou vers la recherche. */
 function refaireDemande(id) {
   const demande = demandes.value.find((item) => item.id === id)
 
@@ -294,15 +241,16 @@ function refaireDemande(id) {
     return
   }
 
-  router.push({ name: 'trouver-service', query: { refaire: 'true' } })
+  router.push({ name: 'client-prestataires', query: { refaire: 'true' } })
 }
 
 /**
  * --------------------------------------------------------------------------
  * Configuration des actions selon le statut
  * --------------------------------------------------------------------------
+ * Centralise, pour chaque statut affiché, le libellé et la couleur du badge
+ * ainsi que les deux actions du RequestCard (primaire / secondaire).
  */
-
 const configParStatut = {
   en_cours: {
     badgeLabel: 'En cours',
@@ -312,16 +260,6 @@ const configParStatut = {
     secondaryLabel: 'Détails',
     onPrimary: suivreDemande,
     onSecondary: voirDetails,
-  },
-
-  devis: {
-    badgeLabel: 'Devis reçu',
-    badgeBackground: '#EDF4FF',
-    badgeColor: '#3267B1',
-    primaryLabel: 'Accepter',
-    secondaryLabel: "Voir l'offre",
-    onPrimary: accepterDevis,
-    onSecondary: voirOffre,
   },
 
   terminee: {
@@ -347,30 +285,71 @@ const configParStatut = {
 </script>
 
 <template>
-  <AppLayout>
-    <div class="mx-auto flex w-full flex-col gap-7 sm:gap-8">
-      <ClientHeader
-        title="Mes demandes"
-        subtitle="Gérez l'historique de vos demandes de services et devis."
-      />
+  <ClientLayout>
+    <div class="mx-auto flex w-full max-w-[100%] flex-col gap-6 px-4 py-10 sm:gap-8 sm:px-8 sm:py-12">
+      <!-- En-tête (repris de front_mimosy/views/clients/MesDemandes.vue) -->
+      <div class="flex flex-col gap-1.5">
+        <h1 class="font-serif text-[28px] leading-[34px] text-mimosy-text sm:text-[32px] sm:leading-[38px]">Mes demandes</h1>
+        <p class="font-sans text-sm text-mimosy-secondary">Gérez et suivez l'avancement de vos demandes de services.</p>
+      </div>
 
-      <FilterTabs
-        v-model="activeTab"
-        :tabs="tabs"
-      />
+      <!-- Statistiques -->
+      <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        <div v-for="stat in statistiques" :key="stat.id" class="flex items-center gap-3 rounded-2xl border border-mimosy-border bg-mimosy-surface p-4 sm:p-5">
+          <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl" :style="{ backgroundColor: stat.fond }">
+            <component :is="stat.icone" :size="20" :stroke-width="1.8" :style="{ color: stat.texte }" />
+          </div>
+          <div class="flex min-w-0 flex-col">
+            <span class="font-serif text-2xl leading-7 text-mimosy-text">{{ stat.valeur }}</span>
+            <span class="truncate font-sans text-[11px] font-bold uppercase leading-4 tracking-[0.4px] text-mimosy-secondary">{{ stat.label }}</span>
+          </div>
+        </div>
+      </div>
 
-      <p v-if="demandeStore.isLoading" class="rounded-[20px] border border-[#E2E8F0] bg-white p-10 text-center text-[#64748B]">
-        Chargement de vos demandes...
-      </p>
+      <!-- Onglets à compteurs : défilement horizontal si trop étroit -->
+      <div class="-mx-1 flex flex-wrap gap-2 overflow-x-auto pb-1">
+        <button
+          v-for="tab in tabs"
+          :key="tab.id"
+          type="button"
+          class="flex items-center gap-2 rounded-xl px-4 py-2.5 font-sans text-sm font-bold transition"
+          :class="activeTab === tab.id ? 'bg-mimosy-text text-white' : 'border border-mimosy-border bg-mimosy-surface text-mimosy-text hover:border-mimosy-primary hover:text-mimosy-primary'"
+          @click="activeTab = tab.id"
+        >
+          {{ tab.label }}
+          <span class="rounded-full px-1.5 py-0.5 text-[11px] leading-none" :class="activeTab === tab.id ? 'bg-white/15 text-white' : 'bg-mimosy-page text-mimosy-secondary'">
+            {{ tab.nombre }}
+          </span>
+        </button>
+      </div>
 
-      <p v-else-if="demandeStore.errorMessage" class="rounded-[20px] bg-[#FFF0EE] p-6 text-center text-[#A85148]">
+      <!-- ═══════════════ État : chargement ═══════════════ -->
+      <div
+        v-if="demandeStore.isLoading"
+        class="flex flex-col gap-4"
+      >
+        <div
+          v-for="n in 3"
+          :key="n"
+          class="h-24 animate-pulse rounded-[20px] border border-mimosy-border bg-mimosy-page sm:h-28"
+        ></div>
+      </div>
+
+      <!-- ═══════════════ État : erreur ═══════════════ -->
+      <p
+        v-else-if="demandeStore.errorMessage"
+        class="rounded-[20px] bg-[#FFF0EE] p-6 text-center text-sm font-semibold text-[#A85148] sm:p-10"
+      >
         {{ demandeStore.errorMessage }}
       </p>
 
-      <div v-else class="flex flex-col gap-4">
+      <!-- ═══════════════ Liste des demandes (grille en vagues) ═══════════════ -->
+      <div v-else class="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <RequestCard
-          v-for="demande in demandesFiltrees"
+          v-for="(demande, index) in demandesFiltrees"
           :key="demande.id"
+          class="transition-transform duration-300"
+          :class="index % 2 === 1 ? 'sm:mt-10' : ''"
           :icon="demande.icon"
           :icon-background="demande.iconBackground"
           :title="demande.titre"
@@ -384,203 +363,33 @@ const configParStatut = {
           @primary-action="configParStatut[demande.statut].onPrimary(demande.id)"
           @secondary-action="configParStatut[demande.statut].onSecondary(demande.id)"
         >
-          <!-- Suivi en cours : barre de progression -->
-          <div
-            v-if="demande.statut === 'en_cours'"
-            class="flex items-center gap-3 pt-1"
-          >
-            <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-[#FAF5F0]">
-              <div
-                class="h-full rounded-full bg-[#2F6250]"
-                :style="{ width: `${demande.progression}%` }"
-              ></div>
-            </div>
-
-            <span class="shrink-0 text-xs text-[#64748B]">
-              {{ demande.arrivee }}
-            </span>
-          </div>
-
-          <!-- Devis reçu : montant proposé -->
-          <p
-            v-else-if="demande.statut === 'devis'"
-            class="text-lg font-extrabold text-[#2F6250]"
-          >
-            {{ demande.prix.toLocaleString('fr-FR') }} FCFA
-          </p>
-
-          <!-- Terminée : montant déjà payé -->
-          <p
-            v-else-if="demande.statut === 'terminee' && demande.montantPaye != null"
-            class="text-sm font-bold text-[#334155]"
-          >
-            {{ demande.montantPaye.toLocaleString('fr-FR') }} FCFA payés
+          <!-- Budget réel de la demande (seule donnée de montant réellement fournie par l'API à ce stade). -->
+          <p v-if="demande.budget" class="font-sans text-sm font-bold text-mimosy-primary">
+            {{ Number(demande.budget).toLocaleString('fr-FR') }} FCFA
           </p>
         </RequestCard>
 
+        <!-- ═══════════════ État : liste vide ═══════════════ -->
         <div
           v-if="demandesFiltrees.length === 0"
-          class="rounded-[20px] border border-dashed border-[#E2E8F0] bg-white p-10 text-center"
+          class="col-span-full rounded-[24px] border border-dashed border-mimosy-border bg-mimosy-surface p-8 text-center sm:p-10"
         >
-          <p class="font-semibold text-[#051F20]">
+          <div
+            class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-mimosy-page text-mimosy-secondary"
+          >
+            <Inbox class="h-6 w-6" />
+          </div>
+
+          <p class="font-sans font-semibold text-mimosy-text">
             Aucune demande dans cette catégorie
           </p>
 
-          <p class="mt-1 text-sm text-[#64748B]">
+          <p class="mt-1 font-sans text-sm text-mimosy-secondary">
             Vos demandes apparaîtront ici une fois créées.
           </p>
         </div>
       </div>
     </div>
-
-    <!-- ====================================================================
-         MODAL LAISSER UN AVIS
-         ==================================================================== -->
-
-    <Teleport to="body">
-      <Transition name="avis-modal">
-        <div
-          v-if="isAvisModalOpen"
-          class="fixed inset-0 z-[100] flex items-center justify-center bg-[#051F20]/50 px-4 py-6"
-          @click.self="fermerAvis"
-        >
-          <div
-            class="w-full max-w-[520px] rounded-[20px] bg-white"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="avis-modal-title"
-          >
-            <!-- En-tête -->
-            <div
-              class="flex items-start justify-between border-b border-[#E2E8F0] px-5 py-5 sm:px-6"
-            >
-              <div class="pr-4">
-                <h2
-                  id="avis-modal-title"
-                  class="font-['Plus_Jakarta_Sans'] text-xl font-extrabold text-[#051F20]"
-                >
-                  Laisser un avis
-                </h2>
-
-                <p class="mt-1 text-sm text-[#64748B]">
-                  Partagez votre expérience avec ce prestataire.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                class="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] text-xl text-[#64748B] transition hover:bg-[#F5F6F4] hover:text-[#051F20]"
-                aria-label="Fermer"
-                @click="fermerAvis"
-              >
-                ×
-              </button>
-            </div>
-
-            <!-- Contenu -->
-            <div class="px-5 py-5 sm:px-6 sm:py-6">
-              <!-- Prestataire : nom, jamais l'identifiant -->
-              <div
-                v-if="demandeAvis"
-                class="mb-6 rounded-[12px] bg-[#FAF5F0] px-4 py-3"
-              >
-                <p class="text-xs font-medium text-[#64748B]">
-                  Prestataire
-                </p>
-
-                <p class="mt-1 text-sm font-bold text-[#051F20]">
-                  {{ demandeAvis.prestataire }}
-                </p>
-
-                <p class="mt-1 text-xs text-[#64748B]">
-                  {{ demandeAvis.titre }}
-                </p>
-              </div>
-
-              <!-- Note -->
-              <div>
-                <p class="text-sm font-bold text-[#051F20]">
-                  Votre note
-                </p>
-
-                <div
-                  class="mt-3 flex items-center gap-2"
-                  aria-label="Choisir une note sur 5"
-                >
-                  <button
-                    v-for="note in 5"
-                    :key="note"
-                    type="button"
-                    class="flex h-10 w-10 items-center justify-center text-2xl transition"
-                    :class="
-                      note <= noteAvis
-                        ? 'text-[#A87545]'
-                        : 'text-[#CBD5E1]'
-                    "
-                    :aria-label="`${note} étoile${note > 1 ? 's' : ''}`"
-                    @click="selectionnerNote(note)"
-                  >
-                    ★
-                  </button>
-                </div>
-
-                <p
-                  v-if="noteAvis > 0"
-                  class="mt-2 text-xs font-medium text-[#64748B]"
-                >
-                  {{ noteAvis }}/5
-                </p>
-              </div>
-
-              <!-- Commentaire -->
-              <div class="mt-6">
-                <label
-                  for="commentaire-avis"
-                  class="text-sm font-bold text-[#051F20]"
-                >
-                  Votre commentaire
-                </label>
-
-                <textarea
-                  id="commentaire-avis"
-                  v-model="commentaireAvis"
-                  rows="5"
-                  maxlength="500"
-                  placeholder="Décrivez votre expérience avec ce prestataire..."
-                  class="mt-3 w-full resize-none rounded-[12px] border border-[#E2E8F0] bg-white px-4 py-3 text-sm text-[#051F20] outline-none transition placeholder:text-[#94A3B8] focus:border-[#2F6250]"
-                ></textarea>
-
-                <p class="mt-1 text-right text-xs text-[#94A3B8]">
-                  {{ commentaireAvis.length }}/500
-                </p>
-              </div>
-            </div>
-
-            <!-- Actions -->
-            <div
-              class="flex flex-col-reverse gap-3 border-t border-[#E2E8F0] px-5 py-5 sm:flex-row sm:justify-end sm:px-6"
-            >
-              <button
-                type="button"
-                class="h-11 rounded-[10px] border border-[#E2E8F0] px-5 text-sm font-bold text-[#334155] transition hover:bg-[#F5F6F4]"
-                @click="fermerAvis"
-              >
-                Annuler
-              </button>
-
-              <button
-                type="button"
-                class="h-11 rounded-[10px] bg-[#2F6250] px-5 text-sm font-bold text-white transition hover:bg-[#244B3D] disabled:cursor-not-allowed disabled:opacity-50"
-                :disabled="noteAvis === 0 || !commentaireAvis.trim()"
-                @click="envoyerAvis"
-              >
-                Publier mon avis
-              </button>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
 
     <!-- ====================================================================
          MODAL FACTURE
@@ -590,33 +399,33 @@ const configParStatut = {
       <Transition name="avis-modal">
         <div
           v-if="isFactureModalOpen"
-          class="fixed inset-0 z-[100] flex items-center justify-center bg-[#051F20]/50 px-4 py-6"
+          class="fixed inset-0 z-[1000] flex items-center justify-center bg-mimosy-text/55 px-4 py-6"
           @click.self="fermerFacture"
         >
           <div
-            class="w-full max-w-[520px] rounded-[20px] bg-white"
+            class="flex max-h-[90vh] w-full max-w-[520px] flex-col overflow-y-auto rounded-[24px] bg-mimosy-surface"
             role="dialog"
             aria-modal="true"
             aria-labelledby="facture-modal-title"
           >
             <!-- En-tête -->
-            <div class="flex items-start justify-between border-b border-[#E2E8F0] px-5 py-5 sm:px-6">
+            <div class="flex items-start justify-between border-b border-mimosy-border px-5 py-5 sm:px-6">
               <div class="pr-4">
                 <h2
                   id="facture-modal-title"
-                  class="font-['Plus_Jakarta_Sans'] text-xl font-extrabold text-[#051F20]"
+                  class="font-serif text-xl text-mimosy-text"
                 >
                   Facture {{ demandeFacture?.facture.numero }}
                 </h2>
 
-                <p class="mt-1 text-sm text-[#64748B]">
+                <p class="mt-1 font-sans text-sm text-mimosy-secondary">
                   {{ demandeFacture?.titre }}
                 </p>
               </div>
 
               <button
                 type="button"
-                class="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] text-xl text-[#64748B] transition hover:bg-[#F5F6F4] hover:text-[#051F20]"
+                class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-xl text-mimosy-secondary transition hover:bg-mimosy-page hover:text-mimosy-text"
                 aria-label="Fermer"
                 @click="fermerFacture"
               >
@@ -629,25 +438,25 @@ const configParStatut = {
               v-if="demandeFacture"
               class="px-5 py-5 sm:px-6 sm:py-6"
             >
-              <!-- Infos prestataire / paiement -->
-              <div class="mb-6 grid grid-cols-2 gap-4 rounded-[12px] bg-[#FAF5F0] px-4 py-3">
+              <!-- Infos prestataire / paiement : empilées sur mobile, 3 colonnes dès sm -->
+              <div class="mb-6 grid grid-cols-1 gap-4 rounded-xl bg-mimosy-page px-4 py-3 sm:grid-cols-3">
                 <div>
-                  <p class="text-xs font-medium text-[#64748B]">Prestataire</p>
-                  <p class="mt-1 text-sm font-bold text-[#051F20]">
+                  <p class="font-sans text-xs font-medium text-mimosy-secondary">Prestataire</p>
+                  <p class="mt-1 font-sans text-sm font-bold text-mimosy-text">
                     {{ demandeFacture.prestataire }}
                   </p>
                 </div>
 
                 <div>
-                  <p class="text-xs font-medium text-[#64748B]">Mode de paiement</p>
-                  <p class="mt-1 text-sm font-bold text-[#051F20]">
+                  <p class="font-sans text-xs font-medium text-mimosy-secondary">Mode de paiement</p>
+                  <p class="mt-1 font-sans text-sm font-bold text-mimosy-text">
                     {{ demandeFacture.facture.modePaiement }}
                   </p>
                 </div>
 
                 <div>
-                  <p class="text-xs font-medium text-[#64748B]">N° facture</p>
-                  <p class="mt-1 text-sm font-bold text-[#051F20]">
+                  <p class="font-sans text-xs font-medium text-mimosy-secondary">N° facture</p>
+                  <p class="mt-1 font-sans text-sm font-bold text-mimosy-text">
                     {{ demandeFacture.facture.numero }}
                   </p>
                 </div>
@@ -655,24 +464,24 @@ const configParStatut = {
 
               <!-- Détail des lignes -->
               <div>
-                <p class="text-sm font-bold text-[#051F20]">Détail</p>
+                <p class="font-sans text-sm font-bold text-mimosy-text">Détail</p>
 
-                <div class="mt-3 divide-y divide-[#E2E8F0] rounded-[12px] border border-[#E2E8F0]">
+                <div class="mt-3 divide-y divide-mimosy-border rounded-xl border border-mimosy-border">
                   <div
                     v-for="(ligne, index) in demandeFacture.facture.lignes"
                     :key="index"
-                    class="flex items-center justify-between px-4 py-3"
+                    class="flex items-center justify-between gap-3 px-4 py-3"
                   >
-                    <div>
-                      <p class="text-sm font-semibold text-[#051F20]">
+                    <div class="min-w-0">
+                      <p class="truncate font-sans text-sm font-semibold text-mimosy-text">
                         {{ ligne.libelle }}
                       </p>
-                      <p class="text-xs text-[#64748B]">
+                      <p class="font-sans text-xs text-mimosy-secondary">
                         Qté : {{ ligne.quantite }}
                       </p>
                     </div>
 
-                    <p class="text-sm font-bold text-[#334155]">
+                    <p class="shrink-0 font-sans text-sm font-bold text-mimosy-text">
                       {{ (ligne.quantite * ligne.prixUnitaire).toLocaleString('fr-FR') }} FCFA
                     </p>
                   </div>
@@ -680,19 +489,19 @@ const configParStatut = {
               </div>
 
               <!-- Total -->
-              <div class="mt-4 flex items-center justify-between border-t border-[#E2E8F0] pt-4">
-                <p class="text-sm font-bold text-[#051F20]">Total payé</p>
-                <p class="text-lg font-extrabold text-[#2F6250]">
+              <div class="mt-4 flex items-center justify-between border-t border-mimosy-border pt-4">
+                <p class="font-sans text-sm font-bold text-mimosy-text">Total payé</p>
+                <p class="font-sans text-lg font-extrabold text-mimosy-primary">
                   {{ totalFacture.toLocaleString('fr-FR') }} FCFA
                 </p>
               </div>
             </div>
 
             <!-- Actions -->
-            <div class="flex justify-end border-t border-[#E2E8F0] px-5 py-5 sm:px-6">
+            <div class="flex justify-end border-t border-mimosy-border px-5 py-5 sm:px-6">
               <button
                 type="button"
-                class="h-11 rounded-[10px] bg-[#2F6250] px-5 text-sm font-bold text-white transition hover:bg-[#244B3D]"
+                class="h-11 rounded-xl bg-mimosy-primary px-5 font-sans text-sm font-bold text-white transition hover:opacity-90"
                 @click="fermerFacture"
               >
                 Fermer
@@ -702,7 +511,7 @@ const configParStatut = {
         </div>
       </Transition>
     </Teleport>
-  </AppLayout>
+  </ClientLayout>
 </template>
 
 <style scoped>
@@ -724,5 +533,14 @@ const configParStatut = {
 .avis-modal-enter-from > div,
 .avis-modal-leave-to > div {
   transform: translateY(12px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .avis-modal-enter-active,
+  .avis-modal-leave-active,
+  .avis-modal-enter-active > div,
+  .avis-modal-leave-active > div {
+    transition: none;
+  }
 }
 </style>

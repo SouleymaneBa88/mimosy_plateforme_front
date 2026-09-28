@@ -91,6 +91,8 @@ export const useDemandePrestationStore = defineStore('demandePrestation', () => 
   const accepterDemande = (id) => changerStatutPrestataire(id, 'acceptRequest')
   const refuserDemande = (id) => changerStatutPrestataire(id, 'rejectRequest')
   const terminerDemande = (id) => changerStatutPrestataire(id, 'completeRequest')
+  // Validation par le client d'une prestation réalisée : libère les fonds côté backend.
+  const confirmerDemande = (id) => changerStatutPrestataire(id, 'confirmRequest')
 
-  return { demandes, demandeSelectionnee, isLoading, errorMessage, isLoaded, chargerDemandes, chargerDemande, creerDemande, annulerDemande, accepterDemande, refuserDemande, terminerDemande }
+  return { demandes, demandeSelectionnee, isLoading, errorMessage, isLoaded, chargerDemandes, chargerDemande, creerDemande, annulerDemande, accepterDemande, refuserDemande, terminerDemande, confirmerDemande }
 })

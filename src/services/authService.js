@@ -27,8 +27,13 @@ export function refresh(refreshToken) {
 }
 
 export async function logout() {
+  const refreshToken = localStorage.getItem('mimosy_refresh_token')
+
   try {
-    await apiFetch(API_ENDPOINTS.auth.logout, { method: 'POST' })
+    await apiFetch(API_ENDPOINTS.auth.logout, {
+      method: 'POST',
+      ...(refreshToken ? { body: { refresh: refreshToken } } : {}),
+    })
   } finally {
     clearAuthStorage()
   }

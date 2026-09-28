@@ -9,12 +9,13 @@ const props = defineProps({
   errorMessage: { type: String, default: '' },
 })
 const emit = defineEmits(['update:modelValue', 'save'])
-const form = reactive({ description: '', experience: 0, disponibilite: true })
+const form = reactive({ description: '', date_naissance: '', experience: 0, disponibilite: true })
 
 watch(
   () => props.profil,
   (value) => Object.assign(form, {
     description: value.description || '',
+    date_naissance: value.date_naissance || '',
     experience: Number(value.experience || 0),
     disponibilite: value.disponibilite ?? true,
   }),
@@ -22,7 +23,7 @@ watch(
 )
 
 function save() {
-  emit('save', { ...form })
+  emit('save', { ...form, date_naissance: form.date_naissance || null })
 }
 </script>
 
@@ -30,6 +31,10 @@ function save() {
   <Modal :model-value="modelValue" title="Modifier mon profil" @update:model-value="$emit('update:modelValue', $event)">
     <form class="grid gap-4" @submit.prevent="save">
       <textarea v-model="form.description" class="rounded-xl border border-[#D9DDD8] bg-white px-4 py-3 text-sm text-[#0F172A] outline-none placeholder:text-[#94A3B8]" placeholder="Description professionnelle" rows="4" />
+      <label class="flex flex-col gap-1.5 text-xs font-bold text-[#64748B]">
+        Date de naissance
+        <input v-model="form.date_naissance" type="date" class="rounded-xl border border-[#D9DDD8] bg-white px-4 py-3 text-sm text-[#0F172A] outline-none" />
+      </label>
       <input v-model.number="form.experience" type="number" min="0" class="rounded-xl border border-[#D9DDD8] bg-white px-4 py-3 text-sm text-[#0F172A] outline-none placeholder:text-[#94A3B8]" placeholder="Années d'expérience" />
       <label class="flex items-center gap-2 text-sm text-[#334155]">
         <input v-model="form.disponibilite" type="checkbox" />

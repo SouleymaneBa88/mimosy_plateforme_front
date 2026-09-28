@@ -1,0 +1,169 @@
+/* ==========================================================================
+   MIMOSY — tokens visuels
+   Source unique des couleurs, typographies, rayons et durées.
+   1. :root   → valeurs brutes (utilisables dans les <style> des composants)
+   2. @theme  → exposition aux utilitaires Tailwind (bg-brand, text-ink…)
+   3. alias   → anciens noms (mimosy-primary, mimosy-page…) conservés tant
+                que toutes les pages n'ont pas été migrées.
+   ========================================================================== */
+
+:root {
+  /* Marque */
+  --mimosy-green: #2D6A4F;
+  --mimosy-green-light: #3E8064;
+  --mimosy-green-dark: #051F20;
+  --mimosy-green-soft: #E4EDE7;   /* fond teinté : badge, état actif */
+  --mimosy-green-mist: #F1F5F1;   /* fond très léger : survol */
+
+  /* Surfaces, du plus clair au plus enfoncé */
+  --mimosy-bg: #FFFDF9;           /* fond de page, blanc cassé chaud */
+  --mimosy-raised: #FFFFFF;       /* élément posé sur le fond : champ, carte sur surface */
+  --mimosy-surface: #FAFAF8;      /* carte, panneau */
+  --mimosy-sunken: #F2F3F0;       /* zone en retrait : barre d'outils, piste de skeleton */
+
+  /* Lignes */
+  --mimosy-border: #E6E8E3;
+  --mimosy-border-strong: #D3D7D0;
+
+  /* Texte
+     muted (#7A847E) passe à ~3.9:1 sur le fond : réservé aux métadonnées
+     et placeholders. ink-soft sert au texte secondaire lisible (AA). */
+  --mimosy-text: #1C2420;
+  --mimosy-text-soft: #4F5A54;
+  --mimosy-muted: #7A847E;
+
+  /* Sémantique — tons terreux dérivés de la palette, jamais saturés */
+  --mimosy-success: #2D6A4F;
+  --mimosy-success-soft: #E4EDE7;
+  --mimosy-warning: #8A5A12;
+  --mimosy-warning-soft: #F8EDD8;
+  --mimosy-danger: #A4443A;
+  --mimosy-danger-soft: #F8E8E4;
+  --mimosy-info: #2F5F66;
+  --mimosy-info-soft: #E3EDEE;
+  --mimosy-neutral: #4F5A54;
+  --mimosy-neutral-soft: #EEEFEB;
+  --mimosy-star: #C98A12;
+
+  /* Typographie */
+  --mimosy-font-sans: 'DM Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --mimosy-font-serif: 'Instrument Serif', ui-serif, Georgia, 'Times New Roman', serif;
+
+  /* Rayons */
+  --mimosy-radius-sm: 8px;
+  --mimosy-radius-md: 12px;
+  --mimosy-radius-lg: 18px;
+  --mimosy-radius-xl: 24px;
+  --mimosy-radius-2xl: 32px;
+
+  /* Mouvement */
+  --mimosy-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --mimosy-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --mimosy-duration-fast: 150ms;
+  --mimosy-duration: 220ms;
+  --mimosy-duration-slow: 480ms;
+
+  /* Espacements de mise en page */
+  --mimosy-gutter: 1rem;
+  --mimosy-container: 1200px;
+  --mimosy-header-h: 64px;
+
+  /* Glass — réservé aux headers landing / client et à quelques overlays */
+  --mimosy-glass-bg: rgba(255, 253, 249, 0.62);
+  --mimosy-glass-bg-dense: rgba(255, 253, 249, 0.86);
+  --mimosy-glass-border: rgba(230, 232, 227, 0.7);
+  --mimosy-glass-border-dense: rgba(211, 215, 208, 0.95);
+  --mimosy-glass-blur: 16px;
+
+  /* Focus */
+  --mimosy-focus-ring: 0 0 0 2px var(--mimosy-bg), 0 0 0 4px var(--mimosy-green);
+}
+
+@media (min-width: 640px) {
+  :root {
+    --mimosy-gutter: 1.5rem;
+    --mimosy-header-h: 72px;
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --mimosy-gutter: 2.5rem;
+  }
+}
+
+@theme static {
+  /* --- Nouveaux noms (à utiliser dans toutes les pages refaites) --- */
+  --color-brand: var(--mimosy-green);
+  --color-brand-light: var(--mimosy-green-light);
+  --color-brand-dark: var(--mimosy-green-dark);
+  --color-brand-soft: var(--mimosy-green-soft);
+  --color-brand-mist: var(--mimosy-green-mist);
+
+  --color-canvas: var(--mimosy-bg);
+  --color-raised: var(--mimosy-raised);
+  --color-surface: var(--mimosy-surface);
+  --color-sunken: var(--mimosy-sunken);
+
+  --color-line: var(--mimosy-border);
+  --color-line-strong: var(--mimosy-border-strong);
+
+  --color-ink: var(--mimosy-text);
+  --color-ink-soft: var(--mimosy-text-soft);
+  --color-muted: var(--mimosy-muted);
+
+  --color-success: var(--mimosy-success);
+  --color-success-soft: var(--mimosy-success-soft);
+  --color-warning: var(--mimosy-warning);
+  --color-warning-soft: var(--mimosy-warning-soft);
+  --color-danger: var(--mimosy-danger);
+  --color-danger-soft: var(--mimosy-danger-soft);
+  --color-info: var(--mimosy-info);
+  --color-info-soft: var(--mimosy-info-soft);
+  --color-neutral: var(--mimosy-neutral);
+  --color-neutral-soft: var(--mimosy-neutral-soft);
+  --color-star: var(--mimosy-star);
+
+  --font-sans: var(--mimosy-font-sans);
+  --font-serif: var(--mimosy-font-serif);
+
+  /* Noms dédiés : les rayons Tailwind par défaut (rounded-lg…) restent
+     intacts pour ne pas modifier les pages existantes. */
+  --radius-chip: var(--mimosy-radius-sm);
+  --radius-control: var(--mimosy-radius-md);
+  --radius-card: var(--mimosy-radius-lg);
+  --radius-panel: var(--mimosy-radius-xl);
+
+  --ease-mimosy: var(--mimosy-ease);
+  --ease-mimosy-out: var(--mimosy-ease-out);
+
+  /* --- Alias de compatibilité (anciens noms, valeurs inchangées) ---
+     Les valeurs historiques sont conservées à l'identique pour qu'aucune
+     page non migrée ne change d'apparence. À retirer une fois la
+     migration terminée. */
+  --color-mimosy-page: var(--mimosy-sunken);
+  --color-mimosy-surface: #FFFFFF;
+  --color-mimosy-alt: var(--mimosy-surface);
+  --color-mimosy-border: var(--mimosy-border);
+
+  --color-mimosy-primary: var(--mimosy-green);
+  --color-mimosy-primaryBg: #E2EAE4;
+
+  --color-mimosy-text: var(--mimosy-text);
+  --color-mimosy-secondary: var(--mimosy-muted);
+
+  --color-mimosy-blue: #2F78C2;
+  --color-mimosy-blueBg: #DBE8F7;
+  --color-mimosy-teal: #1A978C;
+  --color-mimosy-tealBg: #D3EEEB;
+  --color-mimosy-yellow: #D99A0B;
+  --color-mimosy-yellowBg: #FBEFCF;
+  --color-mimosy-red: #C22F2F;
+  --color-mimosy-redBg: #F7DBDB;
+  --color-mimosy-gray: #57534E;
+  --color-mimosy-grayBg: #E7E5E4;
+  --color-mimosy-star: #F2B01E;
+
+  --radius-carte: var(--mimosy-radius-xl);
+  --radius-hero: var(--mimosy-radius-2xl);
+}
