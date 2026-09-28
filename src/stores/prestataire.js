@@ -9,6 +9,15 @@ export const usePrestataireStore = defineStore('prestataire', () => {
   const isLoading = ref(false)
   const errorMessage = ref('')
 
+  // État de la recherche (GET /api/recherche/), séparé du chargement
+  // brut ci-dessus : une recherche a sa propre pagination et peut
+  // échouer indépendamment du reste de la page.
+  const resultatsRecherche = ref([])
+  const paginationRecherche = ref({ count: 0, next: null, previous: null })
+  const isSearching = ref(false)
+  const searchErrorMessage = ref('')
+  const interpretationRecherche = ref(null)
+
   async function chargerPrestataires() {
     isLoading.value = true
     errorMessage.value = ''
@@ -37,5 +46,83 @@ export const usePrestataireStore = defineStore('prestataire', () => {
     }
   }
 
-  return { prestataires, prestataireSelectionne, isLoading, errorMessage, chargerPrestataires, chargerPrestataire }
+  /** Lance une nouvelle recherche : remplace les résultats précédents. */
+  async function rechercher(params) {
+    isSearching.value = true
+    searchErrorMessage.value = ''
+    try {
+      const data = await catalogueService.searchOffers(params)
+      resultatsRecherche.value = data.results || []
+      paginationRecherche.value = {
+        count: data.count ?? 0,
+        next: data.next ?? null,
+        previous: data.previous ?? null,
+      }
+    } catch (error) {
+      searchErrorMessage.value = error.message
+      throw error
+    } finally {
+      isSearching.value = false
+    }
+  }
+
+  /** Recherche en langage naturel : remplace les résultats, garde l'interprétation pour l'affichage. */
+  async function rechercherIntelligente(query, position = null) {
+    isSearching.value = true
+    searchErrorMessage.value = ''
+    try {
+      const data = await catalogueService.searchIntelligente(query, position)
+      resultatsRecherche.value = data.results || []
+      paginationRecherche.value = {
+        count: data.pagination?.count ?? 0,
+        next: data.pagination?.next ?? null,
+        previous: data.pagination?.previous ?? null,
+      }
+      interpretationRecherche.value = data.interpretation || null
+    } catch (error) {
+      searchErrorMessage.value = error.message
+      throw error
+    } finally {
+      isSearching.value = false
+    }
+  }
+
+  /** Ajoute la page suivante de résultats à la suite de la recherche en cours. */
+  async function chargerPageSuivante() {
+    if (!paginationRecherche.value.next) return
+
+    isSearching.value = true
+    searchErrorMessage.value = ''
+    try {
+      const data = await catalogueService.fetchSearchPage(paginationRecherche.value.next)
+      resultatsRecherche.value = [...resultatsRecherche.value, ...(data.results || [])]
+      paginationRecherche.value = {
+        count: data.count ?? paginationRecherche.value.count,
+        next: data.next ?? null,
+        previous: data.previous ?? null,
+      }
+    } catch (error) {
+      searchErrorMessage.value = error.message
+      throw error
+    } finally {
+      isSearching.value = false
+    }
+  }
+
+  return {
+    prestataires,
+    prestataireSelectionne,
+    isLoading,
+    errorMessage,
+    chargerPrestataires,
+    chargerPrestataire,
+    resultatsRecherche,
+    paginationRecherche,
+    isSearching,
+    searchErrorMessage,
+    interpretationRecherche,
+    rechercher,
+    rechercherIntelligente,
+    chargerPageSuivante,
+  }
 })
