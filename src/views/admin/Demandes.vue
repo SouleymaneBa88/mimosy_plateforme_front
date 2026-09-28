@@ -35,6 +35,7 @@ const statuts = [
   { valeur: '', label: 'Tous' },
   { valeur: 'EN_ATTENTE', label: 'En attente' },
   { valeur: 'ACCEPTEE', label: 'Acceptée' },
+  { valeur: 'REALISEE', label: 'Validation en attente' },
   { valeur: 'TERMINEE', label: 'Terminée' },
   { valeur: 'ANNULEE', label: 'Annulée' },
 ]
@@ -42,6 +43,7 @@ const statuts = [
 const classeStatut = {
   EN_ATTENTE: 'bg-[#F2F3F0] text-[#1C2420]',
   ACCEPTEE: 'bg-[#2D6A4F] text-white',
+  REALISEE: 'bg-[#FFF7E6] text-[#9A723C]',
   TERMINEE: 'bg-[#F2F3F0] text-[#1C2420]',
   REFUSEE: 'bg-[#FEE2E2] text-[#C0392B]',
   ANNULEE: 'bg-[#FEE2E2] text-[#C0392B]',
@@ -51,6 +53,7 @@ const classeStatut = {
 const couleurLisere = {
   EN_ATTENTE: '#E6E8E3',
   ACCEPTEE: '#2D6A4F',
+  REALISEE: '#C9A45C',
   TERMINEE: '#1C2420',
   REFUSEE: '#C0392B',
   ANNULEE: '#C0392B',
@@ -60,6 +63,7 @@ const libelleStatut = {
   EN_ATTENTE: 'En attente',
   ACCEPTEE: 'Acceptée',
   REFUSEE: 'Refusée',
+  REALISEE: 'Validation en attente',
   TERMINEE: 'Terminée',
   ANNULEE: 'Annulée',
 }

@@ -19,6 +19,7 @@ import Pagination from '@/components/common/Pagination.vue'
 import { useAdminListe } from '@/composables/useAdminListe'
 import { useToast } from '@/composables/useToast'
 import * as adminService from '@/services/adminService'
+import { useEvenementTempsReel } from '@/composables/useEvenementTempsReel'
 
 const { items: litiges, count, page, pageSize, loading, errorMessage, filtres, charger, rechercher, changerPage } =
   useAdminListe(adminService.listLitiges, { statut: '' })
@@ -174,6 +175,7 @@ async function confirmerReattribution() {
 }
 
 onMounted(charger)
+useEvenementTempsReel(['litige.nouveau', 'litige.statut', 'litige.preuve'], () => charger())
 </script>
 
 <template>

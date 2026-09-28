@@ -24,6 +24,7 @@ import ClientLayout from '@/components/layout/ClientLayout.vue'
 import RequestCard from '@/components/client/RequestCard.vue'
 import { useDemandePrestationStore } from '@/stores/demandePrestation'
 import { usePrestataireStore } from '@/stores/prestataire'
+import { useEvenementTempsReel } from '@/composables/useEvenementTempsReel'
 
 const router = useRouter()
 const demandeStore = useDemandePrestationStore()
@@ -107,6 +108,7 @@ const demandes = computed(() =>
         {
           EN_ATTENTE: 'en_cours',
           ACCEPTEE: 'en_cours',
+          REALISEE: 'en_cours',
           REFUSEE: 'annulee',
           TERMINEE: 'terminee',
           ANNULEE: 'annulee',
@@ -155,6 +157,7 @@ function chargerDonnees() {
 }
 
 onMounted(chargerDonnees)
+useEvenementTempsReel(['demande.nouvelle', 'demande.statut'], () => demandeStore.chargerDemandes(true))
 
 /** Liste affichée : toutes les demandes, ou seulement celles de l'onglet actif. */
 const demandesFiltrees = computed(() => {

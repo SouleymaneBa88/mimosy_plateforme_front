@@ -26,7 +26,8 @@ const paiements = reactive({ items: [], loading: false, error: '', charge: false
 const retraits = reactive({ items: [], loading: false, error: '', charge: false, statut: '' })
 const transactions = reactive({ items: [], loading: false, error: '', charge: false })
 
-const statutsPaiement = ['', 'INITIE', 'EN_ATTENTE', 'REUSSI', 'ECHOUE', 'ANNULE', 'REMBOURSE']
+// A_REMBOURSER : payé en double chez PayDunya, à rembourser à la main.
+const statutsPaiement = ['', 'INITIE', 'EN_ATTENTE', 'REUSSI', 'ECHOUE', 'ANNULE', 'REMBOURSE', 'A_REMBOURSER']
 const statutsRetrait = ['', 'EN_ATTENTE', 'EN_COURS', 'REUSSI', 'ECHOUE', 'ANNULE']
 const typeLabels = {
   BLOCAGE: 'Fonds bloqués',
@@ -39,6 +40,7 @@ const typeLabels = {
 const statutClasses = {
   REUSSI: 'bg-[#EAF8F2] text-[#16805B]',
   ECHOUE: 'bg-[#FFF0EE] text-[#A85148]',
+  A_REMBOURSER: 'bg-[#FFFBF0] text-[#9A723C]',
 }
 const classeStatut = (statut) => statutClasses[statut] || 'bg-[#F1F5F9] text-[#64748B]'
 

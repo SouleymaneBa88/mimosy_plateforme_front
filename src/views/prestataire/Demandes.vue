@@ -17,6 +17,7 @@ import NouveauLitigeModal from '@/components/disputes/NouveauLitigeModal.vue'
 
 import { useDemandePrestationStore } from '@/stores/demandePrestation'
 import { useToast } from '@/composables/useToast'
+import { useEvenementTempsReel } from '@/composables/useEvenementTempsReel'
 
 const demandeStore = useDemandePrestationStore()
 
@@ -65,6 +66,7 @@ const statusLabels = {
   EN_ATTENTE: 'En attente',
   ACCEPTEE: 'Acceptée',
   REFUSEE: 'Refusée',
+  REALISEE: 'Validation en attente',
   TERMINEE: 'Terminée',
   ANNULEE: 'Annulée',
 }
@@ -78,6 +80,9 @@ const statusBadgeClasses = {
 
   REFUSEE:
     'bg-[#F7DBDB] text-[#C22F2F]',
+
+  REALISEE:
+    'bg-[#FFF7E6] text-[#9A723C] border border-[#F1E3C4]',
 
   TERMINEE:
     'bg-[#2D6A4F] text-[#FFFFFF] border border-[#E5E7E2]',
@@ -106,6 +111,12 @@ const demandesEnAttente = computed(() =>
 const demandesAcceptees = computed(() =>
   demandes.value.filter(
     (demande) => demande.statut === 'ACCEPTEE'
+  )
+)
+
+const demandesAValider = computed(() =>
+  demandes.value.filter(
+    (demande) => demande.statut === 'REALISEE'
   )
 )
 
@@ -146,6 +157,11 @@ const filtres = computed(() => [
     key: 'ACCEPTEE',
     label: 'Acceptées',
     nombre: demandesAcceptees.value.length,
+  },
+  {
+    key: 'REALISEE',
+    label: 'À valider par le client',
+    nombre: demandesAValider.value.length,
   },
   {
     key: 'TERMINEE',
@@ -562,7 +578,7 @@ async function terminerDemande() {
   await changerStatut(
     demandeStore.terminerDemande,
     demandeSelectionnee.value.id,
-    'Demande marquée comme terminée.'
+    'Prestation marquée comme terminée : en attente de validation du client.'
   )
 }
 
@@ -584,6 +600,8 @@ function litigeCree() {
 /* =========================================================
    CHARGEMENT
 ========================================================= */
+
+useEvenementTempsReel(['demande.nouvelle', 'demande.statut'], () => demandeStore.chargerDemandes(true).catch(() => {}))
 
 onMounted(async () => {
   await demandeStore
@@ -1197,6 +1215,40 @@ onMounted(async () => {
           </div>
         </div>
 
+        <!-- Paiement : confirmé par PayDunya (jamais supposé), et fonds sécurisés -->
+        <div
+          v-if="['ACCEPTEE', 'REALISEE', 'TERMINEE'].includes(demandeSelectionnee.statut)"
+          class="border-t border-[#E5E7E2] pt-6"
+        >
+          <p class="font-['DM_Sans'] text-[10px] font-bold uppercase leading-[15px] tracking-[1px] text-[#1A1C1A]/40">
+            Paiement
+          </p>
+          <div
+            v-if="demandeSelectionnee.paiement?.statut === 'REUSSI'"
+            class="mt-2 bg-[#EAF8F2] p-4 font-['DM_Sans'] text-sm text-[#16805B]"
+          >
+            <p class="font-bold">
+              {{ demandeSelectionnee.statut === 'TERMINEE' ? 'Paiement reçu' : 'Paiement reçu et sécurisé' }}
+              · {{ Number(demandeSelectionnee.paiement.montant).toLocaleString('fr-FR') }} FCFA
+            </p>
+            <p class="mt-1 text-[#1A1C1A]/70">
+              <template v-if="demandeSelectionnee.litige_en_cours">Litige en cours : les fonds restent sécurisés jusqu'à sa résolution.</template>
+              <template v-else-if="demandeSelectionnee.statut === 'ACCEPTEE'">Statut : prestation à réaliser. Le montant sera disponible dans votre wallet après la validation du client.</template>
+              <template v-else-if="demandeSelectionnee.statut === 'REALISEE'">En attente de validation du client<span v-if="demandeSelectionnee.date_limite_validation"> (validation automatique le {{ formatDate(demandeSelectionnee.date_limite_validation) }})</span>.</template>
+              <template v-else>Prestation validée : le montant, commission MIMOSY déduite, est disponible dans votre wallet.</template>
+            </p>
+          </div>
+          <p
+            v-else-if="['EN_ATTENTE', 'INITIE'].includes(demandeSelectionnee.paiement?.statut)"
+            class="mt-2 bg-[#EDF4FF] p-4 font-['DM_Sans'] text-sm text-[#3267B1]"
+          >
+            Paiement du client en attente de confirmation par PayDunya.
+          </p>
+          <p v-else class="mt-2 bg-[#F2F3F0] p-4 font-['DM_Sans'] text-sm text-[#1A1C1A]/70">
+            Aucun paiement MIMOSY reçu pour cette demande.
+          </p>
+        </div>
+
         <!-- Description -->
         <div class="border-t border-[#E5E7E2] pt-6">
           <p class="font-['DM_Sans'] text-[10px] font-bold uppercase leading-[15px] tracking-[1px] text-[#1A1C1A]/40">
@@ -1236,10 +1288,24 @@ onMounted(async () => {
               :disabled="actionEnCours"
               @click="terminerDemande"
             >
-              {{ actionEnCours ? 'Patientez…' : 'Marquer comme terminée' }}
+              {{ actionEnCours ? 'Patientez…' : 'Marquer la prestation comme terminée' }}
             </button>
 
             <button
+              type="button"
+              class="border border-[#E5E7E2] px-5 py-3 font-['DM_Sans'] text-sm font-medium text-[#1A1C1A] transition-colors hover:bg-[#F2F3F0] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2D6A4F] focus-visible:ring-offset-2"
+              @click="ouvrirLitige"
+            >
+              Signaler un litige
+            </button>
+          </template>
+
+          <template v-else-if="demandeSelectionnee.statut === 'REALISEE'">
+            <p class="flex-1 bg-[#FFF7E6] px-5 py-3 font-['DM_Sans'] text-sm font-bold text-[#9A723C]">
+              En attente de validation client
+            </p>
+            <button
+              v-if="!demandeSelectionnee.litige_en_cours"
               type="button"
               class="border border-[#E5E7E2] px-5 py-3 font-['DM_Sans'] text-sm font-medium text-[#1A1C1A] transition-colors hover:bg-[#F2F3F0] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2D6A4F] focus-visible:ring-offset-2"
               @click="ouvrirLitige"

@@ -17,6 +17,7 @@ import ClientHeader from '@/components/client/ClientHeader.vue'
 import { MBadge, MButton, MCard, MEmptyState, MErrorState, MInput, MLoader, MModal, MTable } from '@/components/ui'
 import * as adminService from '@/services/adminService'
 import { CHAMPS_EXTRAITS, LABELS_STATUT_DOCUMENT, etatAnalyseOcr } from '@/utils/verification'
+import { useEvenementTempsReel } from '@/composables/useEvenementTempsReel'
 
 const LABELS_TYPE_DOCUMENT = {
   PIECE_IDENTITE: "Pièce d'identité",
@@ -239,6 +240,7 @@ const vueDocuments = computed(() =>
 )
 
 onMounted(charger)
+useEvenementTempsReel(['verification.a_verifier'], () => charger())
 onBeforeUnmount(libererTousLesApercus)
 </script>
 

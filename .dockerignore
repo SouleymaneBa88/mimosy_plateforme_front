@@ -1,0 +1,9 @@
+# Jamais dans l'image du frontend.
+node_modules/
+dist/
+.git/
+.env
+.env.*
+.vscode/
+*.log
+Dockerfile

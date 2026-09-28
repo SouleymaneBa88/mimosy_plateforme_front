@@ -12,7 +12,7 @@
 
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, MessageCircle, TriangleAlert } from 'lucide-vue-next'
+import { ArrowLeft, CheckCircle2, MessageCircle, Receipt, TriangleAlert } from 'lucide-vue-next'
 
 import ClientLayout from '@/components/layout/ClientLayout.vue'
 import NouveauLitigeModal from '@/components/disputes/NouveauLitigeModal.vue'
@@ -23,6 +23,8 @@ import { useToast } from '@/composables/useToast'
 import { creerAvis } from '@/services/avisService'
 import * as walletService from '@/services/walletService'
 import * as disputeService from '@/services/disputeService'
+import * as demandeService from '@/services/demandePrestationService'
+import { useEvenementTempsReel } from '@/composables/useEvenementTempsReel'
 
 const route = useRoute()
 const router = useRouter()
@@ -164,13 +166,21 @@ const avisSuccess = ref('')
 const statutConfig = {
   EN_ATTENTE: { label: 'En attente', fond: 'var(--color-mimosy-blueBg)', texte: 'var(--color-mimosy-blue)' },
   ACCEPTEE: { label: 'Acceptée', fond: 'var(--color-mimosy-primaryBg)', texte: 'var(--color-mimosy-primary)' },
+  PAYEE: { label: 'Paiement confirmé', fond: 'var(--color-mimosy-primaryBg)', texte: 'var(--color-mimosy-primary)' },
+  REALISEE: { label: 'Validation en attente', fond: '#FFF7E6', texte: '#9A723C' },
+  LITIGE: { label: 'Litige en cours', fond: '#FFF0EE', texte: '#A85148' },
   REFUSEE: { label: 'Refusée', fond: '#FFF0EE', texte: '#C53B35' },
   TERMINEE: { label: 'Terminée', fond: 'var(--color-mimosy-primaryBg)', texte: 'var(--color-mimosy-primary)' },
   ANNULEE: { label: 'Annulée', fond: '#FFF0EE', texte: '#C53B35' },
 }
 
-/** Renvoie la config du statut courant, avec repli sur "En attente". */
+/** Paiement confirmé par PayDunya (jamais supposé : vient de l'API). */
+const estPayee = computed(() => paiement.value?.statut === 'REUSSI' || demande.value?.paiement?.statut === 'REUSSI')
+
+/** Statut « humain » affiché : tient compte du paiement et d'un litige en cours. */
 const statutActuel = computed(() => {
+  if (demande.value?.litige_en_cours) return statutConfig.LITIGE
+  if (demande.value?.statut === 'ACCEPTEE' && estPayee.value) return statutConfig.PAYEE
   return statutConfig[demande.value?.statut] || statutConfig.EN_ATTENTE
 })
 
@@ -201,9 +211,13 @@ function formatDate(value) {
 
 /* ───────────────────────── Règles d'affichage des actions ───────────────────────── */
 
-/** La demande peut être annulée tant qu'elle est en attente ou acceptée. */
+/**
+ * La demande peut être annulée tant qu'elle est en attente ou acceptée,
+ * mais plus une fois payée (le backend le refuse : les fonds sont
+ * sécurisés, un problème se règle par un litige).
+ */
 const canCancel = computed(() => {
-  return ['EN_ATTENTE', 'ACCEPTEE'].includes(demande.value?.statut)
+  return ['EN_ATTENTE', 'ACCEPTEE'].includes(demande.value?.statut) && !estPayee.value
 })
 
 /** On ne peut laisser un avis que sur une prestation terminée, et pas deux fois (voir demande.a_un_avis, calculé côté backend). */
@@ -217,14 +231,51 @@ const peutDonnerAvis = computed(() => {
  * annulée, où il n'y a rien à contester.
  */
 const peutOuvrirLitige = computed(() => {
-  return ['ACCEPTEE', 'TERMINEE'].includes(demande.value?.statut)
+  return ['ACCEPTEE', 'REALISEE', 'TERMINEE'].includes(demande.value?.statut) && !demande.value?.litige_en_cours
 })
+
+/* ───────────────────────── Validation de la prestation ───────────────────────── */
+
+/**
+ * Le prestataire a déclaré la prestation terminée : le client vérifie le
+ * travail puis la confirme (les fonds sont alors libérés côté backend),
+ * ou signale un problème (litige : l'argent reste sécurisé).
+ */
+const aValider = computed(() => demande.value?.statut === 'REALISEE' && !demande.value?.litige_en_cours)
+const confirmationOuverte = ref(false)
+const confirmationEnCours = ref(false)
+const confirmationErreur = ref('')
+
+const dateLimiteValidation = computed(() => formatDate(demande.value?.date_limite_validation))
+
+async function confirmerPrestation() {
+  if (!demande.value?.id) return
+  confirmationEnCours.value = true
+  confirmationErreur.value = ''
+  try {
+    demandeStore.demandeSelectionnee = await demandeService.confirmRequest(demande.value.id)
+    confirmationOuverte.value = false
+    succes('Prestation confirmée. Merci ! Vous pouvez maintenant laisser un avis.')
+    await chargerPaiement()
+  } catch (error) {
+    confirmationErreur.value = error?.message || 'La prestation n’a pas pu être confirmée.'
+  } finally {
+    confirmationEnCours.value = false
+  }
+}
 
 const litigeModalOuvert = ref(false)
 const { succes } = useToast()
 
-function litigeCree() {
-  succes('Votre litige a été envoyé à MIMOSY.')
+async function litigeCree() {
+  succes('Votre litige a été envoyé à MIMOSY. L’argent reste sécurisé pendant son examen.')
+  // Litige en cours : la validation est suspendue, on relit l'état réel.
+  try {
+    demandeStore.demandeSelectionnee = await demandeService.getRequest(route.params.id)
+  } catch {
+    // Silencieux : la page reste consultable.
+  }
+  await chargerLitigeLie()
 }
 
 /* ───────────────────────── Timeline de suivi ───────────────────────── */
@@ -236,13 +287,18 @@ function litigeCree() {
  */
 const progressSteps = computed(() => {
   const status = demande.value?.statut
-  const order = ['EN_ATTENTE', 'ACCEPTEE', 'TERMINEE']
-  const currentIndex = order.indexOf(status)
+  const order = ['EN_ATTENTE', 'ACCEPTEE', 'PAYEE', 'REALISEE', 'TERMINEE']
+  // Le paiement n'est pas un statut de la demande : c'est une étape déduite
+  // du paiement confirmé renvoyé par l'API.
+  const etape = status === 'ACCEPTEE' && estPayee.value ? 'PAYEE' : status
+  const currentIndex = order.indexOf(etape)
 
   return [
-    { key: 'EN_ATTENTE', label: 'Demande envoyée', done: currentIndex >= 0, active: status === 'EN_ATTENTE' },
-    { key: 'ACCEPTEE', label: 'Demande acceptée', done: currentIndex >= 1, active: status === 'ACCEPTEE' },
-    { key: 'TERMINEE', label: 'Prestation terminée', done: currentIndex >= 2, active: status === 'TERMINEE' },
+    { key: 'EN_ATTENTE', label: 'Demande envoyée', done: currentIndex >= 0, active: etape === 'EN_ATTENTE' },
+    { key: 'ACCEPTEE', label: 'Acceptée', done: currentIndex >= 1, active: etape === 'ACCEPTEE' },
+    { key: 'PAYEE', label: 'Paiement confirmé', done: estPayee.value, active: etape === 'PAYEE' },
+    { key: 'REALISEE', label: 'Travail terminé', done: currentIndex >= 3, active: etape === 'REALISEE' },
+    { key: 'TERMINEE', label: 'Validée', done: currentIndex >= 4, active: etape === 'TERMINEE' },
   ]
 })
 
@@ -305,6 +361,13 @@ function retour() {
 }
 
 /* ───────────────────────── Chargement initial ───────────────────────── */
+
+// Seule la demande affichée est rechargée (id comparé, jamais utilisé pour autre chose).
+useEvenementTempsReel(['demande.statut'], (evenement) => {
+  if (evenement.type === 'realtime.reconnecte' || String(evenement.id) === String(route.params.id)) {
+    demandeStore.chargerDemande(route.params.id).catch(() => {})
+  }
+})
 
 onMounted(() => {
   demandeStore
@@ -473,6 +536,51 @@ async function envoyerAvis() {
               </div>
             </section>
 
+            <!-- Carte : validation de la prestation par le client -->
+            <section v-if="aValider" class="rounded-[24px] border-2 border-[#E8D7B5] bg-[#FFFBF0] p-6 sm:p-8">
+              <h2 class="font-serif text-xl text-mimosy-text">Le prestataire indique que la prestation est terminée.</h2>
+              <p class="mt-2 font-sans text-sm leading-6 text-mimosy-secondary">
+                Vérifiez le travail avant de confirmer.
+                <template v-if="estPayee">Les fonds ne seront versés au prestataire qu'après votre confirmation.</template>
+              </p>
+              <p v-if="dateLimiteValidation && demande.date_limite_validation" class="mt-2 font-sans text-xs text-[#9A723C]">
+                Sans réponse de votre part, la prestation sera validée automatiquement le {{ dateLimiteValidation }}.
+              </p>
+              <div class="mt-5 flex flex-col gap-2.5 sm:flex-row">
+                <button
+                  type="button"
+                  class="inline-flex items-center justify-center gap-2 rounded-xl bg-mimosy-primary px-5 py-3 font-sans text-sm font-bold text-white transition hover:opacity-90"
+                  @click="confirmationErreur = ''; confirmationOuverte = true"
+                >
+                  <CheckCircle2 :size="16" :stroke-width="2" />
+                  Confirmer la prestation
+                </button>
+                <button
+                  type="button"
+                  class="inline-flex items-center justify-center gap-2 rounded-xl border border-[#FBE1DD] bg-mimosy-surface px-5 py-3 font-sans text-sm font-bold text-[#A85148] transition hover:bg-[#FFF0EE]"
+                  @click="litigeModalOuvert = true"
+                >
+                  <TriangleAlert :size="16" :stroke-width="1.8" />
+                  Signaler un problème
+                </button>
+              </div>
+            </section>
+            <section v-else-if="demande.statut === 'REALISEE' && demande.litige_en_cours" class="rounded-[24px] border border-[#FBE1DD] bg-[#FFF0EE] p-6 sm:p-8">
+              <h2 class="font-serif text-xl text-mimosy-text">Litige en cours</h2>
+              <p class="mt-2 font-sans text-sm leading-6 text-[#A85148]">
+                Votre signalement est en cours d'examen par MIMOSY. L'argent reste sécurisé : il ne sera versé qu'après la résolution du litige.
+              </p>
+            </section>
+            <section v-else-if="demande.statut === 'TERMINEE' && !demande.a_un_avis" class="rounded-[24px] border border-mimosy-border bg-mimosy-surface p-6 sm:p-8">
+              <h2 class="font-serif text-xl text-mimosy-text">Prestation terminée</h2>
+              <p class="mt-2 font-sans text-sm leading-6 text-mimosy-secondary">
+                Votre prestation est terminée. Votre avis aide les autres clients à choisir.
+              </p>
+              <button type="button" class="mt-5 rounded-xl bg-mimosy-primary px-5 py-3 font-sans text-sm font-bold text-white transition hover:opacity-90" @click="ouvrirAvis">
+                Laisser un avis
+              </button>
+            </section>
+
             <!-- Carte 3 : statut du paiement (si engagé, ou premier paiement possible : peutPayer) -->
             <section v-if="litigeBloquant || paiement || peutPayer" class="rounded-[24px] border border-mimosy-border bg-mimosy-surface p-6 sm:p-8">
               <h2 class="font-sans text-[11px] font-bold uppercase tracking-[0.4px] text-mimosy-secondary">Paiement</h2>
@@ -482,7 +590,9 @@ async function envoyerAvis() {
                 bloqués pendant le traitement du litige en cours. Le prestataire n'a pas reçu cet argent.
               </div>
               <div v-else-if="paiement?.statut === 'REUSSI'" class="mt-3 rounded-xl bg-mimosy-primaryBg px-4 py-3 font-sans text-sm font-semibold text-mimosy-primary">
-                {{ Number(paiement.montant).toLocaleString('fr-FR') }} FCFA payés. Les fonds seront crédités au prestataire une fois la prestation terminée.
+                Paiement confirmé · {{ Number(paiement.montant).toLocaleString('fr-FR') }} FCFA.
+                <template v-if="demande.statut === 'TERMINEE'">Les fonds ont été versés au prestataire après validation.</template>
+                <template v-else>Les fonds sont sécurisés par MIMOSY jusqu'à ce que vous validiez la prestation.</template>
               </div>
               <div v-else-if="paiement?.statut === 'EN_ATTENTE'" class="mt-3 flex items-center gap-3 rounded-xl bg-[#EDF4FF] px-4 py-3 font-sans text-sm font-semibold text-[#3267B1]">
                 <span class="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-[#3267B1]/30 border-t-[#3267B1]" aria-hidden="true" />
@@ -505,6 +615,7 @@ async function envoyerAvis() {
                 v-model="modalPaiementOuverte"
                 :demande="demande"
                 :paiement-en-cours="paiement?.statut === 'EN_ATTENTE' ? paiement : null"
+                :prestataire-nom="nomPrestataire"
                 @resultat="onResultatPaiement"
               />
 
@@ -528,6 +639,14 @@ async function envoyerAvis() {
                 >
                   {{ verificationLoading ? 'Vérification…' : 'Vérifier mon paiement' }}
                 </button>
+                <router-link
+                  v-if="paiement?.statut === 'REUSSI'"
+                  :to="{ name: 'client-facture', params: { id: paiement.id } }"
+                  class="inline-flex items-center gap-2 rounded-xl border border-mimosy-primary bg-mimosy-surface px-4 py-2.5 font-sans text-sm font-bold text-mimosy-primary transition hover:bg-mimosy-primaryBg"
+                >
+                  <Receipt :size="16" :stroke-width="1.8" />
+                  Voir la facture
+                </router-link>
               </div>
             </section>
           </div>
@@ -562,7 +681,7 @@ async function envoyerAvis() {
 
               <div class="mt-3 flex flex-col gap-2.5">
                 <button v-if="peutDonnerAvis" type="button" class="rounded-xl bg-mimosy-primary px-4 py-2.5 font-sans text-sm font-bold text-white transition hover:opacity-90" @click="ouvrirAvis">
-                  Donner mon avis
+                  Laisser un avis
                 </button>
                 <span v-else-if="demande.statut === 'TERMINEE' && demande.a_un_avis" class="rounded-xl border border-mimosy-border bg-mimosy-page px-4 py-2.5 text-center font-sans text-sm font-bold text-mimosy-secondary">
                   Avis déjà envoyé
@@ -617,6 +736,28 @@ async function envoyerAvis() {
               </button>
               <button type="button" class="rounded-xl bg-[#A85148] px-4 py-2.5 font-sans text-sm font-bold text-white transition hover:bg-[#8F4038] disabled:opacity-50" :disabled="demandeStore.isLoading" @click="annulerDemande">
                 {{ demandeStore.isLoading ? 'Annulation...' : 'Confirmer' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </transition>
+
+      <!-- ── Modale : confirmation de la prestation ── -->
+      <transition name="fade">
+        <div v-if="confirmationOuverte" class="fixed inset-0 z-[1000] flex items-center justify-center bg-mimosy-text/55 p-4" @click.self="confirmationEnCours || (confirmationOuverte = false)">
+          <div class="w-full max-w-md rounded-[24px] bg-mimosy-surface p-6 shadow-xl">
+            <h2 class="font-serif text-lg text-mimosy-text">Confirmer la prestation ?</h2>
+            <p class="mt-2 font-sans text-sm leading-6 text-mimosy-secondary">
+              Vous confirmez que le travail a bien été réalisé.
+              <template v-if="estPayee">Le montant payé sera alors versé au prestataire : cette action est définitive.</template>
+            </p>
+            <p v-if="confirmationErreur" class="mt-3 rounded-xl bg-[#FFF0EE] px-4 py-3 font-sans text-sm font-semibold text-[#A85148]" role="alert">{{ confirmationErreur }}</p>
+            <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button type="button" class="rounded-xl border border-mimosy-border px-4 py-2.5 font-sans text-sm font-bold text-mimosy-text transition hover:bg-mimosy-page disabled:opacity-50" :disabled="confirmationEnCours" @click="confirmationOuverte = false">
+                Retour
+              </button>
+              <button type="button" class="rounded-xl bg-mimosy-primary px-4 py-2.5 font-sans text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-50" :disabled="confirmationEnCours" @click="confirmerPrestation">
+                {{ confirmationEnCours ? 'Confirmation…' : 'Confirmer' }}
               </button>
             </div>
           </div>

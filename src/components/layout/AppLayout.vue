@@ -5,6 +5,7 @@ import AppSidebar from '@/components/layout/AppSidebar.vue'
 import ToastContainer from '@/components/common/ToastContainer.vue'
 import HeaderPrestataire from '@/components/prestataire/HeaderPrestataire.vue'
 import { useClientProfilStore } from '@/stores/clientProfil'
+import { useRealtimeStore } from '@/stores/realtime'
 
 const props = defineProps({
   role: {
@@ -24,6 +25,8 @@ const props = defineProps({
 const clientProfilStore = useClientProfilStore()
 
 onMounted(() => {
+  // Connexion temps réel : une seule par onglet (sans effet si déjà ouverte).
+  useRealtimeStore().demarrer()
   if (!clientProfilStore.isLoaded && localStorage.getItem('mimosy_access_token')) {
     clientProfilStore.chargerProfil().catch(() => {})
   }

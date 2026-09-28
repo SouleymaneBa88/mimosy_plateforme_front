@@ -37,6 +37,8 @@ const {
   positionLoading,
   positionError,
   clientLocation,
+  sourcePosition,
+  libellePosition,
   nombreFiltresActifs,
   filtreVerifies,
   resultatsAffiches,
@@ -121,7 +123,10 @@ onMounted(() => chargerDonnees(route.query))
 
       <p v-if="positionActive" class="pr-position-note">
         <LocateFixed class="pr-icon-xs" :stroke-width="2.25" />
-        Recherche dans un rayon de {{ filtres.rayon_km }} km autour de votre position.
+        <template v-if="sourcePosition === 'adresse'">
+          Position du navigateur indisponible : recherche dans un rayon de {{ filtres.rayon_km }} km autour de votre adresse enregistrée<span v-if="libellePosition"> ({{ libellePosition }})</span>.
+        </template>
+        <template v-else>Recherche dans un rayon de {{ filtres.rayon_km }} km autour de votre position.</template>
       </p>
       <p v-else-if="positionError" class="pr-position-note pr-position-note--error" role="alert">{{ positionError }}</p>
 
@@ -199,7 +204,7 @@ onMounted(() => chargerDonnees(route.query))
           <ProvidersMap
             ref="providersMapRef"
             :client-location="clientLocation"
-            client-label="Votre position"
+            :client-label="sourcePosition === 'adresse' ? 'Votre adresse enregistrée' : 'Votre position'"
             :providers="resultatsAffiches"
             :rayon-km="positionActive ? filtres.rayon_km : null"
             class="h-full"

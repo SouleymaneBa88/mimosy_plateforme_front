@@ -40,6 +40,9 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function logout() {
+    // Plus de session : on ferme aussi la connexion temps réel.
+    const { useRealtimeStore } = await import('@/stores/realtime')
+    useRealtimeStore().arreter()
     await authService.logout()
     user.value = null
   }

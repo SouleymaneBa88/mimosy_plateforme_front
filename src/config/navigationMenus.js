@@ -110,21 +110,21 @@ export const navigationByRole = {
       path: '/prestataire/rendez-vous',
       icon: CalendarDays,
     },
-    // {
-    //   label: 'Vérification',
-    //   path: '/prestataire/verification',
-    //   icon: ShieldCheck,
-    // },
+    {
+      label: 'Vérification',
+      path: '/prestataire/verification',
+      icon: ShieldCheck,
+    },
     {
       label: 'Mes litiges',
       path: '/prestataire/litiges',
       icon: Scale,
     },
-    // {
-    //   label: 'Profil et paramètres',
-    //   path: '/prestataire/profil',
-    //   icon: User,
-    // },
+    {
+      label: 'Profil et paramètres',
+      path: '/prestataire/profil',
+      icon: User,
+    },
   ],
 
   // Toutes ces pages existent et sont connectées à une vraie API (voir

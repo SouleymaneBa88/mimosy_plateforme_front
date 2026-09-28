@@ -13,10 +13,10 @@ import {
   CheckCircle2,
   XCircle,
   AlertCircle,
+  X,
 } from 'lucide-vue-next'
 
 import AppLayout from '@/components/layout/AppLayout.vue'
-import { MModal } from '@/components/ui'
 import EmptyState from '@/components/common/EmptyState.vue'
 import * as walletService from '@/services/walletService'
 
@@ -819,13 +819,9 @@ onMounted(chargerDonnees)
         <!-- FLUX RETRAIT -->
         <!-- ============================================================ -->
 
-        <MModal
-          :model-value="etape !== 'ferme'"
-          title="Retirer mon argent"
-          :description="`Solde disponible : ${formaterMontant(soldeDisponible)}`"
-          size="lg"
-          :persistent="formulaireEnvoi"
-          @update:model-value="(ouvert) => { if (!ouvert) fermerFlux() }"
+        <section
+          v-if="etape !== 'ferme'"
+          class="border border-[#E5E7E2] bg-[#FAFAF8]"
         >
 
           <!-- Étape formulaire -->
@@ -834,12 +830,27 @@ onMounted(chargerDonnees)
             v-if="etape === 'formulaire'"
             class="p-6 sm:p-8"
           >
-            <p class="text-sm text-[#7A847E]">
-              Choisissez le montant, le moyen de retrait et le numéro qui recevra l'argent.
-              Le montant est réservé sur votre solde dès la validation, et recrédité si le retrait échoue.
-            </p>
+            <div class="flex items-center justify-between gap-4">
+              <div>
+                <h2 class="font-['Instrument_Serif'] text-[24px] leading-8 text-[#1C2420]">
+                  Retirer des fonds
+                </h2>
 
-            <div class="mt-5 grid gap-5">
+                <p class="mt-1 text-sm text-[#7A847E]">
+                  Choisissez le montant et le moyen de paiement.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                class="flex h-9 w-9 items-center justify-center border border-[#E5E7E2] text-[#7A847E] transition hover:text-[#1C2420]"
+                @click="fermerFlux"
+              >
+                <X :size="17" />
+              </button>
+            </div>
+
+            <div class="mt-6 grid gap-5 md:grid-cols-3">
 
               <label class="flex flex-col gap-2">
                 <span class="text-xs font-medium uppercase tracking-[0.5px] text-[#7A847E]">
@@ -888,9 +899,6 @@ onMounted(chargerDonnees)
                   placeholder="77 XXX XX XX"
                   class="h-11 border border-[#E5E7E2] bg-white px-4 text-sm text-[#1C2420] outline-none focus:border-[#2D6A4F]"
                 />
-                <span class="text-xs text-[#7A847E]">
-                  Compte Wave ou Orange Money qui recevra l'argent (9 chiffres, sans +221).
-                </span>
               </label>
             </div>
 
@@ -1078,7 +1086,7 @@ onMounted(chargerDonnees)
               Fermer
             </button>
           </div>
-        </MModal>
+        </section>
 
         <!-- ============================================================ -->
         <!-- ÉVOLUTION DES GAINS -->

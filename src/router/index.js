@@ -33,6 +33,7 @@ const router = createRouter({
     { path: '/client/rendez-vous', name: 'client-rendez-vous', component: MesRendezVous, meta: { requiresAuth: true, roles: ['CLIENT'] } },
     { path: '/client/demandes/:id', name: 'detais.demande', component: DetailsDemandes, meta: { requiresAuth: true, roles: ['CLIENT'] } },
     { path: '/client/paiement/retour', name: 'client-paiement-retour', component: () => import('@/views/client/PaiementRetour.vue'), meta: { requiresAuth: true, roles: ['CLIENT'] } },
+    { path: '/client/factures/:id', name: 'client-facture', component: () => import('@/views/client/Facture.vue'), meta: { requiresAuth: true, roles: ['CLIENT'] } },
     { path: '/client/diagnostic', name: 'client-diagnostic', component: () => import('@/views/client/Diagnostic.vue'), meta: { requiresAuth: true, roles: ['CLIENT'] } },
     { path: '/client/litiges', name: 'client-litiges', component: () => import('@/views/client/MesLitiges.vue'), meta: { requiresAuth: true, roles: ['CLIENT'] } },
     { path: '/messages', name: 'messagerie', component: Messages, meta: { requiresAuth: true, roles: ['CLIENT', 'PRESTATAIRE'] } },
