@@ -2,11 +2,12 @@
  * Règles de navigation dérivées des rôles renvoyés par l'API Django.
  * Les entrées correspondent uniquement aux routes déclarées dans le router.
  */
-import { navigationByRole } from './navigation'
+import { navigationByRole } from './navigationMenus'
 
 export const ROLE_HOME = {
   CLIENT: 'client-home',
   PRESTATAIRE: 'prestataire-dashboard',
+  ADMIN: 'admin-dashboard',
 }
 
 export function normalizeRole(role) {

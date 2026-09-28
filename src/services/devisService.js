@@ -12,3 +12,5 @@ export const createQuoteResponse = (payload) =>
 
 export const acceptQuoteResponse = (id) =>
   apiFetch(API_ENDPOINTS.acceptQuoteResponse(id), { method: 'POST' })
+export const refuseQuoteResponse = (id) =>
+  apiFetch(API_ENDPOINTS.refuseQuoteResponse(id), { method: 'POST' })

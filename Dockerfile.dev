@@ -1,0 +1,38 @@
+# Image de DÉVELOPPEMENT du frontend MIMOSY : serveur Vite avec rechargement
+# à chaud (HMR). Utilisée par ../docker-compose.yml (racine du projet).
+#
+# L'image de PRODUCTION (compilation + nginx) reste le fichier « Dockerfile »,
+# utilisé par back_Mimosy/docker-compose.prod.yml.
+#
+# En développement, le code source est MONTÉ depuis l'hôte (./mimosy:/app) :
+# une modification de .vue/.js/.css est vue immédiatement par Vite, sans
+# reconstruire l'image. Seules les dépendances (node_modules) viennent de
+# l'image : reconstruire uniquement quand package.json / package-lock.json
+# changent.
+
+# Même version de Node que l'image de production (voir Dockerfile).
+FROM node:24-alpine
+
+# L'image fournit l'utilisateur « node » (uid 1000, comme l'utilisateur de
+# l'hôte) : les fichiers éventuellement créés dans le dossier monté ne
+# seront pas la propriété de root.
+RUN mkdir -p /app && chown node:node /app
+USER node
+WORKDIR /app
+
+# Dépendances d'abord : cette couche n'est reconstruite que si
+# package.json ou package-lock.json change.
+COPY --chown=node:node package.json package-lock.json ./
+RUN npm ci
+
+# Le code est copié pour que l'image fonctionne aussi seule ; en
+# développement, le montage ./mimosy:/app le remplace.
+COPY --chown=node:node . .
+
+EXPOSE 5173
+
+# --host 0.0.0.0 : Vite doit écouter sur toutes les interfaces du conteneur,
+# sinon il n'est pas joignable depuis l'hôte. Le port reste celui du projet
+# (5173, attendu par CORS_ALLOWED_ORIGINS du backend) ; --strictPort échoue
+# clairement au lieu de basculer silencieusement sur un autre port.
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173", "--strictPort"]
