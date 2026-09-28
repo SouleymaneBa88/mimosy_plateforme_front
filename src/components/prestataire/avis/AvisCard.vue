@@ -13,11 +13,16 @@ const dateAvis = computed(() => formatDate(props.avis.dateAvis || props.avis.dat
 const clientName = computed(() => props.avis.client?.nom || 'Client MIMOSY')
 
 function formatDate(value) {
+  if (!value) return ''
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+
   return new Intl.DateTimeFormat('fr-FR', {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
-  }).format(new Date(`${value}T00:00:00`))
+  }).format(date)
 }
 </script>
 

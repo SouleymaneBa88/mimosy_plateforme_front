@@ -10,3 +10,4 @@ export const cancelRequest = (id) => apiFetch(API_ENDPOINTS.cancelRequest(id), {
 export const acceptRequest = (id) => apiFetch(API_ENDPOINTS.acceptRequest(id), { method: 'POST' })
 export const rejectRequest = (id) => apiFetch(API_ENDPOINTS.rejectRequest(id), { method: 'POST' })
 export const completeRequest = (id) => apiFetch(API_ENDPOINTS.completeRequest(id), { method: 'POST' })
+export const confirmRequest = (id) => apiFetch(API_ENDPOINTS.confirmRequest(id), { method: 'POST' })

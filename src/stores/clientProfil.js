@@ -62,11 +62,12 @@ export const useClientProfilStore = defineStore('clientProfil', {
       this.errorMessage = ''
 
       try {
+        // email/telephone sont protégés côté backend (voir ProfileSerializer.read_only_fields) :
+        // aucun processus de vérification de changement n'existe encore, donc on ne les envoie
+        // même pas ici, pour ne jamais laisser croire à l'utilisateur qu'ils ont été modifiés.
         const data = await profileService.updateProfile({
             first_name: payload.firstName,
             last_name: payload.lastName,
-            email: payload.email,
-            telephone: payload.telephone,
         })
 
         Object.assign(this.profil, normaliserProfil(data))

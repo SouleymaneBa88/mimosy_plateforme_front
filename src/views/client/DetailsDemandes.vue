@@ -1,13 +1,30 @@
 <script setup>
+/**
+ * ─────────────────────────────────────────────────────────────
+ * Page : Détail d'une demande de prestation
+ * ─────────────────────────────────────────────────────────────
+ * Disposition reprise de front_mimosy/src/views/clients/DetailsDemande.vue
+ * (cartes séparées : infos, suivi, prestataire, paiement, actions) — la
+ * logique ci-dessous est inchangée : paiement PayDunya + vérification
+ * serveur, litige bloquant, avis, annulation.
+ * ─────────────────────────────────────────────────────────────
+ */
+
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { ArrowLeft, CheckCircle2, MessageCircle, Receipt, TriangleAlert } from 'lucide-vue-next'
 
-import AppLayout from '@/components/layout/AppLayout.vue'
-
+import ClientLayout from '@/components/layout/ClientLayout.vue'
+import NouveauLitigeModal from '@/components/disputes/NouveauLitigeModal.vue'
+import PaiementModal from '@/components/client/PaiementModal.vue'
 import { useDemandePrestationStore } from '@/stores/demandePrestation'
 import { usePrestataireStore } from '@/stores/prestataire'
-
+import { useToast } from '@/composables/useToast'
 import { creerAvis } from '@/services/avisService'
+import * as walletService from '@/services/walletService'
+import * as disputeService from '@/services/disputeService'
+import * as demandeService from '@/services/demandePrestationService'
+import { useEvenementTempsReel } from '@/composables/useEvenementTempsReel'
 
 const route = useRoute()
 const router = useRouter()
@@ -15,10 +32,122 @@ const router = useRouter()
 const demandeStore = useDemandePrestationStore()
 const prestataireStore = usePrestataireStore()
 
+/* ───────────────────────── Paiement ───────────────────────── */
+
+const paiement = ref(null)
+const paiementLoading = ref(false)
+const paiementError = ref('')
+
+/**
+ * Le bouton de paiement reste visible tant que la demande (acceptée)
+ * n'est pas payée. C'est le BACKEND qui décide quoi faire à chaque clic
+ * (voir apps.wallet.services.initier_paiement) :
+ *   - aucune tentative ou ECHOUE → nouvelle facture PayDunya ;
+ *   - EN_ATTENTE                 → la même facture est renvoyée (« Reprendre ») ;
+ *   - INITIE                     → facture en cours de création, rien de nouveau.
+ */
+const peutPayer = computed(() => demande.value?.statut === 'ACCEPTEE' && paiement.value?.statut !== 'REUSSI')
+
+const libelleBoutonPaiement = computed(() => {
+  if (paiementLoading.value) return 'Préparation du paiement…'
+  const montant = `${Number(demande.value?.budget || 0).toLocaleString('fr-FR')} FCFA`
+  if (paiement.value?.statut === 'EN_ATTENTE') return 'Reprendre le paiement'
+  if (paiement.value?.statut === 'INITIE') return 'Actualiser'
+  if (paiement.value?.statut === 'ECHOUE') return `Réessayer (${montant})`
+  return `Payer ${montant}`
+})
+
+const verificationLoading = ref(false)
+
+/**
+ * « Payer » et « Reprendre le paiement » ouvrent la modal de paiement
+ * (components/client/PaiementModal.vue) : le client y choisit Wave ou
+ * Orange Money et son numéro, puis la modal redirige vers la page de
+ * paiement renvoyée par le backend. Aucun montant n'est envoyé.
+ */
+const modalPaiementOuverte = ref(false)
+
+function payer() {
+  if (!demande.value?.id) return
+  paiementError.value = ''
+  modalPaiementOuverte.value = true
+}
+
+// Résultat sans redirection (ex. fournisseur sandbox MIMOSY : REUSSI immédiat,
+// ou paiement encore en préparation) : on met simplement la carte à jour.
+function onResultatPaiement(resultat) {
+  if (resultat) paiement.value = resultat
+}
+
+/**
+ * Vérifie le statut réel d'un paiement EN_ATTENTE (ex. le client est
+ * revenu sur cette page sans passer par /client/paiement/retour, ou
+ * a laissé la page ouverte pendant qu'il payait dans un autre onglet).
+ * Interroge toujours le backend, jamais un statut supposé côté client.
+ */
+async function verifierPaiement() {
+  if (!paiement.value?.id) return
+
+  verificationLoading.value = true
+  paiementError.value = ''
+  try {
+    paiement.value = await walletService.getStatutPaiement(paiement.value.id)
+  } catch (error) {
+    paiementError.value = error.message
+  } finally {
+    verificationLoading.value = false
+  }
+}
+
+async function chargerPaiement() {
+  try {
+    const paiements = (await walletService.listMesPaiements()).filter(
+      (item) => item.demande_prestation === demande.value?.id,
+    )
+    // Plusieurs tentatives peuvent exister (échouées, payée en double...) :
+    // on affiche la plus significative, pas simplement la plus récente.
+    const priorite = ['REUSSI', 'EN_ATTENTE', 'INITIE', 'A_REMBOURSER']
+    paiement.value =
+      priorite.map((statut) => paiements.find((item) => item.statut === statut)).find(Boolean) || paiements[0] || null
+  } catch {
+    // Silencieux : l'absence de paiement affiché n'empêche pas de consulter la demande.
+  }
+}
+
+/* ───────────────────────── Litige ouvert sur cette demande ───────────────────────── */
+
+// Tant qu'un litige est ouvert sur cette demande, le paiement ne doit
+// jamais être présenté comme normalement acquis au prestataire : voir
+// litigeBloquant ci-dessous, qui remplace le bandeau de paiement usuel.
+const litigeBloquant = ref(null)
+
+async function chargerLitigeLie() {
+  try {
+    const data = await disputeService.listMesLitiges()
+    const litiges = Array.isArray(data) ? data : data?.results || []
+    litigeBloquant.value =
+      litiges.find(
+        (item) => item.demande_prestation === demande.value?.id && item.fonds_geles && !['RESOLU', 'REJETE'].includes(item.statut),
+      ) || null
+  } catch {
+    // Silencieux : l'absence d'information sur un litige n'empêche pas de consulter la demande.
+  }
+}
+
+/** La demande actuellement affichée (issue du store). */
 const demande = computed(() => demandeStore.demandeSelectionnee)
+
+/** Le prestataire lié à la demande (issu du store). */
 const prestataire = computed(() => prestataireStore.prestataireSelectionne)
 
-const contactOpen = ref(false)
+const nomPrestataire = computed(() =>
+  prestataire.value
+    ? `${prestataire.value.user_first_name || ''} ${prestataire.value.user_last_name || ''}`.trim() || prestataire.value.user_email || 'Prestataire'
+    : 'Chargement…',
+)
+
+/* ───────────────────────── États des modales ───────────────────────── */
+
 const cancelOpen = ref(false)
 
 const avisOpen = ref(false)
@@ -28,149 +157,269 @@ const avisLoading = ref(false)
 const avisError = ref('')
 const avisSuccess = ref('')
 
+/* ───────────────────────── Configuration des statuts ───────────────────────── */
+
+/**
+ * Table de correspondance statut → apparence (libellé + couleurs).
+ * Permet de garder une seule source de vérité pour le style des badges.
+ */
 const statutConfig = {
-  EN_ATTENTE: {
-    label: 'En attente',
-    background: '#EDF4FF',
-    color: '#3267B1',
-  },
-
-  ACCEPTEE: {
-    label: 'Acceptée',
-    background: '#EAF8F2',
-    color: '#16805B',
-  },
-
-  REFUSEE: {
-    label: 'Refusée',
-    background: '#FFF0EE',
-    color: '#C53B35',
-  },
-
-  TERMINEE: {
-    label: 'Terminée',
-    background: '#EAF8F2',
-    color: '#16805B',
-  },
-
-  ANNULEE: {
-    label: 'Annulée',
-    background: '#FFF0EE',
-    color: '#C53B35',
-  },
+  EN_ATTENTE: { label: 'En attente', fond: 'var(--color-mimosy-blueBg)', texte: 'var(--color-mimosy-blue)' },
+  ACCEPTEE: { label: 'Acceptée', fond: 'var(--color-mimosy-primaryBg)', texte: 'var(--color-mimosy-primary)' },
+  PAYEE: { label: 'Paiement confirmé', fond: 'var(--color-mimosy-primaryBg)', texte: 'var(--color-mimosy-primary)' },
+  REALISEE: { label: 'Validation en attente', fond: '#FFF7E6', texte: '#9A723C' },
+  LITIGE: { label: 'Litige en cours', fond: '#FFF0EE', texte: '#A85148' },
+  REFUSEE: { label: 'Refusée', fond: '#FFF0EE', texte: '#C53B35' },
+  TERMINEE: { label: 'Terminée', fond: 'var(--color-mimosy-primaryBg)', texte: 'var(--color-mimosy-primary)' },
+  ANNULEE: { label: 'Annulée', fond: '#FFF0EE', texte: '#C53B35' },
 }
 
+/** Paiement confirmé par PayDunya (jamais supposé : vient de l'API). */
+const estPayee = computed(() => paiement.value?.statut === 'REUSSI' || demande.value?.paiement?.statut === 'REUSSI')
+
+/** Statut « humain » affiché : tient compte du paiement et d'un litige en cours. */
 const statutActuel = computed(() => {
-  return (
-    statutConfig[demande.value?.statut] ||
-    statutConfig.EN_ATTENTE
-  )
+  if (demande.value?.litige_en_cours) return statutConfig.LITIGE
+  if (demande.value?.statut === 'ACCEPTEE' && estPayee.value) return statutConfig.PAYEE
+  return statutConfig[demande.value?.statut] || statutConfig.EN_ATTENTE
 })
 
-const dateCreation = computed(() => {
-  return formatDate(demande.value?.date_creation)
-})
+/* ───────────────────────── Dates formatées ───────────────────────── */
 
-const dateSouhaitee = computed(() => {
-  return formatDate(demande.value?.date_souhaitee)
-})
+const dateCreation = computed(() => formatDate(demande.value?.date_creation))
+const dateSouhaitee = computed(() => formatDate(demande.value?.date_souhaitee))
 
+/**
+ * Formate une date ISO en date/heure lisible (locale fr-FR).
+ * @param {string|null} value
+ * @returns {string}
+ */
+function formatDate(value) {
+  if (!value) return 'Non renseignée'
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'Date invalide'
+
+  return date.toLocaleString('fr-FR', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+/* ───────────────────────── Règles d'affichage des actions ───────────────────────── */
+
+/**
+ * La demande peut être annulée tant qu'elle est en attente ou acceptée,
+ * mais plus une fois payée (le backend le refuse : les fonds sont
+ * sécurisés, un problème se règle par un litige).
+ */
 const canCancel = computed(() => {
-  return ['EN_ATTENTE', 'ACCEPTEE'].includes(
-    demande.value?.statut
-  )
+  return ['EN_ATTENTE', 'ACCEPTEE'].includes(demande.value?.statut) && !estPayee.value
 })
 
+/** On ne peut laisser un avis que sur une prestation terminée, et pas deux fois (voir demande.a_un_avis, calculé côté backend). */
 const peutDonnerAvis = computed(() => {
-  return demande.value?.statut === 'TERMINEE'
+  return demande.value?.statut === 'TERMINEE' && !demande.value?.a_un_avis
 })
 
+/**
+ * Un litige n'a de sens que sur un engagement réel (demande acceptée
+ * ou terminée) : pas sur une demande encore en attente, refusée ou
+ * annulée, où il n'y a rien à contester.
+ */
+const peutOuvrirLitige = computed(() => {
+  return ['ACCEPTEE', 'REALISEE', 'TERMINEE'].includes(demande.value?.statut) && !demande.value?.litige_en_cours
+})
+
+/* ───────────────────────── Validation de la prestation ───────────────────────── */
+
+/**
+ * Le prestataire a déclaré la prestation terminée : le client vérifie le
+ * travail puis la confirme (les fonds sont alors libérés côté backend),
+ * ou signale un problème (litige : l'argent reste sécurisé).
+ */
+const aValider = computed(() => demande.value?.statut === 'REALISEE' && !demande.value?.litige_en_cours)
+const confirmationOuverte = ref(false)
+const confirmationEnCours = ref(false)
+const confirmationErreur = ref('')
+
+const dateLimiteValidation = computed(() => formatDate(demande.value?.date_limite_validation))
+
+async function confirmerPrestation() {
+  if (!demande.value?.id) return
+  confirmationEnCours.value = true
+  confirmationErreur.value = ''
+  try {
+    demandeStore.demandeSelectionnee = await demandeService.confirmRequest(demande.value.id)
+    confirmationOuverte.value = false
+    succes('Prestation confirmée. Merci ! Vous pouvez maintenant laisser un avis.')
+    await chargerPaiement()
+  } catch (error) {
+    confirmationErreur.value = error?.message || 'La prestation n’a pas pu être confirmée.'
+  } finally {
+    confirmationEnCours.value = false
+  }
+}
+
+const litigeModalOuvert = ref(false)
+const { succes } = useToast()
+
+async function litigeCree() {
+  succes('Votre litige a été envoyé à MIMOSY. L’argent reste sécurisé pendant son examen.')
+  // Litige en cours : la validation est suspendue, on relit l'état réel.
+  try {
+    demandeStore.demandeSelectionnee = await demandeService.getRequest(route.params.id)
+  } catch {
+    // Silencieux : la page reste consultable.
+  }
+  await chargerLitigeLie()
+}
+
+/* ───────────────────────── Timeline de suivi ───────────────────────── */
+
+/**
+ * Construit les 3 étapes de la timeline en fonction du statut courant.
+ * `done`   → l'étape est atteinte ou dépassée
+ * `active` → l'étape est l'état actuel de la demande
+ */
 const progressSteps = computed(() => {
   const status = demande.value?.statut
-
-  const order = [
-    'EN_ATTENTE',
-    'ACCEPTEE',
-    'TERMINEE',
-  ]
-
-  const currentIndex = order.indexOf(status)
+  const order = ['EN_ATTENTE', 'ACCEPTEE', 'PAYEE', 'REALISEE', 'TERMINEE']
+  // Le paiement n'est pas un statut de la demande : c'est une étape déduite
+  // du paiement confirmé renvoyé par l'API.
+  const etape = status === 'ACCEPTEE' && estPayee.value ? 'PAYEE' : status
+  const currentIndex = order.indexOf(etape)
 
   return [
-    {
-      key: 'EN_ATTENTE',
-      label: 'Demande envoyée',
-      done: currentIndex >= 0,
-      active: status === 'EN_ATTENTE',
-    },
-
-    {
-      key: 'ACCEPTEE',
-      label: 'Demande acceptée',
-      done: currentIndex >= 1,
-      active: status === 'ACCEPTEE',
-    },
-
-    {
-      key: 'TERMINEE',
-      label: 'Prestation terminée',
-      done: currentIndex >= 2,
-      active: status === 'TERMINEE',
-    },
+    { key: 'EN_ATTENTE', label: 'Demande envoyée', done: currentIndex >= 0, active: etape === 'EN_ATTENTE' },
+    { key: 'ACCEPTEE', label: 'Acceptée', done: currentIndex >= 1, active: etape === 'ACCEPTEE' },
+    { key: 'PAYEE', label: 'Paiement confirmé', done: estPayee.value, active: etape === 'PAYEE' },
+    { key: 'REALISEE', label: 'Travail terminé', done: currentIndex >= 3, active: etape === 'REALISEE' },
+    { key: 'TERMINEE', label: 'Validée', done: currentIndex >= 4, active: etape === 'TERMINEE' },
   ]
 })
 
-function formatDate(value) {
-  if (!value) {
-    return 'Non renseignée'
+/* ───────────────────────── Navigation / messagerie ───────────────────────── */
+
+/**
+ * Redirige vers la messagerie avec le profil du prestataire.
+ *
+ * Important :
+ * On envoie l'ID du ProfilPrestataire, pas l'ID du compte User.
+ * Le backend fera ensuite : ProfilPrestataire → profil.user → Message.destinataire
+ */
+function ouvrirDiscussion() {
+  if (!prestataire.value) {
+    console.error('Prestataire introuvable.')
+    return
   }
 
-  return new Date(value).toLocaleString('fr-FR')
+  const profilPrestataireId = prestataire.value.id
+  if (!profilPrestataireId) {
+    console.error('ID du profil prestataire introuvable.', prestataire.value)
+    return
+  }
+
+  const nom =
+    `${prestataire.value.user_first_name || ''} ${prestataire.value.user_last_name || ''}`.trim() ||
+    prestataire.value.user_email ||
+    'Prestataire'
+
+  const avatar =
+    prestataire.value.profile_photo ||
+    prestataire.value.photo_profil ||
+    prestataire.value.photo ||
+    ''
+
+  const service =
+    demande.value?.service_nom ||
+    demande.value?.service?.nom ||
+    demande.value?.service_name ||
+    ''
+
+  router.push({
+    path: '/messages',
+    query: {
+      prestataire: String(profilPrestataireId),
+      nom,
+      avatar,
+      service,
+    },
+  })
 }
+
+/**
+ * Retour contextuel vers "Mes demandes" (jamais router.back(), dont la
+ * destination dépendrait de l'historique de navigation et serait donc
+ * imprévisible si la page est ouverte via un lien direct).
+ */
+function retour() {
+  router.push({ name: 'demandes' })
+}
+
+/* ───────────────────────── Chargement initial ───────────────────────── */
+
+// Seule la demande affichée est rechargée (id comparé, jamais utilisé pour autre chose).
+useEvenementTempsReel(['demande.statut'], (evenement) => {
+  if (evenement.type === 'realtime.reconnecte' || String(evenement.id) === String(route.params.id)) {
+    demandeStore.chargerDemande(route.params.id).catch(() => {})
+  }
+})
 
 onMounted(() => {
   demandeStore
     .chargerDemande(route.params.id)
     .then((data) => {
+      // Une fois la demande chargée, on charge le prestataire associé
+      // (si la demande en référence un).
       if (data?.prestataire) {
-        return prestataireStore.chargerPrestataire(
-          data.prestataire
-        )
+        return prestataireStore.chargerPrestataire(data.prestataire)
       }
+      return null
     })
-    .catch(() => {})
+    .then(chargerPaiement)
+    .then(chargerLitigeLie)
+    .catch((error) => {
+      console.error('Erreur lors du chargement de la demande :', error)
+    })
 })
 
-async function annulerDemande() {
-  try {
-    await demandeStore.annulerDemande(
-      demande.value.id
-    )
+/* ───────────────────────── Annulation de la demande ───────────────────────── */
 
+async function annulerDemande() {
+  if (!demande.value?.id) return
+
+  try {
+    await demandeStore.annulerDemande(demande.value.id)
     cancelOpen.value = false
   } catch {
-    // Le message est affiché par le store.
+    // Le message d'erreur est géré et affiché par le store.
   }
 }
 
+/* ───────────────────────── Gestion de l'avis ───────────────────────── */
+
+/** Ouvre la modale d'avis en réinitialisant son état. */
 function ouvrirAvis() {
   avisError.value = ''
   avisSuccess.value = ''
   avisNote.value = 0
   avisCommentaire.value = ''
-
   avisOpen.value = true
 }
 
+/** Ferme la modale d'avis (sauf pendant un envoi en cours). */
 function fermerAvis() {
-  if (avisLoading.value) {
-    return
-  }
+  if (avisLoading.value) return
 
   avisOpen.value = false
   avisError.value = ''
 }
 
+/** Valide puis envoie l'avis (note + commentaire) au backend. */
 async function envoyerAvis() {
   avisError.value = ''
   avisSuccess.value = ''
@@ -199,563 +448,398 @@ async function envoyerAvis() {
       commentaire: avisCommentaire.value.trim(),
     })
 
-    avisSuccess.value =
-      'Votre avis a été enregistré avec succès.'
-
+    avisSuccess.value = 'Votre avis a été enregistré avec succès.'
     avisOpen.value = false
     avisNote.value = 0
     avisCommentaire.value = ''
+    if (demande.value) demande.value.a_un_avis = true
   } catch (error) {
-    console.error(
-      'Erreur lors de l’envoi de l’avis :',
-      error
-    )
-
-    avisError.value =
-      error?.message ||
-      'Impossible d’enregistrer votre avis.'
+    console.error('Erreur lors de l’envoi de l’avis :', error)
+    avisError.value = error?.message || 'Impossible d’enregistrer votre avis.'
   } finally {
     avisLoading.value = false
   }
 }
-
-function retour() {
-  router.back()
-}
 </script>
 
 <template>
-  <AppLayout>
-    <div
-      v-if="demandeStore.isLoading"
-      class="rounded-3xl bg-white p-10 text-center text-[#64748B]"
-    >
-      Chargement de la demande...
-    </div>
-
-    <div
-      v-else-if="demandeStore.errorMessage"
-      class="rounded-3xl bg-[#FFF0EE] p-10 text-center text-[#A85148]"
-    >
-      {{ demandeStore.errorMessage }}
-    </div>
-
-    <div
-      v-else-if="demande"
-      class="mx-auto flex w-full max-w-6xl flex-col gap-8 p-10"
-    >
-      <!-- En-tête -->
-      <div
-        class="flex flex-col justify-between gap-5 sm:flex-row sm:items-center"
-      >
-        <div class="flex items-start gap-4">
-          <button
-            type="button"
-            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#E2E8F0] bg-white text-[#64748B] shadow-sm transition hover:bg-[#F5F6F4]"
-            aria-label="Retour"
-            @click="retour"
-          >
-            ←
-          </button>
-
-          <div class="min-w-0">
-            <div class="flex flex-wrap items-center gap-2">
-              <h1
-                class="font-['Plus_Jakarta_Sans'] text-2xl font-extrabold text-[#051F20]"
-              >
-                Détail de la demande #{{ demande.id }}
-              </h1>
-
-              <span
-                class="rounded-full px-3 py-1 text-xs font-bold"
-                :style="{
-                  background: statutActuel.background,
-                  color: statutActuel.color,
-                }"
-              >
-                {{ statutActuel.label }}
-              </span>
-            </div>
-
-            <p class="text-sm text-[#64748B]">
-              Créée le {{ dateCreation }}
-            </p>
-          </div>
-        </div>
-
-        <div class="flex flex-wrap gap-3">
-          <!-- Donner un avis -->
-          <button
-            v-if="peutDonnerAvis"
-            type="button"
-            class="rounded-xl bg-[#2F6250] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#1D4033]"
-            @click="ouvrirAvis"
-          >
-            Donner mon avis
-          </button>
-
-          <!-- Annuler -->
-          <button
-            v-if="canCancel"
-            type="button"
-            class="rounded-xl border border-[#E7B8B2] bg-white px-4 py-2.5 text-sm font-bold text-[#A85148] transition hover:bg-[#FFF0EE]"
-            @click="cancelOpen = true"
-          >
-            Annuler la demande
-          </button>
-
-          <!-- Contact -->
-          <button
-            v-if="prestataire"
-            type="button"
-            class="rounded-xl border border-[#2F6250] bg-white px-4 py-2.5 text-sm font-bold text-[#2F6250] transition hover:bg-[#EAF8F2]"
-            @click="contactOpen = true"
-          >
-            Contacter le prestataire
-          </button>
-        </div>
+  <ClientLayout>
+    <section class="mx-auto w-full max-w-[100%] px-4 py-10 sm:px-8 sm:py-12 ">
+      <!-- ═══════════════ État : chargement ═══════════════ -->
+      <div v-if="demandeStore.isLoading" class="animate-pulse space-y-6">
+        <div class="h-8 w-1/3 rounded-lg bg-mimosy-page"></div>
+        <div class="h-40 rounded-[24px] bg-mimosy-page"></div>
+        <div class="h-32 rounded-[24px] bg-mimosy-page"></div>
       </div>
 
-      <!-- Message succès avis -->
-      <div
-        v-if="avisSuccess"
-        class="rounded-2xl border border-[#B8DEC9] bg-[#EAF8F2] px-5 py-4 text-sm font-bold text-[#16805B]"
-      >
-        {{ avisSuccess }}
+      <!-- ═══════════════ État : erreur ═══════════════ -->
+      <div v-else-if="demandeStore.errorMessage" class="rounded-[24px] border border-[#a85148] bg-[#fbeeec] p-8 text-center font-sans text-sm font-semibold text-[#a85148]">
+        {{ demandeStore.errorMessage }}
       </div>
 
-      <!-- Informations de la demande -->
-      <section
-        class="flex flex-col gap-6 rounded-3xl border border-[#E2E8F0] bg-white p-8 shadow-sm"
-      >
-        <div>
-          <p
-            class="text-sm font-bold uppercase tracking-wide text-[#94A3B8]"
-          >
-            Description
-          </p>
+      <!-- ═══════════════ Contenu principal ═══════════════ -->
+      <template v-else-if="demande">
+        <button type="button" class="flex items-center gap-1.5 font-sans text-sm font-medium text-mimosy-secondary transition hover:text-mimosy-text" @click="retour">
+          <ArrowLeft :size="16" :stroke-width="1.8" />
+          Retour aux demandes
+        </button>
 
-          <p class="mt-2 leading-relaxed text-[#64748B]">
-            {{ demande.description || 'Aucune description.' }}
-          </p>
+        <div class="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <div class="flex min-w-0 flex-col gap-6 lg:col-span-2">
+            <!-- Carte 1 : en-tête + informations de la demande -->
+            <section class="rounded-[24px] border border-mimosy-border bg-mimosy-surface p-6 sm:p-8">
+              <div class="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <h1 class="font-serif text-[28px] leading-[34px] text-mimosy-text sm:text-[32px]">
+                    {{ demande.service_nom || demande.service?.nom || demande.service_name || 'Demande' }}
+                  </h1>
+                  <p class="mt-1 font-sans text-xs text-mimosy-secondary">Demande #{{ demande.id }} · Créée le {{ dateCreation }}</p>
+                </div>
+                <span class="shrink-0 rounded-full px-3 py-1.5 font-sans text-xs font-bold whitespace-nowrap" :style="{ background: statutActuel.fond, color: statutActuel.texte }">
+                  {{ statutActuel.label }}
+                </span>
+              </div>
+
+              <p class="mt-5 font-sans text-sm leading-relaxed text-mimosy-secondary">{{ demande.description || 'Aucune description.' }}</p>
+
+              <div class="mt-6 grid grid-cols-1 gap-5 border-t border-mimosy-border pt-6 sm:grid-cols-2">
+                <div>
+                  <p class="font-sans text-[10px] font-bold uppercase tracking-[0.4px] text-mimosy-secondary">Date souhaitée</p>
+                  <p class="mt-1 font-sans text-sm font-bold text-mimosy-text">{{ dateSouhaitee }}</p>
+                </div>
+                <div>
+                  <p class="font-sans text-[10px] font-bold uppercase tracking-[0.4px] text-mimosy-secondary">Budget</p>
+                  <p class="mt-1 font-sans text-sm font-bold text-mimosy-primary">{{ Number(demande.budget || 0).toLocaleString('fr-FR') }} FCFA</p>
+                </div>
+              </div>
+            </section>
+
+            <!-- Carte 2 : suivi de la demande -->
+            <section class="rounded-[24px] border border-mimosy-border bg-mimosy-surface p-6 sm:p-8">
+              <h2 class="font-sans text-base font-bold text-mimosy-text">Suivi de la demande</h2>
+
+              <div class="mt-6 flex flex-col gap-6 sm:flex-row sm:gap-0">
+                <div v-for="(step, index) in progressSteps" :key="step.key" class="relative flex items-center gap-3 sm:flex-1 sm:flex-col sm:items-center sm:gap-2 sm:text-center">
+                  <span
+                    v-if="index < progressSteps.length - 1"
+                    class="absolute left-[17px] top-9 h-6 w-0.5 sm:left-1/2 sm:top-[17px] sm:h-0.5 sm:w-full sm:translate-x-[17px]"
+                    :class="step.done ? 'bg-mimosy-primary' : 'bg-mimosy-page'"
+                  ></span>
+                  <span
+                    class="relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-sans text-sm font-extrabold"
+                    :class="step.done ? 'bg-mimosy-primary text-white' : 'bg-mimosy-page text-mimosy-secondary'"
+                  >
+                    {{ step.done ? '✓' : '•' }}
+                  </span>
+                  <span class="font-sans text-sm font-bold" :class="step.active ? 'text-mimosy-primary' : 'text-mimosy-secondary'">{{ step.label }}</span>
+                </div>
+              </div>
+            </section>
+
+            <!-- Carte : validation de la prestation par le client -->
+            <section v-if="aValider" class="rounded-[24px] border-2 border-[#E8D7B5] bg-[#FFFBF0] p-6 sm:p-8">
+              <h2 class="font-serif text-xl text-mimosy-text">Le prestataire indique que la prestation est terminée.</h2>
+              <p class="mt-2 font-sans text-sm leading-6 text-mimosy-secondary">
+                Vérifiez le travail avant de confirmer.
+                <template v-if="estPayee">Les fonds ne seront versés au prestataire qu'après votre confirmation.</template>
+              </p>
+              <p v-if="dateLimiteValidation && demande.date_limite_validation" class="mt-2 font-sans text-xs text-[#9A723C]">
+                Sans réponse de votre part, la prestation sera validée automatiquement le {{ dateLimiteValidation }}.
+              </p>
+              <div class="mt-5 flex flex-col gap-2.5 sm:flex-row">
+                <button
+                  type="button"
+                  class="inline-flex items-center justify-center gap-2 rounded-xl bg-mimosy-primary px-5 py-3 font-sans text-sm font-bold text-white transition hover:opacity-90"
+                  @click="confirmationErreur = ''; confirmationOuverte = true"
+                >
+                  <CheckCircle2 :size="16" :stroke-width="2" />
+                  Confirmer la prestation
+                </button>
+                <button
+                  type="button"
+                  class="inline-flex items-center justify-center gap-2 rounded-xl border border-[#FBE1DD] bg-mimosy-surface px-5 py-3 font-sans text-sm font-bold text-[#A85148] transition hover:bg-[#FFF0EE]"
+                  @click="litigeModalOuvert = true"
+                >
+                  <TriangleAlert :size="16" :stroke-width="1.8" />
+                  Signaler un problème
+                </button>
+              </div>
+            </section>
+            <section v-else-if="demande.statut === 'REALISEE' && demande.litige_en_cours" class="rounded-[24px] border border-[#FBE1DD] bg-[#FFF0EE] p-6 sm:p-8">
+              <h2 class="font-serif text-xl text-mimosy-text">Litige en cours</h2>
+              <p class="mt-2 font-sans text-sm leading-6 text-[#A85148]">
+                Votre signalement est en cours d'examen par MIMOSY. L'argent reste sécurisé : il ne sera versé qu'après la résolution du litige.
+              </p>
+            </section>
+            <section v-else-if="demande.statut === 'TERMINEE' && !demande.a_un_avis" class="rounded-[24px] border border-mimosy-border bg-mimosy-surface p-6 sm:p-8">
+              <h2 class="font-serif text-xl text-mimosy-text">Prestation terminée</h2>
+              <p class="mt-2 font-sans text-sm leading-6 text-mimosy-secondary">
+                Votre prestation est terminée. Votre avis aide les autres clients à choisir.
+              </p>
+              <button type="button" class="mt-5 rounded-xl bg-mimosy-primary px-5 py-3 font-sans text-sm font-bold text-white transition hover:opacity-90" @click="ouvrirAvis">
+                Laisser un avis
+              </button>
+            </section>
+
+            <!-- Carte 3 : statut du paiement (si engagé, ou premier paiement possible : peutPayer) -->
+            <section v-if="litigeBloquant || paiement || peutPayer" class="rounded-[24px] border border-mimosy-border bg-mimosy-surface p-6 sm:p-8">
+              <h2 class="font-sans text-[11px] font-bold uppercase tracking-[0.4px] text-mimosy-secondary">Paiement</h2>
+
+              <div v-if="litigeBloquant" class="mt-3 rounded-xl bg-[#FFFBF0] px-4 py-3 font-sans text-sm font-semibold text-[#9A723C]">
+                Paiement sécurisé — {{ Number(litigeBloquant.montant_concerne || 0).toLocaleString('fr-FR') }} FCFA restent
+                bloqués pendant le traitement du litige en cours. Le prestataire n'a pas reçu cet argent.
+              </div>
+              <div v-else-if="paiement?.statut === 'REUSSI'" class="mt-3 rounded-xl bg-mimosy-primaryBg px-4 py-3 font-sans text-sm font-semibold text-mimosy-primary">
+                Paiement confirmé · {{ Number(paiement.montant).toLocaleString('fr-FR') }} FCFA.
+                <template v-if="demande.statut === 'TERMINEE'">Les fonds ont été versés au prestataire après validation.</template>
+                <template v-else>Les fonds sont sécurisés par MIMOSY jusqu'à ce que vous validiez la prestation.</template>
+              </div>
+              <div v-else-if="paiement?.statut === 'EN_ATTENTE'" class="mt-3 flex items-center gap-3 rounded-xl bg-[#EDF4FF] px-4 py-3 font-sans text-sm font-semibold text-[#3267B1]">
+                <span class="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-[#3267B1]/30 border-t-[#3267B1]" aria-hidden="true" />
+                Paiement en attente chez PayDunya. Si vous avez quitté la page de paiement, vous pouvez la reprendre.
+              </div>
+              <div v-else-if="paiement?.statut === 'INITIE'" class="mt-3 flex items-center gap-3 rounded-xl bg-[#EDF4FF] px-4 py-3 font-sans text-sm font-semibold text-[#3267B1]">
+                <span class="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-[#3267B1]/30 border-t-[#3267B1]" aria-hidden="true" />
+                Paiement en cours de préparation…
+              </div>
+              <div v-else-if="paiement?.statut === 'A_REMBOURSER'" class="mt-3 rounded-xl bg-[#FFFBF0] px-4 py-3 font-sans text-sm font-semibold text-[#9A723C]">
+                Un paiement en double a été détecté. Il n'a pas été appliqué et vous sera remboursé par l'équipe MIMOSY.
+              </div>
+              <div v-else-if="paiement?.statut === 'ECHOUE'" class="mt-3 rounded-xl bg-[#FFF0EE] px-4 py-3 font-sans text-sm font-semibold text-[#A85148]">
+                Le paiement n'a pas abouti. Vous pouvez réessayer.
+              </div>
+              <p v-if="paiementError" class="mt-2 font-sans text-sm font-bold text-[#A85148]">{{ paiementError }}</p>
+
+              <PaiementModal
+                v-if="demande"
+                v-model="modalPaiementOuverte"
+                :demande="demande"
+                :paiement-en-cours="paiement?.statut === 'EN_ATTENTE' ? paiement : null"
+                :prestataire-nom="nomPrestataire"
+                @resultat="onResultatPaiement"
+              />
+
+              <div class="mt-4 flex flex-wrap gap-2.5">
+                <button
+                  v-if="peutPayer"
+                  type="button"
+                  class="inline-flex items-center gap-2 rounded-xl bg-mimosy-primary px-4 py-2.5 font-sans text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-60"
+                  :disabled="paiementLoading"
+                  @click="payer"
+                >
+                  <span v-if="paiementLoading" class="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden="true" />
+                  {{ libelleBoutonPaiement }}
+                </button>
+                <button
+                  v-if="paiement?.statut === 'EN_ATTENTE'"
+                  type="button"
+                  class="inline-flex items-center gap-2 rounded-xl border border-mimosy-primary bg-mimosy-surface px-4 py-2.5 font-sans text-sm font-bold text-mimosy-primary transition hover:bg-mimosy-primaryBg disabled:opacity-60"
+                  :disabled="verificationLoading"
+                  @click="verifierPaiement"
+                >
+                  {{ verificationLoading ? 'Vérification…' : 'Vérifier mon paiement' }}
+                </button>
+                <router-link
+                  v-if="paiement?.statut === 'REUSSI'"
+                  :to="{ name: 'client-facture', params: { id: paiement.id } }"
+                  class="inline-flex items-center gap-2 rounded-xl border border-mimosy-primary bg-mimosy-surface px-4 py-2.5 font-sans text-sm font-bold text-mimosy-primary transition hover:bg-mimosy-primaryBg"
+                >
+                  <Receipt :size="16" :stroke-width="1.8" />
+                  Voir la facture
+                </router-link>
+              </div>
+            </section>
+          </div>
+
+          <!-- Colonne latérale -->
+          <div class="flex flex-col gap-6">
+            <!-- Carte : prestataire -->
+            <section v-if="prestataire" class="rounded-[24px] border border-mimosy-border bg-mimosy-surface p-6">
+              <h2 class="font-sans text-[11px] font-bold uppercase tracking-[0.4px] text-mimosy-secondary">Prestataire</h2>
+              <div class="mt-4 flex items-center gap-3 p-5">
+                <img v-if="prestataire.photo" :src="prestataire.photo" :alt="`Photo de ${nomPrestataire}`" class="h-12 w-12 shrink-0 rounded-full object-cover p-5" />
+                <div v-else class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-mimosy-primaryBg font-serif text-lg text-mimosy-primary mx-2">{{ nomPrestataire.charAt(0) }}</div>
+                <div class="min-w-0">
+                  <p class="truncate font-sans text-sm font-bold text-mimosy-text">{{ nomPrestataire }}</p>
+                </div>
+              </div>
+              <router-link
+                :to="{ name: 'client.prestataire', params: { id: prestataire.id } }"
+                class="mt-4 flex w-full items-center justify-center rounded-xl border border-mimosy-border bg-mimosy-surface px-4 py-2.5 font-sans text-sm font-bold text-mimosy-text transition hover:border-mimosy-primary hover:text-mimosy-primary"
+              >
+                Voir le profil
+              </router-link>
+            </section>
+
+            <!-- Carte : actions -->
+            <section class="rounded-[24px] border border-mimosy-border bg-mimosy-surface p-6">
+              <h2 class="font-sans text-[11px] font-bold uppercase tracking-[0.4px] text-mimosy-secondary">Actions</h2>
+
+              <transition name="fade">
+                <div v-if="avisSuccess" class="mt-3 rounded-xl border border-mimosy-primary bg-mimosy-primaryBg px-4 py-3 font-sans text-sm font-bold text-mimosy-primary">{{ avisSuccess }}</div>
+              </transition>
+
+              <div class="mt-3 flex flex-col gap-2.5">
+                <button v-if="peutDonnerAvis" type="button" class="rounded-xl bg-mimosy-primary px-4 py-2.5 font-sans text-sm font-bold text-white transition hover:opacity-90" @click="ouvrirAvis">
+                  Laisser un avis
+                </button>
+                <span v-else-if="demande.statut === 'TERMINEE' && demande.a_un_avis" class="rounded-xl border border-mimosy-border bg-mimosy-page px-4 py-2.5 text-center font-sans text-sm font-bold text-mimosy-secondary">
+                  Avis déjà envoyé
+                </span>
+
+                <button
+                  v-if="prestataire"
+                  type="button"
+                  class="flex items-center justify-center gap-2 rounded-xl border border-mimosy-border bg-mimosy-surface px-4 py-2.5 font-sans text-sm font-bold text-mimosy-text transition hover:border-mimosy-primary hover:text-mimosy-primary"
+                  @click="ouvrirDiscussion"
+                >
+                  <MessageCircle :size="16" :stroke-width="1.8" />
+                  Contacter le prestataire
+                </button>
+
+                <button v-if="canCancel" type="button" class="rounded-xl border border-mimosy-border bg-mimosy-surface px-4 py-2.5 font-sans text-sm font-bold text-[#A85148] transition hover:bg-[#FFF0EE]" @click="cancelOpen = true">
+                  Annuler la demande
+                </button>
+
+                <button
+                  v-if="peutOuvrirLitige"
+                  type="button"
+                  class="flex items-center justify-center gap-2 rounded-xl border border-[#FBE1DD] bg-mimosy-surface px-4 py-2.5 font-sans text-sm font-bold text-[#A85148] transition hover:bg-[#FFF0EE]"
+                  @click="litigeModalOuvert = true"
+                >
+                  <TriangleAlert :size="16" :stroke-width="1.8" />
+                  Signaler un litige
+                </button>
+              </div>
+            </section>
+          </div>
         </div>
+      </template>
 
-        <div
-          class="grid gap-5 border-t border-[#F1F5F9] pt-6 sm:grid-cols-2"
-        >
-          <!-- Prestataire -->
-          <div>
-            <p
-              class="text-xs font-bold uppercase text-[#94A3B8]"
-            >
-              Prestataire
-            </p>
+      <!-- ═══════════════ État : demande introuvable ═══════════════ -->
+      <div v-else class="rounded-[24px] border border-dashed border-mimosy-border bg-mimosy-surface p-10 text-center font-sans text-sm text-mimosy-secondary">
+        Demande introuvable.
+      </div>
+    </section>
 
-            <p
-              class="mt-1 text-sm font-bold text-[#334155]"
-            >
-              {{
-                prestataire
-                  ? `${prestataire.user_first_name || ''} ${prestataire.user_last_name || ''}`.trim() ||
-                    prestataire.user_email ||
-                    'Prestataire'
-                  : 'Chargement...'
-              }}
-            </p>
-          </div>
-
-          <!-- Date -->
-          <div>
-            <p
-              class="text-xs font-bold uppercase text-[#94A3B8]"
-            >
-              Date souhaitée
-            </p>
-
-            <p
-              class="mt-1 text-sm font-bold text-[#334155]"
-            >
-              {{ dateSouhaitee }}
-            </p>
-          </div>
-
-          <!-- Budget -->
-          <div>
-            <p
-              class="text-xs font-bold uppercase text-[#94A3B8]"
-            >
-              Budget
-            </p>
-
-            <p
-              class="mt-1 text-sm font-bold text-[#2F6250]"
-            >
-              {{
-                Number(demande.budget || 0).toLocaleString(
-                  'fr-FR'
-                )
-              }}
-              FCFA
-            </p>
-          </div>
-
-          <!-- Service -->
-          <div>
-            <p
-              class="text-xs font-bold uppercase text-[#94A3B8]"
-            >
-              Service
-            </p>
-
-            <p
-              class="mt-1 text-sm font-bold text-[#334155]"
-            >
-              {{
-                demande.service_nom ||
-                demande.service?.nom ||
-                demande.service_name ||
-                'Service non renseigné'
-              }}
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <!-- Suivi -->
-      <section
-        class="rounded-3xl border border-[#E2E8F0] bg-white p-8 shadow-sm"
-      >
-        <div
-          class="flex items-center justify-between gap-4"
-        >
-          <div>
-            <h2
-              class="text-lg font-extrabold text-[#051F20]"
-            >
-              Suivi de la demande
-            </h2>
-
-            <p class="mt-1 text-sm text-[#64748B]">
-              L'état affiché provient directement de Django.
-            </p>
-          </div>
-
-          <span
-            class="rounded-full px-3 py-1.5 text-xs font-bold"
-            :style="{
-              background: statutActuel.background,
-              color: statutActuel.color,
-            }"
-          >
-            {{ statutActuel.label }}
-          </span>
-        </div>
-
-        <div
-          class="mt-8 grid gap-5 sm:grid-cols-3"
-        >
-          <div
-            v-for="step in progressSteps"
-            :key="step.key"
-            class="flex items-center gap-3 sm:flex-col sm:items-start"
-          >
-            <span
-              class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-extrabold"
-              :class="
-                step.done
-                  ? 'bg-[#2F6250] text-white'
-                  : 'bg-[#F1F5F9] text-[#94A3B8]'
-              "
-            >
-              {{ step.done ? '✓' : '•' }}
-            </span>
-
-            <span
-              class="text-sm font-bold"
-              :class="
-                step.active
-                  ? 'text-[#2F6250]'
-                  : 'text-[#64748B]'
-              "
-            >
-              {{ step.label }}
-            </span>
-          </div>
-        </div>
-      </section>
-    </div>
-
-    <!-- Demande introuvable -->
-    <div
-      v-else
-      class="rounded-3xl border border-dashed border-[#E2E8F0] bg-white p-10 text-center text-[#64748B]"
-    >
-      Demande introuvable.
-    </div>
-
-    <!-- Modals -->
+    <!-- ═══════════════ Modales ═══════════════ -->
     <Teleport to="body">
-      <!-- Modal annulation -->
-      <div
-        v-if="cancelOpen"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-[#051F20]/50 px-4"
-        @click.self="cancelOpen = false"
-      >
-        <div
-          class="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl"
-        >
-          <h2
-            class="text-lg font-extrabold text-[#051F20]"
-          >
-            Annuler cette demande ?
-          </h2>
-
-          <p
-            class="mt-2 text-sm leading-6 text-[#64748B]"
-          >
-            Cette action changera le statut de la demande
-            en « Annulée ».
-          </p>
-
-          <div class="mt-6 flex justify-end gap-3">
-            <button
-              type="button"
-              class="rounded-xl border border-[#E2E8F0] px-4 py-2.5 text-sm font-bold text-[#334155]"
-              @click="cancelOpen = false"
-            >
-              Retour
-            </button>
-
-            <button
-              type="button"
-              class="rounded-xl bg-[#A85148] px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50"
-              :disabled="demandeStore.isLoading"
-              @click="annulerDemande"
-            >
-              {{
-                demandeStore.isLoading
-                  ? 'Annulation...'
-                  : 'Confirmer'
-              }}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Modal contact -->
-      <div
-        v-if="contactOpen"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-[#051F20]/50 px-4"
-        @click.self="contactOpen = false"
-      >
-        <div
-          class="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl"
-        >
-          <div
-            class="flex items-start justify-between gap-4"
-          >
-            <div>
-              <p
-                class="text-xs font-bold uppercase tracking-wide text-[#94A3B8]"
-              >
-                Contact prestataire
-              </p>
-
-              <h2
-                class="mt-1 text-xl font-extrabold text-[#051F20]"
-              >
-                {{
-                  `${prestataire?.user_first_name || ''} ${prestataire?.user_last_name || ''}`.trim() ||
-                  prestataire?.user_email ||
-                  'Prestataire'
-                }}
-              </h2>
-            </div>
-
-            <button
-              type="button"
-              class="text-xl text-[#64748B]"
-              aria-label="Fermer"
-              @click="contactOpen = false"
-            >
-              ×
-            </button>
-          </div>
-
-          <div class="mt-6 grid gap-3 text-sm">
-            <a
-              v-if="prestataire?.user_phone"
-              :href="`tel:${prestataire.user_phone}`"
-              class="rounded-xl bg-[#EAF8F2] px-4 py-3 font-bold text-[#2F6250]"
-            >
-              {{ prestataire.user_phone }}
-            </a>
-
-            <a
-              v-if="prestataire?.user_email"
-              :href="`mailto:${prestataire.user_email}`"
-              class="rounded-xl bg-[#F8FAFC] px-4 py-3 font-bold text-[#334155]"
-            >
-              {{ prestataire.user_email }}
-            </a>
-
-            <p
-              v-if="
-                !prestataire?.user_phone &&
-                !prestataire?.user_email
-              "
-              class="rounded-xl border border-dashed border-[#E2E8F0] px-4 py-3 text-[#64748B]"
-            >
-              Informations de contact non disponibles.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Modal avis -->
-      <div
-        v-if="avisOpen"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-[#051F20]/50 px-4"
-        @click.self="fermerAvis"
-      >
-        <div
-          class="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl"
-        >
-          <div
-            class="flex items-start justify-between gap-4"
-          >
-            <div>
-              <p
-                class="text-xs font-bold uppercase tracking-wide text-[#000307]"
-              >
-                Votre expérience
-              </p>
-
-              <h2
-                class="mt-1 text-xl font-extrabold text-[#051F20]"
-              >
-                Donner votre avis
-              </h2>
-
-              <p
-                class="mt-1 text-sm text-[#000307]"
-              >
-                Évaluez la prestation réalisée par le
-                prestataire.
-              </p>
-            </div>
-
-            <button
-              type="button"
-              class="text-xl text-[#64748B]"
-              aria-label="Fermer"
-              :disabled="avisLoading"
-              @click="fermerAvis"
-            >
-              ×
-            </button>
-          </div>
-
-          <!-- Note -->
-          <div class="mt-6">
-            <p
-              class="text-sm font-bold text-[#334155]"
-            >
-              Votre note
-            </p>
-
-            <div class="mt-3 flex gap-2">
-              <button
-                v-for="note in 5"
-                :key="note"
-                type="button"
-                class="text-3xl transition"
-                :class="
-                  note <= avisNote
-                    ? 'text-[#2F6250]'
-                    : 'text-[#01050a]'
-                "
-                :aria-label="`${note} étoile${note > 1 ? 's' : ''}`"
-                @click="avisNote = note"
-              >
-                ★
+      <!-- ── Modale : confirmation d'annulation ── -->
+      <transition name="fade">
+        <div v-if="cancelOpen" class="fixed inset-0 z-[1000] flex items-center justify-center bg-mimosy-text/55 p-4" @click.self="cancelOpen = false">
+          <div class="w-full max-w-md rounded-[24px] bg-mimosy-surface p-6 shadow-xl">
+            <h2 class="font-serif text-lg text-mimosy-text">Annuler cette demande ?</h2>
+            <p class="mt-2 font-sans text-sm leading-6 text-mimosy-secondary">Cette action changera le statut de la demande en « Annulée ».</p>
+            <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button type="button" class="rounded-xl border border-mimosy-border px-4 py-2.5 font-sans text-sm font-bold text-mimosy-text transition hover:bg-mimosy-page" @click="cancelOpen = false">
+                Retour
+              </button>
+              <button type="button" class="rounded-xl bg-[#A85148] px-4 py-2.5 font-sans text-sm font-bold text-white transition hover:bg-[#8F4038] disabled:opacity-50" :disabled="demandeStore.isLoading" @click="annulerDemande">
+                {{ demandeStore.isLoading ? 'Annulation...' : 'Confirmer' }}
               </button>
             </div>
-
-            <p
-              v-if="avisNote"
-              class="mt-2 text-sm font-bold text-[#2F6250]"
-            >
-              {{ avisNote }}/5
-            </p>
-          </div>
-
-          <!-- Commentaire -->
-          <div class="mt-6">
-            <label
-              for="avis-commentaire"
-              class="text-sm font-bold text-[#010408]"
-            >
-              Commentaire
-            </label>
-
-            <textarea
-              id="avis-commentaire"
-              v-model="avisCommentaire"
-              rows="5"
-              maxlength="1000"
-              class="mt-2 w-full rounded-xl border border-[#E2E8F0] px-4 py-3 text-[#010408] text-sm outline-none transition focus:border-[#2F6250]"
-              placeholder="Partagez votre expérience..."
-              :disabled="avisLoading"
-            />
-
-            <p
-              class="mt-1 text-right text-xs text-[#01060e]"
-            >
-              {{ avisCommentaire.length }}/1000
-            </p>
-          </div>
-
-          <!-- Erreur -->
-          <p
-            v-if="avisError"
-            class="mt-3 rounded-xl bg-[#FFF0EE] px-4 py-3 text-sm text-[#A85148]"
-          >
-            {{ avisError }}
-          </p>
-
-          <!-- Actions -->
-          <div
-            class="mt-6 flex justify-end gap-3"
-          >
-            <button
-              type="button"
-              class="rounded-xl border border-[#E2E8F0] px-4 py-2.5 text-sm font-bold text-[#334155]"
-              :disabled="avisLoading"
-              @click="fermerAvis"
-            >
-              Annuler
-            </button>
-
-            <button
-              type="button"
-              class="rounded-xl bg-[#2F6250] px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
-              :disabled="
-                avisLoading ||
-                avisNote === 0 ||
-                !avisCommentaire.trim()
-              "
-              @click="envoyerAvis"
-            >
-              {{
-                avisLoading
-                  ? 'Envoi...'
-                  : 'Publier mon avis'
-              }}
-            </button>
           </div>
         </div>
-      </div>
+      </transition>
+
+      <!-- ── Modale : confirmation de la prestation ── -->
+      <transition name="fade">
+        <div v-if="confirmationOuverte" class="fixed inset-0 z-[1000] flex items-center justify-center bg-mimosy-text/55 p-4" @click.self="confirmationEnCours || (confirmationOuverte = false)">
+          <div class="w-full max-w-md rounded-[24px] bg-mimosy-surface p-6 shadow-xl">
+            <h2 class="font-serif text-lg text-mimosy-text">Confirmer la prestation ?</h2>
+            <p class="mt-2 font-sans text-sm leading-6 text-mimosy-secondary">
+              Vous confirmez que le travail a bien été réalisé.
+              <template v-if="estPayee">Le montant payé sera alors versé au prestataire : cette action est définitive.</template>
+            </p>
+            <p v-if="confirmationErreur" class="mt-3 rounded-xl bg-[#FFF0EE] px-4 py-3 font-sans text-sm font-semibold text-[#A85148]" role="alert">{{ confirmationErreur }}</p>
+            <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button type="button" class="rounded-xl border border-mimosy-border px-4 py-2.5 font-sans text-sm font-bold text-mimosy-text transition hover:bg-mimosy-page disabled:opacity-50" :disabled="confirmationEnCours" @click="confirmationOuverte = false">
+                Retour
+              </button>
+              <button type="button" class="rounded-xl bg-mimosy-primary px-4 py-2.5 font-sans text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-50" :disabled="confirmationEnCours" @click="confirmerPrestation">
+                {{ confirmationEnCours ? 'Confirmation…' : 'Confirmer' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </transition>
+
+      <!-- ── Modale : dépôt d'un avis ── -->
+      <transition name="fade">
+        <div v-if="avisOpen" class="fixed inset-0 z-[1000] flex items-center justify-center bg-mimosy-text/55 p-4" @click.self="fermerAvis">
+          <div class="flex max-h-[90vh] w-full max-w-md flex-col overflow-y-auto rounded-[24px] bg-mimosy-surface p-6 shadow-xl">
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <p class="font-sans text-xs font-bold uppercase tracking-wide text-mimosy-primary">Votre expérience</p>
+                <h2 class="mt-1 font-serif text-xl text-mimosy-text">Donner votre avis</h2>
+                <p class="mt-1 font-sans text-sm text-mimosy-secondary">Évaluez la prestation réalisée par le prestataire.</p>
+              </div>
+              <button type="button" class="shrink-0 text-xl text-mimosy-secondary transition hover:text-mimosy-text" aria-label="Fermer" :disabled="avisLoading" @click="fermerAvis">×</button>
+            </div>
+
+            <div class="mt-6">
+              <p class="font-sans text-sm font-bold text-mimosy-text">Votre note</p>
+              <div class="mt-3 flex gap-2">
+                <button
+                  v-for="note in 5"
+                  :key="note"
+                  type="button"
+                  class="text-3xl leading-none transition hover:scale-110"
+                  :class="note <= avisNote ? 'text-mimosy-primary' : 'text-mimosy-border'"
+                  :aria-label="`${note} étoile${note > 1 ? 's' : ''}`"
+                  @click="avisNote = note"
+                >
+                  ★
+                </button>
+              </div>
+              <p v-if="avisNote" class="mt-2 font-sans text-sm font-bold text-mimosy-primary">{{ avisNote }}/5</p>
+            </div>
+
+            <div class="mt-6">
+              <label for="avis-commentaire" class="font-sans text-sm font-bold text-mimosy-text">Commentaire</label>
+              <textarea
+                id="avis-commentaire"
+                v-model="avisCommentaire"
+                rows="5"
+                maxlength="1000"
+                class="mt-2 w-full rounded-xl border border-mimosy-border px-4 py-3 font-sans text-sm text-mimosy-text outline-none transition focus:border-mimosy-primary"
+                placeholder="Partagez votre expérience..."
+                :disabled="avisLoading"
+              />
+              <p class="mt-1 text-right font-sans text-xs text-mimosy-secondary">{{ avisCommentaire.length }}/1000</p>
+            </div>
+
+            <p v-if="avisError" class="mt-3 rounded-xl bg-[#FFF0EE] px-4 py-3 font-sans text-sm text-[#A85148]">{{ avisError }}</p>
+
+            <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button type="button" class="rounded-xl border border-mimosy-border px-4 py-2.5 font-sans text-sm font-bold text-mimosy-text transition hover:bg-mimosy-page" :disabled="avisLoading" @click="fermerAvis">
+                Annuler
+              </button>
+              <button
+                type="button"
+                class="rounded-xl bg-mimosy-primary px-4 py-2.5 font-sans text-sm font-bold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                :disabled="avisLoading || avisNote === 0 || !avisCommentaire.trim()"
+                @click="envoyerAvis"
+              >
+                {{ avisLoading ? 'Envoi...' : 'Publier mon avis' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </transition>
     </Teleport>
-  </AppLayout>
+
+    <NouveauLitigeModal v-model="litigeModalOuvert" :demande="demande" role="CLIENT" @cree="litigeCree" />
+  </ClientLayout>
 </template>
+
+<style scoped>
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.18s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+</style>
