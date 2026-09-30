@@ -7,20 +7,25 @@
  * (seul rôle pour lequel cette action existe réellement côté API) : ne
  * pas en ajouter un ici pour le CLIENT, qui n'a pas cette action.
  */
+// Outils Vue.
 import { computed, onMounted, ref } from 'vue'
 
+// Les composants de la page.
 import ClientLayout from '@/components/layout/ClientLayout.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import ErrorState from '@/components/common/ErrorState.vue'
 import Loader from '@/components/common/Loader.vue'
 import LitigeCard from '@/components/disputes/LitigeCard.vue'
+// Appels à l'API des litiges et abonnement au temps réel.
 import * as disputeService from '@/services/disputeService'
 import { useEvenementTempsReel } from '@/composables/useEvenementTempsReel'
 
+// La liste des litiges, et les états de chargement et d'erreur.
 const litiges = ref([])
 const loading = ref(false)
 const errorMessage = ref('')
 
+// Charge les litiges depuis le serveur.
 async function charger() {
   loading.value = true
   errorMessage.value = ''
@@ -34,6 +39,7 @@ async function charger() {
   }
 }
 
+// On charge au montage, et on recharge à chaque événement "litige" reçu.
 onMounted(charger)
 useEvenementTempsReel(['litige.nouveau', 'litige.statut', 'litige.preuve'], () => charger())
 
@@ -41,6 +47,7 @@ useEvenementTempsReel(['litige.nouveau', 'litige.statut', 'litige.preuve'], () =
  * Filtres : regroupement des vrais statuts (voir LitigeCard.vue) sous
  * 4 catégories lisibles, sans en inventer aucun.
  * ---------------------------------------------------------------- */
+// Pour chaque groupe de filtre, les statuts qu'il regroupe.
 const GROUPES = {
   en_attente: ['EN_ATTENTE'],
   en_cours: ['EN_COURS', 'REPRISE_DEMANDEE', 'REPRISE_EFFECTUEE', 'DELAI_EXPIRE', 'REATTRIBUE'],
@@ -48,17 +55,21 @@ const GROUPES = {
   rejete: ['REJETE'],
 }
 
+// Trouve le groupe d'un statut.
 function groupeDe(statut) {
   return Object.keys(GROUPES).find((groupe) => GROUPES[groupe].includes(statut)) || 'en_attente'
 }
 
+// Le filtre sélectionné.
 const filtreActif = ref('toutes')
 
+// Compte les litiges d'un groupe (pour le petit compteur des boutons).
 function compterParGroupe(id) {
   if (id === 'toutes') return litiges.value.length
   return litiges.value.filter((litige) => groupeDe(litige.statut) === id).length
 }
 
+// Les boutons de filtre.
 const filtres = computed(() => [
   { id: 'toutes', label: 'Tous' },
   { id: 'en_attente', label: 'En attente' },
@@ -67,6 +78,7 @@ const filtres = computed(() => [
   { id: 'rejete', label: 'Rejetés' },
 ])
 
+// Les litiges à afficher selon le filtre choisi.
 const litigesFiltres = computed(() => {
   if (filtreActif.value === 'toutes') return litiges.value
   return litiges.value.filter((litige) => groupeDe(litige.statut) === filtreActif.value)
@@ -81,6 +93,7 @@ const litigesFiltres = computed(() => {
         <p class="font-sans text-sm text-mimosy-secondary">Suivez vos litiges ouverts sur des prestations.</p>
       </div>
 
+      <!-- Boutons de filtre (avec compteur). -->
       <div v-if="litiges.length" class="-mx-1 flex flex-wrap gap-2 overflow-x-auto pb-1">
         <button
           v-for="filtre in filtres"
@@ -97,6 +110,7 @@ const litigesFiltres = computed(() => {
         </button>
       </div>
 
+      <!-- États : chargement, erreur, aucun litige, aucun litige dans ce filtre, ou liste. -->
       <Loader v-if="loading" />
       <ErrorState v-else-if="errorMessage" message="Impossible de charger vos litiges." @retry="charger" />
       <EmptyState

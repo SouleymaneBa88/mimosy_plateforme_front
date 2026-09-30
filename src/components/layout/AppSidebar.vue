@@ -6,20 +6,25 @@
  * dur proches mais non identiques. Logique de navigation, tiroir mobile
  * et déconnexion inchangées.
  */
+// Outils Vue, routeur et icônes.
 import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { LogOut, Menu, X } from 'lucide-vue-next'
 
+// Le menu selon le rôle, et les stores du profil et de la connexion.
 import { getNavigationByRole } from '@/config/navigator'
 import { useClientProfilStore } from '@/stores/clientProfil'
 import { useAuthStore } from '@/stores/auth'
 
+// Le routeur et la route actuelle.
 const router = useRouter()
 const route = useRoute()
 
+// Les stores utilisés.
 const clientProfilStore = useClientProfilStore()
 const authStore = useAuthStore()
 
+// Props : le rôle (pour choisir le menu) et un nom à afficher (facultatif).
 const props = defineProps({
   role: {
     type: String,
@@ -41,6 +46,7 @@ const menuItems = computed(() => getNavigationByRole(props.role))
 /* ---------------------------------------------
  * Utilisateur affiché (selon le rôle)
  * ------------------------------------------- */
+// Le nom de l'utilisateur tiré du store de connexion.
 const nomDepuisAuth = computed(() => {
   const user = authStore.user || {}
   if (user.nomComplet) return user.nomComplet
@@ -48,6 +54,7 @@ const nomDepuisAuth = computed(() => {
   return complet || user.email || ''
 })
 
+// Le nom affiché selon le rôle.
 const displayName = computed(() => {
   if (props.userName) return props.userName
 
@@ -61,6 +68,7 @@ const displayName = computed(() => {
   }
 })
 
+// Le libellé du rôle ("Client", "Prestataire", "Administrateur").
 const roleLabel = computed(() => {
   const roles = {
     client: 'Client',
@@ -90,6 +98,7 @@ const initiales = computed(() => {
  * ------------------------------------------- */
 const isMobileOpen = ref(false)
 
+// Ouvrir, fermer ou basculer le menu mobile.
 const openMenu = () => {
   isMobileOpen.value = true
 }
@@ -113,6 +122,7 @@ watch(
   () => closeMenu(),
 )
 
+// Touche Échap : ferme le menu mobile.
 const onKeydown = (event) => {
   if (event.key === 'Escape' && isMobileOpen.value) {
     closeMenu()
@@ -127,11 +137,13 @@ const onBreakpointChange = (event) => {
   if (event.matches) closeMenu()
 }
 
+// Au montage : on écoute le clavier et la largeur de l'écran.
 onMounted(() => {
   window.addEventListener('keydown', onKeydown)
   desktopQuery?.addEventListener('change', onBreakpointChange)
 })
 
+// Au démontage : on arrête d'écouter et on débloque le défilement.
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeydown)
   desktopQuery?.removeEventListener('change', onBreakpointChange)
@@ -141,6 +153,7 @@ onBeforeUnmount(() => {
 /* ---------------------------------------------
  * Actions
  * ------------------------------------------- */
+// Le lien est-il celui de la page actuelle ?
 const isActive = (path) => {
   if (route.path === path) {
     return true
@@ -158,6 +171,7 @@ const isActive = (path) => {
   return route.path.startsWith(`${path}/`)
 }
 
+// Va à la page cliquée (si ce n'est pas déjà la page actuelle), puis ferme le menu mobile.
 const handleNavigation = (path) => {
   if (route.path !== path) {
     router.push(path)
@@ -165,12 +179,14 @@ const handleNavigation = (path) => {
   closeMenu()
 }
 
+// Déconnexion, puis retour à la page de connexion.
 const handleLogout = async () => {
   closeMenu()
   await authStore.logout()
   router.push('/login')
 }
 
+// Retour à la page d'accueil publique.
 const goHome = () => {
   closeMenu()
   router.push('/')

@@ -1,4 +1,10 @@
+<!--
+  EmptyState : bloc affiché quand une liste est vide.
+  Props : title (titre), message (texte facultatif).
+  Le <slot /> permet d'ajouter un contenu en plus (ex. un bouton).
+-->
 <script setup>
+// Les données reçues du composant parent.
 defineProps({
   title: { type: String, default: 'Aucun élément' },
   message: { type: String, default: '' },

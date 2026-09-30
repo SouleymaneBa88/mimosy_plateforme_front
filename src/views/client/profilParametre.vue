@@ -9,18 +9,23 @@
  * déroulant, visible sur toutes les pages). Cette carte affiche un
  * aperçu des notifications réelles, sans dupliquer le popup.
  */
+// Outils Vue et routeur.
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
+// Les icônes de la page.
 import { Bell, Globe2, Lock, PenLine, ShieldAlert, UserRound } from 'lucide-vue-next'
 
+// Les composants de la page.
 import PhotoProfil from '@/components/client/PhotoProfil.vue'
 import ClientLayout from '@/components/layout/ClientLayout.vue'
 import LocationCard from '@/components/profile/LocationCard.vue'
 
+// Les stores du profil et des notifications.
 import { useClientProfilStore } from '@/stores/clientProfil'
 import { destinationNotification, useNotificationsStore } from '@/stores/notifications'
 
+// Le routeur et les stores.
 const router = useRouter()
 const clientProfilStore = useClientProfilStore()
 const notificationsStore = useNotificationsStore()
@@ -39,6 +44,7 @@ const profil = clientProfilStore.profil
 // utilisé pour restaurer les valeurs si l'utilisateur clique sur "Annuler".
 let profilAvantEdition = null
 
+// Mode édition du profil, et message d'erreur.
 const isEditingProfil = ref(false)
 const messageErreurProfil = ref('')
 
@@ -56,6 +62,7 @@ function separerNomComplet(nomComplet) {
   return { firstName, lastName }
 }
 
+// Charge le profil depuis le serveur.
 async function chargerProfil() {
   try {
     await clientProfilStore.chargerProfil()
@@ -67,11 +74,13 @@ async function chargerProfil() {
   }
 }
 
+// Passe en mode édition en gardant une copie des valeurs actuelles.
 function activerEditionProfil() {
   profilAvantEdition = { ...profil }
   isEditingProfil.value = true
 }
 
+// Annule : on remet les valeurs d'avant.
 function annulerEditionProfil() {
   if (profilAvantEdition) {
     Object.assign(profil, profilAvantEdition)
@@ -98,6 +107,7 @@ async function enregistrerProfil() {
   }
 }
 
+// Envoie la nouvelle photo de profil.
 async function envoyerPhotoProfil(fichier) {
   try {
     await clientProfilStore.mettreAJourPhoto(fichier)
@@ -115,6 +125,7 @@ async function envoyerPhotoProfil(fichier) {
 |--------------------------------------------------------------------------
 */
 
+// Met la date d'une notification au format "12 mars 2026, 14:30".
 function formaterDateNotification(date) {
   if (!date) return ''
   const dateFormatee = new Date(date)
@@ -139,8 +150,10 @@ async function ouvrirNotification(notification) {
 |--------------------------------------------------------------------------
 */
 
+// La langue affichée (seul le français est proposé pour l'instant).
 const langueActuelle = ref('Français')
 
+// Au montage : on charge le profil et les notifications.
 onMounted(() => {
   chargerProfil()
   notificationsStore.chargerNotifications()

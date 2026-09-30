@@ -12,9 +12,11 @@
  *   - Scanner caméra (navigator.mediaDevices.getUserMedia)
  *   - Ajouter une photo (input[type=file])
  */
+// Outils Vue et icônes.
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { Camera, Clock, FileCheck2, ImagePlus, RefreshCw, ScrollText, ShieldQuestion, X } from 'lucide-vue-next'
 
+// Composants, store du profil, toasts, API de vérification, et outils d'affichage de la vérification.
 import AppLayout from '@/components/layout/AppLayout.vue'
 import ClientHeader from '@/components/client/ClientHeader.vue'
 import Loader from '@/components/common/Loader.vue'
@@ -35,6 +37,7 @@ import {
 } from '@/utils/verification'
 import { useEvenementTempsReel } from '@/composables/useEvenementTempsReel'
 
+// Le store du profil et les fonctions de toast.
 const profileStore = useClientProfilStore()
 const { erreur, succes } = useToast()
 
@@ -42,12 +45,14 @@ const { erreur, succes } = useToast()
 /* Types de documents facultatifs                                             */
 /* -------------------------------------------------------------------------- */
 
+// Les documents facultatifs que le prestataire peut ajouter.
 const DOCUMENTS_FACULTATIFS = [
   { value: 'DIPLOME',                label: 'Diplôme',                description: 'Diplôme attestant de votre formation dans votre domaine.' },
   { value: 'CERTIFICATION',          label: 'Certification',          description: 'Certification professionnelle reconnue dans votre métier.' },
   { value: 'DOCUMENT_PROFESSIONNEL', label: 'Document professionnel', description: 'Tout autre justificatif professionnel utile à votre vérification.' },
 ]
 
+// Raccourcis vers les libellés et couleurs des statuts.
 const LABELS_STATUT  = LABELS_STATUT_DOCUMENT
 const CLASSES_STATUT = CLASSES_STATUT_DOCUMENT
 
@@ -55,6 +60,7 @@ const CLASSES_STATUT = CLASSES_STATUT_DOCUMENT
 /* État global                                                                */
 /* -------------------------------------------------------------------------- */
 
+// Chargement, erreur, documents (rangés par type), et type en cours d'envoi.
 const loading      = ref(true)
 const errorMessage = ref('')
 const documents    = ref({})
@@ -64,15 +70,19 @@ const envoiEnCours = ref('')
 /* Calculs sur la pièce d'identité                                           */
 /* -------------------------------------------------------------------------- */
 
+// Le document "pièce d'identité" (ou un objet vide).
 const documentIdentite = computed(() =>
   documents.value.PIECE_IDENTITE || { statut: 'NON_SOUMIS' }
 )
 
+// Informations calculées sur l'analyse de la pièce d'identité :
+// en cours ? résultats disponibles ? IA désactivée ? comparaison des champs ? niveau de confiance ?
 const enAnalyse           = computed(() => analyseCourante(documentIdentite.value))
 const ocRResultatsDisponibles = computed(() => analyseEffectuee(documentIdentite.value))
 const iaDesactiveeMessage = computed(() => iaEtaitDesactivee(documentIdentite.value))
 const champsComparaison   = computed(() => documentIdentite.value.resultat_comparaison?.champs || null)
 const niveauConfiance     = computed(() => calculerNiveauConfiance(documentIdentite.value.score_correspondance))
+// Le prestataire peut-il (re)soumettre sa pièce d'identité ?
 const peutSoumettreCNI    = computed(() =>
   ['NON_SOUMIS', 'REJETE'].includes(documentIdentite.value.statut)
 )
@@ -81,6 +91,7 @@ const peutSoumettreCNI    = computed(() =>
 /* Scanner caméra                                                             */
 /* -------------------------------------------------------------------------- */
 
+// Scanner caméra : ouvert ? balise vidéo, canevas de capture, photo prise, aperçu, erreur, flux vidéo.
 const scannerOuvert    = ref(false)
 const videoRef         = ref(null)
 const canvasRef        = ref(null)
@@ -89,6 +100,7 @@ const photoUrl         = ref('')     // URL objet pour l'aperçu
 const erreurCamera     = ref('')
 let   streamActif      = null
 
+// Ouvre la caméra du navigateur.
 async function ouvrirScanner() {
   erreurCamera.value = ''
   photoCapturee.value = null
@@ -113,6 +125,7 @@ async function ouvrirScanner() {
   }
 }
 
+// Arrête la caméra.
 function arreterStream() {
   if (streamActif) {
     streamActif.getTracks().forEach(t => t.stop())
@@ -123,6 +136,7 @@ function arreterStream() {
   }
 }
 
+// Ferme le scanner.
 function fermerScanner() {
   arreterStream()
   scannerOuvert.value  = false
@@ -131,6 +145,7 @@ function fermerScanner() {
   erreurCamera.value   = ''
 }
 
+// Prend la photo : on copie l'image de la vidéo dans le canevas.
 function capturer() {
   const video  = videoRef.value
   const canvas = canvasRef.value
@@ -147,6 +162,7 @@ function capturer() {
   }, 'image/jpeg', 0.92)
 }
 
+// Reprendre une nouvelle photo.
 function reprendreCapture() {
   photoCapturee.value = null
   if (photoUrl.value) {
@@ -157,6 +173,7 @@ function reprendreCapture() {
   ouvrirScanner()
 }
 
+// Envoie la photo prise.
 async function utiliserPhoto() {
   if (!photoCapturee.value) return
   const fichier = new File([photoCapturee.value], 'cni_scan.jpg', { type: 'image/jpeg' })
@@ -171,9 +188,11 @@ onUnmounted(() => arreterStream())
 /* Sélection photo depuis fichier                                             */
 /* -------------------------------------------------------------------------- */
 
+// Envoi d'un fichier : aperçu et fichier choisi.
 const photoPreview  = ref('')
 const fichierChoisi = ref(null)
 
+// Appelée quand un fichier est choisi.
 function surSelectionFichier(event, type) {
   const fichier = event.target.files?.[0]
   if (!fichier) return
@@ -190,6 +209,7 @@ function surSelectionFichier(event, type) {
   }
 }
 
+// Confirme l'envoi du fichier choisi.
 async function confirmerEnvoiPhoto() {
   if (!fichierChoisi.value) return
   const { fichier, type } = fichierChoisi.value
@@ -201,6 +221,7 @@ async function confirmerEnvoiPhoto() {
   await soumettreFichier(type, fichier)
 }
 
+// Annule l'aperçu.
 function annulerPreview() {
   if (photoPreview.value) URL.revokeObjectURL(photoPreview.value)
   photoPreview.value  = ''
@@ -211,6 +232,7 @@ function annulerPreview() {
 /* Envoi commun                                                               */
 /* -------------------------------------------------------------------------- */
 
+// Envoie un fichier au serveur pour un type de document.
 async function soumettreFichier(type, fichier) {
   envoiEnCours.value = type
   try {
@@ -238,6 +260,7 @@ async function soumettre(type, event) {
 /* Chargement                                                                 */
 /* -------------------------------------------------------------------------- */
 
+// Charge tous les documents du prestataire.
 async function charger() {
   loading.value = true
   errorMessage.value = ''
@@ -253,11 +276,13 @@ async function charger() {
   }
 }
 
+// Au montage : on charge le profil et les documents.
 onMounted(async () => {
   await profileStore.chargerProfil().catch(() => {})
   await charger()
 })
 
+// On recharge quand l'analyse avance ou qu'une décision est prise (temps réel).
 useEvenementTempsReel(
   ['verification.analyse', 'verification.a_verifier', 'verification.validee', 'verification.rejetee'],
   () => charger(),

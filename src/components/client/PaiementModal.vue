@@ -17,15 +17,19 @@
  * Événement `resultat` : le paiement renvoyé par l'API quand il n'y a pas
  * de redirection (ex. mode sandbox MIMOSY, ou paiement en préparation).
  */
+// Outils Vue et icônes.
 import { computed, ref, watch } from 'vue'
 import { Check, Lock, ShieldCheck } from 'lucide-vue-next'
 
+// La fenêtre modale, le store de connexion et les appels à l'API du wallet.
 import Modal from '@/components/common/Modal.vue'
 import { useAuthStore } from '@/stores/auth'
 import * as walletService from '@/services/walletService'
 
+// v-model : fenêtre ouverte ou fermée.
 const ouvert = defineModel({ type: Boolean, default: false })
 
+// Props : la demande à payer, le paiement déjà en cours, le nom du prestataire.
 const props = defineProps({
   demande: { type: Object, required: true },
   // Paiement déjà en cours (EN_ATTENTE) : la modal sert alors à le reprendre.
@@ -34,6 +38,7 @@ const props = defineProps({
   prestataireNom: { type: String, default: '' },
 })
 
+// Événement envoyé avec le résultat quand il n'y a pas de redirection.
 const emit = defineEmits(['resultat'])
 
 // Couleurs officielles des deux opérateurs, pour les pastilles uniquement :
@@ -43,13 +48,16 @@ const MOYENS = [
   { valeur: 'ORANGE_MONEY', nom: 'Orange Money', initiales: 'OM', couleur: '#FF7900', aide: 'Un QR code et un lien Orange Money / Max it s’afficheront.' },
 ]
 
+// Le store de connexion (pour pré-remplir le numéro de téléphone).
 const authStore = useAuthStore()
+// Le moyen choisi, le numéro, l'état d'envoi, l'erreur, et "l'utilisateur a-t-il touché au numéro ?".
 const moyen = ref('WAVE')
 const telephone = ref('')
 const envoi = ref(false)
 const erreur = ref('')
 const numeroTouche = ref(false)
 
+// Le montant et le service affichés, et le moyen de paiement choisi.
 const montant = computed(() => `${Number(props.demande?.budget || 0).toLocaleString('fr-FR')} FCFA`)
 const service = computed(() => props.demande?.service_nom || props.demande?.service?.nom || 'Prestation')
 const moyenChoisi = computed(() => MOYENS.find((m) => m.valeur === moyen.value))
@@ -59,7 +67,9 @@ const moyenChoisi = computed(() => MOYENS.find((m) => m.valeur === moyen.value))
 const chiffres = computed(() =>
   telephone.value.replace(/[\s.\-()]/g, '').replace(/^(\+221|00221|221)(?=\d{9}$)/, ''),
 )
+// Le numéro est-il un numéro mobile sénégalais valide ?
 const telephoneValide = computed(() => /^7[05678]\d{7}$/.test(chiffres.value))
+// Message d'erreur du numéro (seulement après que l'utilisateur a touché au champ).
 const erreurNumero = computed(() =>
   numeroTouche.value && !telephoneValide.value
     ? '9 chiffres commençant par 70, 75, 76, 77 ou 78.'
@@ -75,17 +85,21 @@ watch(ouvert, (estOuvert) => {
   telephone.value = telephone.value || authStore.user?.phone || ''
 })
 
+// Ferme la fenêtre.
 function fermer() {
   // Pas de fermeture pendant l'envoi : la redirection est peut-être imminente.
   if (!envoi.value) ouvert.value = false
 }
 
+// Clic sur "Payer".
 async function continuer() {
+  // On affiche l'erreur de numéro si besoin, et on s'arrête s'il est invalide.
   numeroTouche.value = true
   if (!telephoneValide.value) return
   envoi.value = true
   erreur.value = ''
   try {
+    // On demande au serveur de préparer le paiement.
     const paiement = await walletService.payerDemande(props.demande.id, {
       moyen_paiement: moyen.value,
       telephone: telephone.value,
@@ -96,6 +110,7 @@ async function continuer() {
       window.location.href = paiement.url_paiement
       return
     }
+    // Pas de redirection : on renvoie le résultat au parent et on ferme.
     emit('resultat', paiement)
     ouvert.value = false
   } catch (error) {

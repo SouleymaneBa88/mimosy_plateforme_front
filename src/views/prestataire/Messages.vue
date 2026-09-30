@@ -1,3 +1,8 @@
+<!--
+  Page "Messages" du prestataire.
+  Elle place simplement l'espace de messagerie commun (MessagingWorkspace)
+  dans la mise en page du prestataire (AppLayout).
+-->
 <script setup>
 import AppLayout from '@/components/layout/AppLayout.vue'
 import MessagingWorkspace from '@/components/messages/MessagingWorkspace.vue'

@@ -1,13 +1,21 @@
+<!--
+  Page "Mes rendez-vous" du client : liste des rendez-vous pris
+  auprès des prestataires, avec la possibilité d'en annuler.
+-->
 <script setup>
+// Outils Vue et icône calendrier.
 import { onMounted } from 'vue'
 import { CalendarDays } from 'lucide-vue-next'
 
+// La mise en page client, l'état vide et le store des rendez-vous.
 import ClientLayout from '@/components/layout/ClientLayout.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { useRendezVousStore } from '@/stores/rendezVous'
 
+// Le store qui contient les rendez-vous.
 const rdvStore = useRendezVousStore()
 
+// Libellés lisibles des statuts.
 const statutLabels = {
   EN_ATTENTE: 'En attente',
   CONFIRME: 'Confirmé',
@@ -16,6 +24,7 @@ const statutLabels = {
   TERMINE: 'Terminé',
 }
 
+// Couleurs du badge selon le statut.
 const statutBadgeClasses = {
   EN_ATTENTE: 'bg-mimosy-yellowBg text-mimosy-yellow',
   CONFIRME: 'bg-mimosy-primaryBg text-mimosy-primary',
@@ -24,10 +33,12 @@ const statutBadgeClasses = {
   TERMINE: 'bg-mimosy-blueBg text-mimosy-blue',
 }
 
+// Renvoie les classes CSS du badge (gris par défaut).
 function badgeClass(statut) {
   return statutBadgeClasses[statut] || 'bg-mimosy-grayBg text-mimosy-gray'
 }
 
+// Met une date au format "12 mars 2026, 14:30".
 function formatDateHeure(value) {
   if (!value) return ''
   return new Date(value).toLocaleString('fr-FR', {
@@ -39,10 +50,12 @@ function formatDateHeure(value) {
   })
 }
 
+// Annule un rendez-vous (l'erreur est déjà affichée par le store).
 async function annuler(id) {
   await rdvStore.annuler(id).catch(() => {})
 }
 
+// Au montage, on charge les rendez-vous.
 onMounted(() => rdvStore.chargerRendezVous().catch(() => {}))
 </script>
 
@@ -54,6 +67,7 @@ onMounted(() => rdvStore.chargerRendezVous().catch(() => {}))
         <p class="font-sans text-sm text-mimosy-secondary">Suivez vos rendez-vous auprès des prestataires.</p>
       </div>
 
+      <!-- États : chargement, erreur, vide. -->
       <p v-if="rdvStore.isLoading" class="rounded-[24px] border border-mimosy-border bg-mimosy-surface p-8 text-center font-sans text-sm text-mimosy-secondary">
         Chargement de vos rendez-vous...
       </p>
@@ -63,6 +77,7 @@ onMounted(() => rdvStore.chargerRendezVous().catch(() => {}))
 
       <EmptyState v-else-if="!rdvStore.rendezVous.length" title="Aucun rendez-vous" message="Vos rendez-vous apparaîtront ici une fois pris depuis le profil d'un prestataire." />
 
+      <!-- Une carte par rendez-vous. -->
       <div v-else class="grid grid-cols-1 gap-5 sm:grid-cols-2">
         <article v-for="rdv in rdvStore.rendezVous" :key="rdv.id" class="flex flex-col gap-3 rounded-[24px] border border-mimosy-border bg-mimosy-surface p-5 sm:p-6">
           <div class="flex items-start justify-between gap-3">
@@ -82,6 +97,7 @@ onMounted(() => rdvStore.chargerRendezVous().catch(() => {}))
 
           <p class="font-sans text-sm font-semibold text-mimosy-text">{{ formatDateHeure(rdv.date_heure_debut) }}</p>
 
+          <!-- Bouton "Annuler", seulement si le rendez-vous est en attente ou confirmé. -->
           <button
             v-if="['EN_ATTENTE', 'CONFIRME'].includes(rdv.statut)"
             type="button"

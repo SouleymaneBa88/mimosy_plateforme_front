@@ -7,6 +7,7 @@
 import { computed, ref, watch } from 'vue'
 import { UserRound } from 'lucide-vue-next'
 
+// Props : adresse de la photo, nom de la personne, taille, et badge "vérifié".
 const props = defineProps({
   src: { type: String, default: '' },
   name: { type: String, default: '' },
@@ -19,11 +20,14 @@ const props = defineProps({
   verified: { type: Boolean, default: false },
 })
 
+// true si la photo n'a pas pu être chargée. On remet à false quand la photo change.
 const imageEnErreur = ref(false)
 watch(() => props.src, () => { imageEnErreur.value = false })
 
+// On affiche la photo seulement si elle existe et n'est pas cassée.
 const afficherImage = computed(() => Boolean(props.src) && !imageEnErreur.value)
 
+// Les initiales : première lettre des deux premiers mots du nom (ex. "Awa Diop" -> "AD").
 const initiales = computed(() =>
   props.name
     .trim()
@@ -44,17 +48,20 @@ const TEINTES = [
   ['#E8EBE3', '#45513D'],
 ]
 
+// On additionne les codes des lettres du nom pour choisir toujours la même teinte.
 const teinte = computed(() => {
   let somme = 0
   for (const lettre of props.name) somme = (somme + lettre.charCodeAt(0)) % 997
   return TEINTES[somme % TEINTES.length]
 })
 
+// Taille de l'icône de secours selon la taille de l'avatar.
 const tailleIcone = computed(() => ({ xs: 12, sm: 14, md: 18, lg: 22, xl: 28 })[props.size])
 </script>
 
 <template>
   <span class="m-avatar" :class="`m-avatar--${size}`">
+    <!-- La photo, si elle existe ; sinon les initiales (ou une icône). -->
     <img
       v-if="afficherImage"
       :src="src"
@@ -75,6 +82,7 @@ const tailleIcone = computed(() => ({ xs: 12, sm: 14, md: 18, lg: 22, xl: 28 })[
       <UserRound v-else :size="tailleIcone" :stroke-width="1.8" aria-hidden="true" />
     </span>
 
+    <!-- Petite pastille "vérifié". -->
     <span v-if="verified" class="m-avatar__verified" title="Profil vérifié">
       <span class="sr-only">Profil vérifié</span>
     </span>

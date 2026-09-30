@@ -8,10 +8,13 @@
 import { computed, useId } from 'vue'
 import { ChevronDown } from 'lucide-vue-next'
 
+// Les attributs non déclarés vont sur le <select>, pas sur la <div>.
 defineOptions({ inheritAttrs: false })
 
+// defineModel : permet d'utiliser v-model sur ce composant.
 const model = defineModel({ type: [String, Number, null], default: '' })
 
+// Les options : libellé, liste des choix, texte d'aide, erreur, taille...
 const props = defineProps({
   label: { type: String, default: '' },
   options: { type: Array, default: () => [] },
@@ -25,6 +28,7 @@ const props = defineProps({
   id: { type: String, default: '' },
 })
 
+// Identifiants uniques pour relier le libellé, le select et le message.
 const autoId = useId()
 const champId = computed(() => props.id || `m-select-${autoId}`)
 const messageId = computed(() => `${champId.value}-message`)
@@ -49,7 +53,9 @@ const aMessage = computed(() => Boolean(props.error || props.help))
         :aria-describedby="aMessage ? messageId : undefined"
         class="m-select__input"
       >
+        <!-- Option vide affichée comme texte d'invitation (ex. "Choisir..."). -->
         <option v-if="placeholder" value="" :disabled="required">{{ placeholder }}</option>
+        <!-- Si le parent ne fournit pas ses propres <option>, on les crée à partir de "options". -->
         <slot>
           <option
             v-for="option in options"
@@ -61,9 +67,11 @@ const aMessage = computed(() => Boolean(props.error || props.help))
           </option>
         </slot>
       </select>
+      <!-- La petite flèche vers le bas. -->
       <ChevronDown class="m-select__chevron" :size="16" :stroke-width="1.8" aria-hidden="true" />
     </div>
 
+    <!-- Message d'erreur ou texte d'aide. -->
     <p
       v-if="aMessage"
       :id="messageId"

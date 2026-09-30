@@ -9,16 +9,20 @@
  * l'authenticité du document. La page n'a donc jamais de bouton
  * « auto-valider », seulement les deux décisions humaines.
  */
+// Outils Vue et icônes.
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Expand, FileImage, ShieldCheck } from 'lucide-vue-next'
 
+// Les composants de la page (mise en page + design system).
 import AppLayout from '@/components/layout/AppLayout.vue'
 import ClientHeader from '@/components/client/ClientHeader.vue'
 import { MBadge, MButton, MCard, MEmptyState, MErrorState, MInput, MLoader, MModal, MTable } from '@/components/ui'
+// Appels à l'API admin, outils de vérification, et temps réel.
 import * as adminService from '@/services/adminService'
 import { CHAMPS_EXTRAITS, LABELS_STATUT_DOCUMENT, etatAnalyseOcr } from '@/utils/verification'
 import { useEvenementTempsReel } from '@/composables/useEvenementTempsReel'
 
+// Libellés lisibles des types de documents.
 const LABELS_TYPE_DOCUMENT = {
   PIECE_IDENTITE: "Pièce d'identité",
   DIPLOME: 'Diplôme',
@@ -66,6 +70,8 @@ function messageOcr(etat, document) {
 // « Non détecté » ferait croire à une lecture qui n'a pas eu lieu.
 const ETATS_AVEC_LECTURE = ['partiel', 'complet', 'inconnu']
 
+// La liste des documents, les états, les motifs de rejet tapés (par document),
+// le document en cours de traitement et les erreurs d'action (par document).
 const documents = ref([])
 const loading = ref(false)
 const errorMessage = ref('')
@@ -78,6 +84,7 @@ const erreursAction = ref({})
 const apercus = ref({})
 const documentAgrandi = ref(null)
 
+// Télécharge l'image d'un document de façon sécurisée pour l'afficher.
 async function chargerApercu(document) {
   apercus.value[document.id] = { url: '', loading: true, erreur: '' }
   try {
@@ -88,16 +95,19 @@ async function chargerApercu(document) {
   }
 }
 
+// Libère la mémoire utilisée par l'aperçu d'un document.
 function libererApercu(id) {
   const url = apercus.value[id]?.url
   if (url) URL.revokeObjectURL(url)
   delete apercus.value[id]
 }
 
+// Libère tous les aperçus.
 function libererTousLesApercus() {
   Object.keys(apercus.value).forEach(libererApercu)
 }
 
+// Charge les documents à vérifier, puis leurs aperçus.
 async function charger() {
   loading.value = true
   errorMessage.value = ''
@@ -112,12 +122,14 @@ async function charger() {
   }
 }
 
+// Retire un document de la liste après une décision.
 function retirerDocument(id) {
   documents.value = documents.value.filter((item) => item.id !== id)
   if (documentAgrandi.value?.id === id) documentAgrandi.value = null
   libererApercu(id)
 }
 
+// Valide un document (l'identité du prestataire est confirmée).
 async function valider(document) {
   actionEnCours.value = document.id
   erreursAction.value[document.id] = ''
@@ -131,6 +143,7 @@ async function valider(document) {
   }
 }
 
+// Rejette un document : un motif est obligatoire.
 async function rejeter(document) {
   const motif = (motifs.value[document.id] || '').trim()
   if (!motif) {
@@ -152,6 +165,7 @@ async function rejeter(document) {
 
 // ── Mise en forme (aucune donnée ajoutée, uniquement l'affichage) ──────────
 
+// Date au format "12 mars 2026, 14:30".
 function formaterDateHeure(valeur) {
   if (!valeur) return ''
   return new Date(valeur).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })
@@ -163,11 +177,13 @@ function formaterDateIso(valeur) {
   return morceaux.length === 3 ? `${morceaux[2]}/${morceaux[1]}/${morceaux[0]}` : valeur
 }
 
+// Rend une valeur lisible (date convertie au format JJ/MM/AAAA), ou null si vide.
 function valeurLisible(valeur, champ) {
   if (valeur == null || valeur === '') return null
   return champ.date ? formaterDateIso(valeur) : String(valeur)
 }
 
+// Résultat de la comparaison d'un champ, sous forme de badge (couleur + texte).
 function resultatComparaison(champCompare) {
   if (!champCompare) return { variant: 'neutral', label: 'Non comparé' }
   if (!champCompare.verifiable) return { variant: 'neutral', label: 'Non vérifiable' }
@@ -196,6 +212,7 @@ function lignesInformations(document) {
   })
 }
 
+// Les colonnes du tableau (les colonnes "lu" et "comparaison" seulement s'il y a eu une lecture).
 function colonnesInformations(avecLecture) {
   const colonnes = [
     { key: 'champ', label: 'Information', primary: true },
@@ -207,6 +224,7 @@ function colonnesInformations(avecLecture) {
   return colonnes
 }
 
+// Pour une analyse partielle : quels champs ont été détectés ou non.
 function champsDetectes(document) {
   const donnees = document.donnees_extraites || {}
   return CHAMPS_EXTRAITS.map((champ) => {
@@ -222,6 +240,7 @@ function scoreEnPourcentage(score) {
   return `${Math.round(score * 100)} %`
 }
 
+// Prépare tout ce qu'il faut afficher pour chaque document.
 const vueDocuments = computed(() =>
   documents.value.map((document) => {
     const etat = document.type_document === 'PIECE_IDENTITE' ? etatAnalyseOcr(document) : null
@@ -239,6 +258,8 @@ const vueDocuments = computed(() =>
   }),
 )
 
+// On charge au montage, on recharge quand un nouveau document arrive,
+// et on libère la mémoire en quittant la page.
 onMounted(charger)
 useEvenementTempsReel(['verification.a_verifier'], () => charger())
 onBeforeUnmount(libererTousLesApercus)
@@ -249,6 +270,7 @@ onBeforeUnmount(libererTousLesApercus)
     <div class="mx-auto flex w-full flex-col gap-6">
       <ClientHeader title="Vérifications d'identité" subtitle="Documents en attente de décision." />
 
+      <!-- États : chargement, erreur, vide. -->
       <MCard v-if="loading"><MLoader variant="skeleton" :lines="5" label="Chargement des documents…" /></MCard>
 
       <MErrorState v-else-if="errorMessage" :message="errorMessage" @retry="charger" />
@@ -260,6 +282,7 @@ onBeforeUnmount(libererTousLesApercus)
         description="Les nouveaux documents soumis apparaîtront ici."
       />
 
+      <!-- Une carte par document à vérifier. -->
       <div v-else class="grid gap-5">
         <MCard v-for="item in vueDocuments" :key="item.document.id" tone="raised" as="article">
           <!-- En-tête : prestataire, type, statut, dates -->
@@ -395,6 +418,7 @@ onBeforeUnmount(libererTousLesApercus)
       </div>
     </div>
 
+    <!-- Fenêtre pour voir l'image du document en grand. -->
     <MModal
       :model-value="Boolean(documentAgrandi)"
       size="xl"

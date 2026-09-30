@@ -13,10 +13,12 @@
  * Rendez-vous, Diagnostic, Paiement et Profil restent accessibles depuis
  * les parcours concernés plutôt que depuis ce menu principal.
  */
+// Outils Vue, routeur et icônes.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { ChevronDown, LogOut, Menu, Settings, UserRound, X } from 'lucide-vue-next'
 
+// Les composants et stores utilisés.
 import NotificationButton from '@/components/notifications/NotificationButton.vue'
 import NotificationPanel from '@/components/notifications/NotificationPanel.vue'
 import PhotoProfil from '@/components/client/PhotoProfil.vue'
@@ -24,14 +26,17 @@ import { useAuthStore } from '@/stores/auth'
 import { useClientProfilStore } from '@/stores/clientProfil'
 import { destinationNotification, useNotificationsStore } from '@/stores/notifications'
 
+// La route actuelle, le routeur et les stores.
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const clientProfilStore = useClientProfilStore()
 const notificationsStore = useNotificationsStore()
 
+// Menu mobile ouvert ? Menu profil ouvert ? Panneau notifications ouvert ?
 const menuOuvert = ref(false)
 const menuProfilOuvert = ref(false)
+// Référence vers le bloc du menu profil (pour détecter un clic à l'extérieur).
 const conteneurProfil = ref(null)
 const notificationsOpen = ref(false)
 
@@ -45,6 +50,7 @@ const navigation = [
   { label: 'Litiges', path: '/client/litiges' },
 ]
 
+// Le nom et la photo du client, et le nombre de notifications non lues.
 const displayName = computed(() => clientProfilStore.nomComplet)
 const displayAvatar = computed(() => clientProfilStore.photoProfil)
 const unreadCount = computed(() => notificationsStore.nombreNonLues)
@@ -60,11 +66,13 @@ const notificationsAffichees = computed(() =>
   })),
 )
 
+// Le lien est-il celui de la page actuelle ? (pour le mettre en valeur)
 function estActif(chemin) {
   if (chemin === '/client') return route.path === '/client'
   return route.path.startsWith(chemin)
 }
 
+// Ferme le menu profil quand on clique ailleurs dans la page.
 function fermerMenuProfilSiExterieur(evenement) {
   if (conteneurProfil.value && !conteneurProfil.value.contains(evenement.target)) {
     menuProfilOuvert.value = false
@@ -93,17 +101,20 @@ async function ouvrirNotification(id) {
   if (destination) router.push(destination)
 }
 
+// Déconnexion : on ferme le menu, on déconnecte, puis on va sur la page de connexion.
 async function seDeconnecter() {
   menuProfilOuvert.value = false
   await authStore.logout()
   router.push('/login')
 }
 
+// Au montage : on écoute les clics sur la page et on charge les notifications.
 onMounted(() => {
   document.addEventListener('click', fermerMenuProfilSiExterieur)
   notificationsStore.chargerNotifications()
 })
 
+// Au démontage : on arrête d'écouter les clics.
 onBeforeUnmount(() => {
   document.removeEventListener('click', fermerMenuProfilSiExterieur)
 })

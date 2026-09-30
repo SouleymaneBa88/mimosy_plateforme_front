@@ -1,18 +1,28 @@
+<!--
+  Page admin "Demandes" : toutes les demandes de prestation de la plateforme,
+  affichées en cartes, avec filtres (statut, recherche, dates), pagination
+  et export CSV.
+-->
 <script setup>
+// Outils Vue et routeur.
 import { computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
+// Les composants de la page.
 import AppLayout from '@/components/layout/AppLayout.vue'
 
 import EmptyState from '@/components/common/EmptyState.vue'
 import ErrorState from '@/components/common/ErrorState.vue'
 import Pagination from '@/components/common/Pagination.vue'
 
+// Composable des listes admin et appels à l'API admin.
 import { useAdminListe } from '@/composables/useAdminListe'
 import * as adminService from '@/services/adminService'
 
+// Le routeur (pour ouvrir le détail d'une demande).
 const router = useRouter()
 
+// Liste paginée des demandes, avec les filtres statut, dates et recherche.
 const {
   items: demandes,
   count,
@@ -31,6 +41,7 @@ const {
   recherche: '',
 })
 
+// Les boutons de filtre par statut.
 const statuts = [
   { valeur: '', label: 'Tous' },
   { valeur: 'EN_ATTENTE', label: 'En attente' },
@@ -40,6 +51,7 @@ const statuts = [
   { valeur: 'ANNULEE', label: 'Annulée' },
 ]
 
+// Couleurs du badge selon le statut.
 const classeStatut = {
   EN_ATTENTE: 'bg-[#F2F3F0] text-[#1C2420]',
   ACCEPTEE: 'bg-[#2D6A4F] text-white',
@@ -59,6 +71,7 @@ const couleurLisere = {
   ANNULEE: '#C0392B',
 }
 
+// Libellés lisibles des statuts.
 const libelleStatut = {
   EN_ATTENTE: 'En attente',
   ACCEPTEE: 'Acceptée',
@@ -68,12 +81,16 @@ const libelleStatut = {
   ANNULEE: 'Annulée',
 }
 
+// Minuteur pour attendre la fin de la frappe avant de chercher.
 let debounce = null
 
+// Le statut actuellement filtré.
 const statutActif = computed(() => filtres.statut)
 
+// Nombre de demandes affichées sur la page.
 const nombreAffiche = computed(() => demandes.value?.length ?? 0)
 
+// Numéros de la première et de la dernière demande affichées (ex. "21 à 40").
 const debutAffichage = computed(() => {
   if (!count.value || !nombreAffiche.value) return 0
   return (page.value - 1) * pageSize.value + 1
@@ -84,11 +101,13 @@ const finAffichage = computed(() => {
   return debutAffichage.value + nombreAffiche.value - 1
 })
 
+// Nombre total de pages.
 const totalPages = computed(() => {
   if (!count.value || !pageSize.value) return 1
   return Math.ceil(count.value / pageSize.value)
 })
 
+// Quand le texte de recherche change, on attend 350 ms puis on cherche.
 watch(
   () => filtres.recherche,
   () => {
@@ -99,11 +118,13 @@ watch(
   },
 )
 
+// Clic sur un filtre de statut.
 function selectionnerStatut(statut) {
   filtres.statut = statut
   rechercher()
 }
 
+// Petites fonctions d'affichage : nom du client, service, budget, date, initiales.
 function obtenirNomClient(demande) {
   return demande.client_nom || 'Client non renseigné'
 }
@@ -147,6 +168,7 @@ function obtenirInitiales(nom) {
     .join('')
 }
 
+// Ouvre la page de détail d'une demande.
 function voirDemande(demande) {
   if (!demande?.id) return
 
@@ -160,9 +182,11 @@ function voirDemande(demande) {
   })
 }
 
+// Exporte la page actuelle en fichier CSV (lisible dans Excel).
 function exporterCSV() {
   if (!demandes.value.length) return
 
+  // Les en-têtes des colonnes.
   const colonnes = [
     'Référence',
     'Client',
@@ -174,6 +198,7 @@ function exporterCSV() {
     'Date',
   ]
 
+  // Une ligne par demande.
   const lignes = demandes.value.map((demande) => [
     demande.id ?? '',
     demande.client_nom ?? '',
@@ -185,6 +210,7 @@ function exporterCSV() {
     demande.date_creation ?? '',
   ])
 
+  // On entoure chaque valeur de guillemets (en doublant les guillemets internes) et on sépare par ";".
   const contenu = [colonnes, ...lignes]
     .map((ligne) =>
       ligne
@@ -193,10 +219,12 @@ function exporterCSV() {
     )
     .join('\n')
 
+  // "﻿" au début : permet à Excel de bien lire les accents.
   const blob = new Blob([`\uFEFF${contenu}`], {
     type: 'text/csv;charset=utf-8;',
   })
 
+  // On crée un lien de téléchargement temporaire et on "clique" dessus.
   const url = URL.createObjectURL(blob)
   const lien = document.createElement('a')
   lien.href = url
@@ -205,8 +233,10 @@ function exporterCSV() {
   URL.revokeObjectURL(url)
 }
 
+// On charge la liste au montage.
 onMounted(charger)
 
+// En quittant la page, on annule la recherche en attente.
 onUnmounted(() => {
   clearTimeout(debounce)
 })

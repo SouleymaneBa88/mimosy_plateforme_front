@@ -13,16 +13,20 @@
  * apps.wallet.services.verifier_statut_paiement) : jamais un texte
  * "paiement réussi" affiché sur la seule foi du retour de redirection.
  */
+// Outils Vue, routeur et icônes.
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { CheckCircle2, Clock3, TriangleAlert, XCircle } from 'lucide-vue-next'
 
+// La mise en page client et les appels à l'API du wallet.
 import ClientLayout from '@/components/layout/ClientLayout.vue'
 import * as walletService from '@/services/walletService'
 
+// La route (pour lire l'URL) et le routeur (pour changer de page).
 const route = useRoute()
 const router = useRouter()
 
+// Le paiement reçu du serveur, le message d'erreur, et le minuteur de vérification.
 const paiement = ref(null)
 const erreur = ref('')
 let intervalle = null
@@ -40,7 +44,9 @@ const paiementId = computed(() => {
 // Statuts encore « en cours » : on continue d'interroger le backend.
 const STATUTS_EN_COURS = ['EN_ATTENTE', 'INITIE']
 
+// Demande au serveur le vrai statut du paiement.
 async function verifier() {
+  // Pas d'identifiant dans l'URL : on ne peut rien vérifier.
   if (!paiementId.value) {
     erreur.value = 'Paiement introuvable.'
     return
@@ -60,6 +66,7 @@ async function verifier() {
   }
 }
 
+// Au montage : on vérifie tout de suite, puis toutes les 4 secondes.
 onMounted(() => {
   verifier()
   intervalle = setInterval(verifier, 4000)
@@ -73,10 +80,12 @@ onMounted(() => {
   }, 60000)
 })
 
+// Au démontage : on arrête le minuteur.
 onUnmounted(() => {
   if (intervalle) clearInterval(intervalle)
 })
 
+// Ouvre la page de la demande concernée (ou la liste des demandes).
 function voirLaDemande() {
   if (paiement.value?.demande_prestation) {
     router.push(`/client/demandes/${paiement.value.demande_prestation}`)
@@ -90,6 +99,7 @@ function voirLaDemande() {
   <ClientLayout>
     <!-- Conteneur "standard" réduit : page de confirmation centrée, pas une liste. -->
     <div class="mx-auto flex w-full max-w-lg flex-col items-center gap-6 px-4 py-16 text-center sm:px-8">
+      <!-- Cinq cas possibles : erreur, vérification, en cours, réussi, en double, ou échoué. -->
       <div v-if="erreur" class="w-full rounded-[24px] border border-[#E7B8B2] bg-[#FFF0EE] p-8 sm:p-10">
         <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-white text-[#A85148]">
           <TriangleAlert class="h-6 w-6" />

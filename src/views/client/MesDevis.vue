@@ -12,20 +12,25 @@
  * l'avis se font sur la page de la demande de prestation créée à
  * l'acceptation, exactement comme pour une demande de prestation classique.
  */
+// Outils Vue et icônes.
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { CheckCircle2, FileText, MessageSquare, Receipt, XCircle } from 'lucide-vue-next'
 
+// Les composants de la page.
 import ClientLayout from '@/components/layout/ClientLayout.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import Modal from '@/components/common/Modal.vue'
 import DevisDetail from '@/components/devis/DevisDetail.vue'
 import PaiementModal from '@/components/client/PaiementModal.vue'
+// Toasts, temps réel et appels à l'API des devis.
 import { useToast } from '@/composables/useToast'
 import { useEvenementTempsReel } from '@/composables/useEvenementTempsReel'
 import * as devisService from '@/services/devisService'
 
+// Fonction pour afficher un toast de succès.
 const { succes } = useToast()
 
+// Les demandes de devis, les réponses reçues, et les états de chargement et d'erreur.
 const demandes = ref([])
 const reponses = ref([])
 const isLoading = ref(false)
@@ -41,10 +46,12 @@ const reponsesParDemande = computed(() => {
   return grouped
 })
 
+// Met un montant au format "12 500 FCFA".
 function fcfa(valeur) {
   return `${Number(valeur || 0).toLocaleString('fr-FR')} FCFA`
 }
 
+// Met une date au format "12 mars 2026, 14:30".
 function formatDate(value) {
   if (!value) return ''
   return new Date(value).toLocaleString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
@@ -52,6 +59,7 @@ function formatDate(value) {
 
 /* ─────────────── Statuts humains ─────────────── */
 
+// Couleurs de fond et de texte pour chaque "ton" de badge.
 const TONS = {
   attente: { bg: 'var(--color-mimosy-blueBg)', color: 'var(--color-mimosy-blue)' },
   succes: { bg: 'var(--color-mimosy-primaryBg)', color: 'var(--color-mimosy-primary)' },
@@ -60,6 +68,7 @@ const TONS = {
   neutre: { bg: 'var(--color-mimosy-grayBg)', color: 'var(--color-mimosy-gray)' },
 }
 
+// Renvoie la réponse acceptée d'une demande (ou null).
 function reponseAcceptee(demande) {
   return (reponsesParDemande.value.get(demande.id) || []).find((r) => r.statut === 'ACCEPTEE') || null
 }
@@ -83,6 +92,7 @@ function etapeApresAcceptation(reponse) {
   return { label: 'Devis accepté', ton: 'succes' }
 }
 
+// Étape affichée pour une demande de devis, selon son statut et ses réponses.
 function etapeDemande(demande) {
   const liste = reponsesParDemande.value.get(demande.id) || []
   if (demande.statut === 'ACCEPTE') {
@@ -95,6 +105,7 @@ function etapeDemande(demande) {
   return { label: 'En attente de devis', ton: 'attente' }
 }
 
+// Étape affichée pour une réponse (un devis reçu).
 function etapeReponse(reponse) {
   if (reponse.statut === 'ACCEPTEE') return etapeApresAcceptation(reponse)
   if (reponse.statut === 'REFUSEE') return { label: 'Refusé', ton: 'erreur' }
@@ -102,6 +113,7 @@ function etapeReponse(reponse) {
   return { label: 'À examiner', ton: 'alerte' }
 }
 
+// Transforme un ton en style CSS (couleurs).
 function styleTon(etape) {
   const ton = TONS[etape.ton] || TONS.neutre
   return { backgroundColor: ton.bg, color: ton.color }
@@ -109,6 +121,7 @@ function styleTon(etape) {
 
 /* ─────────────── Chargement ─────────────── */
 
+// Charge les demandes de devis et les réponses en même temps.
 async function chargerDevis({ silencieux = false } = {}) {
   if (!silencieux) isLoading.value = true
   errorMessage.value = ''
@@ -133,19 +146,23 @@ onMounted(() => chargerDevis())
 
 /* ─────────────── Accepter / refuser (avec confirmation) ─────────────── */
 
+// La décision en cours (accepter ou refuser), l'envoi en cours, et l'erreur.
 const decision = ref(null) // { reponse, action: 'accepter' | 'refuser' }
 const decisionEnCours = ref(false)
 const erreurDecision = ref('')
 
+// Ouvre la fenêtre de confirmation.
 function ouvrirDecision(reponse, action) {
   erreurDecision.value = ''
   decision.value = { reponse, action }
 }
 
+// Ferme la fenêtre (sauf pendant l'envoi).
 function fermerDecision() {
   if (!decisionEnCours.value) decision.value = null
 }
 
+// Confirme : on accepte ou on refuse le devis, puis on recharge.
 async function confirmerDecision() {
   if (!decision.value) return
   decisionEnCours.value = true
@@ -170,6 +187,7 @@ async function confirmerDecision() {
 
 /* ─────────────── Paiement (modal PayDunya existante) ─────────────── */
 
+// Le devis à payer et l'état de la fenêtre de paiement.
 const reponseAPayer = ref(null)
 const modalPaiementOuverte = ref(false)
 
@@ -185,6 +203,7 @@ const demandeAPayer = computed(() =>
     : null,
 )
 
+// Peut-on payer ce devis ? (accepté, demande créée, pas encore payé)
 function peutPayer(reponse) {
   return (
     reponse.statut === 'ACCEPTEE' &&
@@ -194,12 +213,14 @@ function peutPayer(reponse) {
   )
 }
 
+// Texte du bouton de paiement selon l'état du paiement.
 function libellePaiement(reponse) {
   if (reponse.paiement?.statut === 'EN_ATTENTE') return 'Reprendre le paiement'
   if (reponse.paiement?.statut === 'ECHOUE') return `Réessayer · ${fcfa(reponse.prix_propose)}`
   return `Payer ${fcfa(reponse.prix_propose)}`
 }
 
+// Ouvre la fenêtre de paiement pour ce devis.
 async function payer(reponse) {
   reponseAPayer.value = reponse
   // La modal est montée (v-if) par la ligne ci-dessus : on ne l'ouvre qu'au
@@ -216,13 +237,16 @@ function onResultatPaiement() {
 
 /* ─────────────── Filtres ─────────────── */
 
+// Le filtre sélectionné.
 const filtreActif = ref('toutes')
 
+// Compte les demandes d'un statut (pour les compteurs des boutons).
 function compterParStatut(statut) {
   if (statut === 'toutes') return demandes.value.length
   return demandes.value.filter((demande) => demande.statut === statut).length
 }
 
+// Les boutons de filtre.
 const filtres = [
   { id: 'toutes', label: 'Tous' },
   { id: 'EN_ATTENTE', label: 'En attente' },
@@ -231,6 +255,7 @@ const filtres = [
   { id: 'EXPIRE', label: 'Expirés' },
 ]
 
+// Les demandes affichées selon le filtre choisi.
 const demandesFiltrees = computed(() => {
   if (filtreActif.value === 'toutes') return demandes.value
   return demandes.value.filter((demande) => demande.statut === filtreActif.value)
@@ -262,6 +287,7 @@ const demandesFiltrees = computed(() => {
         </button>
       </div>
 
+      <!-- États : chargement, erreur, vide. -->
       <p v-if="isLoading" class="rounded-[24px] border border-mimosy-border bg-mimosy-surface p-8 text-center font-sans text-sm font-semibold text-mimosy-secondary">
         Chargement de vos devis...
       </p>
@@ -272,6 +298,7 @@ const demandesFiltrees = computed(() => {
 
       <EmptyState v-else-if="!demandesFiltrees.length" title="Aucune demande de devis" message="Vos demandes de devis apparaîtront ici après envoi à un prestataire." />
 
+      <!-- Une carte par demande de devis, avec ses réponses. -->
       <div v-else class="grid gap-5">
         <article v-for="demande in demandesFiltrees" :key="demande.id" class="rounded-[24px] border border-mimosy-border bg-mimosy-surface p-5 sm:p-6 lg:p-8">
           <div class="flex flex-wrap items-start justify-between gap-4 border-b border-mimosy-border pb-5">
@@ -452,6 +479,7 @@ const demandesFiltrees = computed(() => {
       </template>
     </Modal>
 
+    <!-- Fenêtre de paiement. -->
     <PaiementModal
       v-if="demandeAPayer"
       v-model="modalPaiementOuverte"

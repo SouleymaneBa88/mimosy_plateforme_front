@@ -1,13 +1,23 @@
+<!--
+  MessagingWorkspace : l'espace de messagerie, partagé par le client et le prestataire.
+  - À gauche : la liste des conversations (avec recherche).
+  - À droite : la conversation ouverte et le champ pour écrire.
+  Les messages viennent de l'API ; ils sont regroupés par interlocuteur
+  pour former des "conversations".
+-->
 <script setup>
+// Outils Vue, temps réel et routeur.
 import { computed, onMounted, ref } from 'vue'
 import { useEvenementTempsReel } from '@/composables/useEvenementTempsReel'
 import { useRoute, useRouter } from 'vue-router'
 
+// Les appels à l'API de messagerie.
 import {
   getMessages,
   createMessage,
 } from '@/services/messageService'
 
+// Prop : le rôle ("client" ou "prestataire").
 defineProps({
   role: {
     type: String,
@@ -15,9 +25,11 @@ defineProps({
   },
 })
 
+// La route actuelle (pour lire les paramètres de l'URL) et le routeur.
 const route = useRoute()
 const router = useRouter()
 
+// Les conversations, celle ouverte, le texte de recherche, et les états de chargement / envoi / erreur.
 const conversations = ref([])
 const activeId = ref(null)
 const search = ref('')
@@ -44,6 +56,7 @@ const pendingPrestataireId = ref(
     : null
 )
 
+// Lit un paramètre d'URL (il peut être une liste ou un texte).
 function getQueryString(value) {
   if (Array.isArray(value)) {
     return value[0] || ''
@@ -52,6 +65,7 @@ function getQueryString(value) {
   return value ? String(value) : ''
 }
 
+// Nom, photo et service du contact, passés dans l'URL depuis la page du prestataire.
 const contactName = computed(() =>
   getQueryString(route.query.nom)
 )
@@ -64,12 +78,14 @@ const contactService = computed(() =>
   getQueryString(route.query.service)
 )
 
+// L'identifiant de l'utilisateur connecté.
 const currentUserId = ref(null)
 
 /**
  * Décode le payload du JWT.
  */
 function getCurrentUserId() {
+  // On lit le jeton enregistré.
   const token = localStorage.getItem(
     'mimosy_access_token'
   )
@@ -79,12 +95,14 @@ function getCurrentUserId() {
   }
 
   try {
+    // Un JWT a 3 parties séparées par des points ; la 2e contient les infos (en base64).
     const parts = token.split('.')
 
     if (parts.length !== 3) {
       return null
     }
 
+    // On convertit le base64 "URL" en base64 classique, et on complète avec des "=".
     let base64 = parts[1]
       .replace(/-/g, '+')
       .replace(/_/g, '/')
@@ -93,6 +111,7 @@ function getCurrentUserId() {
       (4 - (base64.length % 4)) % 4
     )
 
+    // On décode le texte puis le JSON.
     const binary = atob(base64)
 
     const bytes = Uint8Array.from(
@@ -104,6 +123,7 @@ function getCurrentUserId() {
 
     const payload = JSON.parse(json)
 
+    // L'identifiant peut s'appeler user_id, id ou sub selon la configuration.
     return (
       payload.user_id ??
       payload.id ??
@@ -182,9 +202,11 @@ function extractResults(payload) {
  * Convertit les messages Django en conversations.
  */
 function buildConversations(messages) {
+  // On range les messages par interlocuteur (clé = id de l'autre personne).
   const map = new Map()
 
   messages.forEach((message) => {
+    // On récupère l'expéditeur et le destinataire (les noms de champs peuvent varier).
     const expediteur =
       message.expediteur_info ??
       message.expediteur ??
@@ -207,6 +229,7 @@ function buildConversations(messages) {
       return
     }
 
+    // L'interlocuteur = l'autre personne : si j'ai envoyé le message, c'est le destinataire.
     const interlocuteur =
       currentUserId.value !== null &&
       String(expediteurId) ===
@@ -223,6 +246,7 @@ function buildConversations(messages) {
 
     const key = String(interlocuteurId)
 
+    // Première fois qu'on voit cet interlocuteur : on crée sa conversation.
     if (!map.has(key)) {
       map.set(key, {
         id: key,
@@ -259,6 +283,7 @@ function buildConversations(messages) {
       })
     }
 
+    // On ajoute le message à la conversation et on met à jour le dernier message.
     const conversation = map.get(key)
 
     conversation.messages.push(message)
@@ -268,6 +293,7 @@ function buildConversations(messages) {
       message.texte ||
       ''
 
+    // On calcule l'heure du message (ex. "14:32").
     const dateValue =
       message.date_envoi ||
       message.created_at ||
@@ -288,6 +314,7 @@ function buildConversations(messages) {
       }
     }
 
+    // Message reçu et non lu : la conversation est marquée "non lue".
     if (
       message.lu === false &&
       currentUserId.value !== null &&
@@ -298,6 +325,7 @@ function buildConversations(messages) {
     }
   })
 
+  // On trie les messages de chaque conversation du plus ancien au plus récent.
   return Array.from(map.values()).map(
     (conversation) => {
       conversation.messages.sort(
@@ -367,6 +395,7 @@ const draftConversation = computed(() => {
   }
 })
 
+// La conversation ouverte : une vraie conversation, ou le brouillon.
 const active = computed(() => {
   const existing =
     conversations.value.find(
@@ -390,6 +419,7 @@ const active = computed(() => {
   return null
 })
 
+// Les conversations filtrées par le texte de recherche (sur le nom).
 const filtered = computed(() => {
   const value = search.value
     .trim()
@@ -416,6 +446,7 @@ const conversationsToShow = computed(() => [
   ...filtered.value,
 ])
 
+// true si aucune conversation à afficher (et chargement terminé).
 const hasNoConversation = computed(
   () =>
     !loading.value &&
@@ -428,6 +459,7 @@ async function loadMessages({ silencieux = false } = {}) {
   if (!silencieux) loading.value = true
   error.value = null
 
+  // On lit qui est connecté, on charge les messages et on construit les conversations.
   try {
     currentUserId.value =
       getCurrentUserId()
@@ -480,6 +512,7 @@ async function loadMessages({ silencieux = false } = {}) {
   }
 }
 
+// Ouvre une conversation et la marque comme lue.
 function select(id) {
   activeId.value = id
   showConversationOnMobile.value = true
@@ -496,11 +529,14 @@ function select(id) {
   }
 }
 
+// Sur mobile : retour à la liste des conversations.
 function backToList() {
   showConversationOnMobile.value = false
 }
 
+// Envoie un message.
 async function send(payload) {
+  // Le contenu peut être un texte simple ou un objet { contenu }.
   const contenu =
     typeof payload === 'string'
       ? payload.trim()
@@ -510,6 +546,7 @@ async function send(payload) {
     return
   }
 
+  // Premier message à un prestataire (depuis sa page) ?
   const isNewConversation =
     Boolean(pendingPrestataireId.value)
 
@@ -519,11 +556,13 @@ async function send(payload) {
   try {
     let response
 
+    // Premier message : on envoie l'id du profil prestataire.
     if (isNewConversation) {
       response = await createMessage({
         prestataire: pendingPrestataireId.value,
         contenu,
       })
+    // Conversation existante : on envoie l'id de l'utilisateur destinataire.
     } else {
       const destinataireId =
         active.value?.destinataireId
@@ -540,6 +579,7 @@ async function send(payload) {
       })
     }
 
+    // Le message tel qu'il sera affiché.
     const newMessage = {
       id: response.id,
       expediteur: response.expediteur,
@@ -549,6 +589,7 @@ async function send(payload) {
       date_envoi: response.date_envoi,
     }
 
+    // On cherche la conversation ouverte ; si elle n'existe pas, on la crée.
     let conversation =
       conversations.value.find(
         (item) =>
@@ -604,6 +645,7 @@ async function send(payload) {
         responseDestinataireId
     }
 
+    // On ajoute le message et on met à jour l'aperçu de la conversation.
     conversation.messages.push(
       newMessage
     )
@@ -630,6 +672,7 @@ async function send(payload) {
      */
     pendingPrestataireId.value = null
 
+    // On nettoie l'URL (on enlève les paramètres du contact).
     await router.replace({
       path: '/messages',
       query: {},
@@ -648,6 +691,7 @@ async function send(payload) {
   }
 }
 
+// Au montage : on charge les messages. À chaque nouveau message reçu : on recharge sans bruit.
 onMounted(loadMessages)
 useEvenementTempsReel(['message.nouveau'], () => loadMessages({ silencieux: true }))
 
@@ -656,8 +700,10 @@ useEvenementTempsReel(['message.nouveau'], () => loadMessages({ silencieux: true
  * front_mimosy, principes UX inspirés de WhatsApp Web sans en copier
  * l'identité visuelle).
  * ---------------------------------------------------------------- */
+// Le texte tapé dans le champ de saisie.
 const texteSaisie = ref('')
 
+// Envoie le texte du champ, puis vide le champ.
 function envoyerDepuisChamp() {
   if (sending.value) return
   const contenu = texteSaisie.value
@@ -665,11 +711,13 @@ function envoyerDepuisChamp() {
   send(contenu)
 }
 
+// true si le message a été envoyé par l'utilisateur connecté (affiché à droite).
 function estDeMoi(message) {
   const expediteurId = getUserId(message.expediteur_info ?? message.expediteur ?? message.sender ?? message.from)
   return currentUserId.value !== null && String(expediteurId) === String(currentUserId.value)
 }
 
+// Première lettre du nom (pour l'avatar sans photo).
 function initiales(nom) {
   return (nom || '?').trim().charAt(0).toUpperCase() || '?'
 }
@@ -690,6 +738,7 @@ function initiales(nom) {
         </div>
       </div>
 
+      <!-- États de la liste : chargement, erreur, vide, ou liste des conversations. -->
       <div v-if="loading" class="flex items-center gap-2 px-5 py-6 font-sans text-sm text-mimosy-secondary">
         <span class="h-3.5 w-3.5 animate-spin rounded-full border-2 border-mimosy-border border-t-mimosy-primary" />
         Chargement des conversations…
@@ -751,6 +800,7 @@ function initiales(nom) {
           </div>
         </div>
 
+        <!-- Bulles : à droite pour mes messages, à gauche pour ceux reçus. -->
         <!-- Messages -->
         <div class="flex-1 space-y-2 overflow-y-auto bg-mimosy-page/40 px-4 py-5 sm:px-6">
           <div v-if="!active.messages.length" class="flex h-full items-center justify-center font-sans text-sm text-mimosy-secondary">

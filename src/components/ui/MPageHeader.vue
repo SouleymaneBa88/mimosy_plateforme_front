@@ -7,6 +7,7 @@
  * Slot `back` : lien de retour au-dessus du titre ; slot `meta` : ligne
  * d'informations sous la description (référence, date, statut…).
  */
+// Props : titre, surtitre, description, style du titre, balise HTML.
 defineProps({
   title: { type: String, required: true },
   eyebrow: { type: String, default: '' },
@@ -18,9 +19,11 @@ defineProps({
 
 <template>
   <header class="m-page-header">
+    <!-- Lien "retour" facultatif. -->
     <div v-if="$slots.back" class="m-page-header__back"><slot name="back" /></div>
 
     <div class="m-page-header__row">
+      <!-- Colonne de gauche : textes. -->
       <div class="m-page-header__text">
         <p v-if="eyebrow" class="m-page-header__eyebrow text-eyebrow">{{ eyebrow }}</p>
         <component :is="as" class="m-page-header__title" :class="{ 'is-editorial': editorial }">
@@ -30,6 +33,7 @@ defineProps({
         <div v-if="$slots.meta" class="m-page-header__meta"><slot name="meta" /></div>
       </div>
 
+      <!-- Colonne de droite : boutons d'action. -->
       <div v-if="$slots.actions" class="m-page-header__actions">
         <slot name="actions" />
       </div>

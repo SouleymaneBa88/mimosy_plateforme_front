@@ -1,8 +1,15 @@
+<!--
+  Page de connexion (/login).
+  L'utilisateur saisit son email et son mot de passe ; après connexion,
+  il est envoyé vers son espace selon son rôle (client, prestataire, admin).
+-->
 <script setup>
+// Outils Vue, routeur, store de connexion et géolocalisation.
 import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
 import { useLocation } from "@/composables/useLocation";
+// Le routeur, le store de connexion et les fonctions de localisation.
 const router = useRouter();
 const authStore = useAuthStore();
 const { requestLocation, memoriserPositionSiLocalisationExiste } = useLocation();
@@ -13,6 +20,7 @@ const { requestLocation, memoriserPositionSiLocalisationExiste } = useLocation()
 |--------------------------------------------------------------------------
 */
 
+// Les champs du formulaire, l'affichage du mot de passe, le chargement et l'erreur.
 const email = ref("");
 const password = ref("");
 const showPassword = ref(false);
@@ -48,10 +56,12 @@ const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8}$/;
 |--------------------------------------------------------------------------
 */
 
+// L'email a-t-il un format valide ?
 const emailIsValid = computed(() => {
   return emailRegex.test(email.value.trim());
 });
 
+// Le mot de passe respecte-t-il la règle ?
 const passwordIsValid = computed(() => {
   return passwordRegex.test(password.value);
 });
@@ -62,6 +72,7 @@ const passwordIsValid = computed(() => {
 |--------------------------------------------------------------------------
 */
 
+// Message d'erreur sous le champ email (vide si tout va bien).
 const emailError = computed(() => {
   if (!email.value) {
     return "";
@@ -74,6 +85,7 @@ const emailError = computed(() => {
   return "";
 });
 
+// Message d'erreur sous le champ mot de passe, selon ce qui ne va pas.
 const passwordError = computed(() => {
   if (!password.value) {
     return "";
@@ -104,6 +116,7 @@ const passwordError = computed(() => {
 |--------------------------------------------------------------------------
 */
 
+// Le formulaire est valide si les deux champs sont remplis et corrects.
 const formIsValid = computed(() => {
   return (
     email.value.trim() !== "" &&
@@ -119,10 +132,12 @@ const formIsValid = computed(() => {
 |--------------------------------------------------------------------------
 */
 
+// Afficher / masquer le mot de passe.
 const togglePassword = () => {
   showPassword.value = !showPassword.value;
 };
 
+// Aller à la page d'inscription.
 const goToRegister = () => {
   router.push("/register");
 };
@@ -138,6 +153,7 @@ const goToHome = () => {
 |--------------------------------------------------------------------------
 */
 
+// Connexion : on vérifie les champs, on appelle le serveur, puis on redirige selon le rôle.
 const handleLogin = async () => {
   errorMessage.value = "";
 
@@ -225,6 +241,7 @@ const handleLogin = async () => {
  */
 const GOOGLE_LOGIN_URL = "http://localhost:8000/accounts/google/login/";
 
+// Redirige vers la connexion Google du serveur.
 const handleGoogleLogin = () => {
   window.location.href = GOOGLE_LOGIN_URL;
 };

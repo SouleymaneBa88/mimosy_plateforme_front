@@ -1,3 +1,4 @@
+/** Appels à l'API pour la localisation (adresse et GPS) de l'utilisateur. */
 import { API_ENDPOINTS } from '@/config/api'
 import { apiFetch } from '@/services/api'
 
@@ -8,7 +9,9 @@ import { apiFetch } from '@/services/api'
  */
 export async function getMyLocation() {
   const data = await apiFetch(API_ENDPOINTS.location)
+  // On accepte une liste simple ou une réponse paginée ({ results: [...] }).
   const liste = Array.isArray(data) ? data : data?.results || []
+  // On renvoie le premier élément, ou null s'il n'y en a pas.
   return liste[0] || null
 }
 

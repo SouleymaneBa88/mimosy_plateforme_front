@@ -7,9 +7,12 @@
  * props/événements qu'avant : la vraie logique de recherche (classique ou
  * intelligente) reste dans la page parente (voir HomeClient.vue).
  */
+// ref : donnée réactive ; watch : réagir aux changements.
 import { ref, watch } from 'vue'
+// L'icône loupe.
 import { Search } from 'lucide-vue-next'
 
+// Props : titre, texte d'exemple, texte du bouton, valeur de départ.
 const props = defineProps({
   title: {
     type: String,
@@ -32,12 +35,16 @@ const props = defineProps({
   },
 })
 
+// Événement envoyé quand on lance la recherche.
 const emit = defineEmits(['search'])
 
+// Le texte tapé dans le champ.
 const serviceValue = ref(props.service)
 
+// Si le parent change la valeur, on met à jour le champ.
 watch(() => props.service, (value) => { serviceValue.value = value })
 
+// Envoie le texte (sans espaces inutiles) au parent.
 const handleSearch = () => {
   // Objet conservé (plutôt qu'une simple chaîne) pour rester compatible avec
   // TrouverService.vue, qui déstructure toujours { service, location }.

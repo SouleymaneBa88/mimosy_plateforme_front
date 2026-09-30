@@ -1,19 +1,27 @@
 ```vue
+<!--
+  Page "Mes prestations" du prestataire : la liste de ses offres de services
+  (ajouter, modifier, supprimer), avec le prix et la disponibilité de chacune.
+-->
 <script setup>
+// Outils Vue, icônes et routeur.
 import { computed, onMounted, ref } from 'vue'
 import { Plus, Pencil, Trash2, Check, X, AlertCircle } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 
+// Les composants de la page.
 import AppLayout from '@/components/layout/AppLayout.vue'
 import ClientHeader from '@/components/client/ClientHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import Loader from '@/components/common/Loader.vue'
 import ServiceModal from '@/components/prestataire/services/ServiceModal.vue'
 
+// Les stores et les appels à l'API prestataire.
 import { useCatalogueStore } from '@/stores/catalogue'
 import { useAuthStore } from '@/stores/auth'
 import * as prestataireService from '@/services/prestataireService'
 
+// Le routeur et les stores.
 const router = useRouter()
 const catalogueStore = useCatalogueStore()
 const authStore = useAuthStore()
@@ -22,6 +30,7 @@ const authStore = useAuthStore()
 /* État de la modale                                                          */
 /* -------------------------------------------------------------------------- */
 
+// La fenêtre d'ajout / modification : ouverte ? offre modifiée ? enregistrement ? erreur ?
 const showModal = ref(false)
 const editing = ref(null)
 const saving = ref(false)
@@ -31,12 +40,14 @@ const modalError = ref('')
 /* Messages                                                                    */
 /* -------------------------------------------------------------------------- */
 
+// Message affiché quand une offre est enregistrée mais pas encore visible.
 const messageBrouillon = ref('')
 
 /* -------------------------------------------------------------------------- */
 /* Données                                                                     */
 /* -------------------------------------------------------------------------- */
 
+// La liste des offres, et les états de chargement et d'erreur.
 const services = ref([])
 const loading = ref(false)
 const errorMessage = ref('')
@@ -45,6 +56,7 @@ const errorMessage = ref('')
 /* Suppression                                                                 */
 /* -------------------------------------------------------------------------- */
 
+// Suppression : offre en attente de confirmation, offre en cours de suppression.
 const confirmingId = ref(null)
 const deletingId = ref(null)
 
@@ -52,8 +64,10 @@ const deletingId = ref(null)
 /* Données calculées                                                           */
 /* -------------------------------------------------------------------------- */
 
+// Les services du catalogue (proposés dans la fenêtre).
 const catalogue = computed(() => catalogueStore.services)
 
+// Le nom du prestataire connecté.
 const userName = computed(() => {
   const parts = [
     authStore.user?.first_name,
@@ -63,6 +77,7 @@ const userName = computed(() => {
   return parts.join(' ') || 'Prestataire'
 })
 
+// Texte du compteur d'offres (ex. "3 offres").
 const countLabel = computed(() => {
   const total = services.value.length
 
@@ -72,6 +87,7 @@ const countLabel = computed(() => {
   return `${total} offres`
 })
 
+// Nombre d'offres disponibles, et nombre d'offres pas encore publiables.
 const offresDisponibles = computed(() =>
   services.value.filter((service) => service.disponible).length,
 )
@@ -84,6 +100,7 @@ const offresNonPubliees = computed(() =>
 /* Chargement                                                                  */
 /* -------------------------------------------------------------------------- */
 
+// Charge les offres du prestataire (et le catalogue).
 async function chargerServices() {
   loading.value = true
   errorMessage.value = ''
@@ -104,18 +121,21 @@ async function chargerServices() {
   }
 }
 
+// On charge au montage.
 onMounted(chargerServices)
 
 /* -------------------------------------------------------------------------- */
 /* Création / modification                                                     */
 /* -------------------------------------------------------------------------- */
 
+// Ouvre la fenêtre (vide pour ajouter, remplie pour modifier).
 function open(service = null) {
   editing.value = service
   modalError.value = ''
   showModal.value = true
 }
 
+// Enregistre l'offre (ajout ou modification).
 async function save(payload) {
   saving.value = true
   modalError.value = ''
@@ -156,15 +176,18 @@ async function save(payload) {
 /* Suppression                                                                 */
 /* -------------------------------------------------------------------------- */
 
+// Demande confirmation avant de supprimer.
 function askRemove(id) {
   errorMessage.value = ''
   confirmingId.value = id
 }
 
+// Annule la suppression.
 function cancelRemove() {
   confirmingId.value = null
 }
 
+// Supprime l'offre après confirmation.
 async function remove(id) {
   errorMessage.value = ''
   deletingId.value = id
@@ -188,10 +211,12 @@ async function remove(id) {
 /* Formatage                                                                   */
 /* -------------------------------------------------------------------------- */
 
+// Met un prix au format "12 500 FCFA".
 function formaterPrix(valeur) {
   return Number(valeur || 0).toLocaleString('fr-FR')
 }
 
+// Aller à la page du profil.
 function allerAuProfil() {
   router.push('/prestataire/profil')
 }

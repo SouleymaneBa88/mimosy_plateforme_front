@@ -7,40 +7,50 @@
  * aucun montant, aucune référence ni aucun statut « Payé » n'est produit
  * par cette page. Imprimable (ou enregistrable en PDF) via le navigateur.
  */
+// Outils Vue, routeur et icônes.
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, Printer } from 'lucide-vue-next'
 
+// La mise en page client et les appels à l'API du wallet.
 import ClientLayout from '@/components/layout/ClientLayout.vue'
 import * as walletService from '@/services/walletService'
 
+// La route (pour lire l'id du paiement) et le routeur.
 const route = useRoute()
 const router = useRouter()
 
+// La facture, le message d'erreur et l'état de chargement.
 const facture = ref(null)
 const erreur = ref('')
 const chargement = ref(true)
 
+// Met un montant au format "12 500 FCFA".
 function fcfa(valeur) {
   return `${Number(valeur || 0).toLocaleString('fr-FR')} FCFA`
 }
 
+// Met une quantité au format français.
 function quantite(valeur) {
   return Number(valeur || 0).toLocaleString('fr-FR')
 }
 
+// Met une date au format "12 mars 2026, 14:30".
 function formatDate(valeur) {
   if (!valeur) return ''
   return new Date(valeur).toLocaleString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
+// Le détail du devis (s'il existe) et la présence de frais.
 const detail = computed(() => facture.value?.detail || null)
 const aDesFrais = computed(() => Number(detail.value?.montant_frais || 0) > 0)
 
+// Ouvre la fenêtre d'impression du navigateur (permet aussi d'enregistrer en PDF).
 function imprimer() {
   window.print()
 }
 
+// Ouvre la page de la demande liée à la facture.
 function voirLaDemande() {
   if (facture.value?.prestation?.id) router.push({ name: 'detais.demande', params: { id: facture.value.prestation.id } })
 }
@@ -48,6 +58,7 @@ function voirLaDemande() {
 onMounted(async () => {
   // À l'impression, seule la facture est gardée (navigation, pied de page masqués).
   document.body.classList.add('impression-facture')
+  // On charge la facture depuis le serveur.
   try {
     facture.value = await walletService.getFacture(route.params.id)
   } catch (error) {
@@ -57,12 +68,14 @@ onMounted(async () => {
   }
 })
 
+// En quittant la page, on retire la classe spéciale d'impression.
 onBeforeUnmount(() => document.body.classList.remove('impression-facture'))
 </script>
 
 <template>
   <ClientLayout>
     <div class="mx-auto w-full max-w-[800px] px-4 py-10 sm:px-8 sm:py-12">
+      <!-- Boutons du haut : retour et impression (cachés à l'impression). -->
       <div class="facture-actions mb-6 flex flex-wrap items-center justify-between gap-3">
         <button type="button" class="flex items-center gap-1.5 font-sans text-sm font-medium text-mimosy-secondary transition hover:text-mimosy-text" @click="router.back()">
           <ArrowLeft :size="16" :stroke-width="1.8" />
@@ -79,6 +92,7 @@ onBeforeUnmount(() => document.body.classList.remove('impression-facture'))
         </button>
       </div>
 
+      <!-- États : chargement, erreur, ou facture. -->
       <div v-if="chargement" class="rounded-[24px] border border-mimosy-border bg-mimosy-surface p-10 text-center font-sans text-sm font-bold text-mimosy-secondary">
         Chargement de la facture…
       </div>

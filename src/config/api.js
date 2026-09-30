@@ -1,9 +1,14 @@
 /**
  * Configuration unique de l'API Django utilisée par les services frontend.
  */
+// L'adresse du serveur. On la lit dans le fichier .env (VITE_API_BASE_URL),
+// sinon on utilise localhost:8000. On enlève le "/" final.
 export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '')
 
+// La liste de toutes les adresses de l'API.
+// Les fonctions (ex. provider(id)) construisent une adresse avec un identifiant.
 export const API_ENDPOINTS = {
+  // Authentification (connexion, inscription, profil).
   auth: {
     login: '/api/auth/login/',
     register: '/api/auth/register/',
@@ -12,6 +17,7 @@ export const API_ENDPOINTS = {
     profile: '/api/auth/profile/',
     profilePhoto: '/api/auth/profile/photo/',
   },
+  // Catalogue, recherche et prestataires.
   location: '/api/location/',
   categories: '/api/categories/',
   services: '/api/services/',
@@ -22,8 +28,10 @@ export const API_ENDPOINTS = {
   providers: '/api/prestataires/',
   provider: (id) => `/api/prestataires/${id}/`,
   providerProfile: '/api/profil/prestataire/',
+  // Avis.
   reviews: '/api/avis/',
   review: (id) => `/api/avis/${id}/`,
+  // Demandes de prestation et actions possibles dessus.
   requests: '/api/demande-prestation/',
   request: (id) => `/api/demande-prestation/${id}/`,
   cancelRequest: (id) => `/api/demande-prestation/${id}/annuler/`,
@@ -31,10 +39,12 @@ export const API_ENDPOINTS = {
   rejectRequest: (id) => `/api/demande-prestation/${id}/refuser/`,
   completeRequest: (id) => `/api/demande-prestation/${id}/terminer/`,
   confirmRequest: (id) => `/api/demande-prestation/${id}/confirmer/`,
+  // Devis.
   quoteRequests: '/api/demandes/',
   quoteResponses: '/api/reponses/',
   acceptQuoteResponse: (id) => `/api/reponses/${id}/accepter/`,
   refuseQuoteResponse: (id) => `/api/reponses/${id}/refuser/`,
+  // Disponibilités et rendez-vous.
   disponibilites: '/api/disponibilites/',
   disponibilite: (id) => `/api/disponibilites/${id}/`,
   providerDisponibilites: (prestataireId) => `/api/prestataires/${prestataireId}/disponibilites/`,
@@ -45,9 +55,11 @@ export const API_ENDPOINTS = {
   refuseRendezVous: (id) => `/api/rendez-vous/${id}/refuser/`,
   cancelRendezVous: (id) => `/api/rendez-vous/${id}/annuler/`,
   completeRendezVous: (id) => `/api/rendez-vous/${id}/terminer/`,
+  // Vérification d'identité.
   verificationDocument: '/api/verification/document/',
   verificationDocuments: '/api/verification/documents/',
   verificationDocumentFichier: (id) => `/api/verification/document/${id}/fichier/`,
+  // Portefeuille (wallet) et paiements.
   monWallet: '/api/wallet/mon-wallet/',
   mesTransactions: '/api/wallet/mes-transactions/',
   mesRetraits: '/api/wallet/mes-retraits/',
@@ -56,6 +68,7 @@ export const API_ENDPOINTS = {
   facturePaiement: (id) => `/api/wallet/mes-paiements/${id}/facture/`,
   // Ticket de connexion WebSocket (temps réel), voir services/realtime.js.
   wsTicket: '/api/ws/ticket/',
+  // Espace administrateur.
   adminDocuments: '/api/verification/admin/documents/',
   adminDocumentValider: (id) => `/api/verification/admin/documents/${id}/valider/`,
   adminDocumentRejeter: (id) => `/api/verification/admin/documents/${id}/rejeter/`,
@@ -76,10 +89,12 @@ export const API_ENDPOINTS = {
   adminRendezVous: '/api/admin/rendez-vous/',
   adminLocalisations: '/api/admin/localisations/',
   adminPrestataireScoreConfiance: (id) => `/api/admin/prestataires/${id}/score-confiance/`,
+  // Signalements.
   signalements: '/api/signalements/',
   signalementPrendreEnCharge: (id) => `/api/signalements/${id}/prendre_en_charge/`,
   signalementTraiter: (id) => `/api/signalements/${id}/traiter/`,
   signalementRejeter: (id) => `/api/signalements/${id}/rejeter/`,
+  // Litiges.
   litiges: '/api/litiges/',
   litige: (id) => `/api/litiges/${id}/`,
   litigeAjouterPreuve: (id) => `/api/litiges/${id}/preuves/`,
@@ -91,6 +106,7 @@ export const API_ENDPOINTS = {
   litigeDemanderReprise: (id) => `/api/litiges/${id}/demander-reprise/`,
   litigeConfirmerReprise: (id) => `/api/litiges/${id}/confirmer-reprise/`,
   litigeReattribuer: (id) => `/api/litiges/${id}/reattribuer/`,
+  // Divers : diagnostic, catalogue, notifications, messagerie.
   diagnostic: '/api/diagnostic/',
   category: (id) => `/api/categories/${id}/`,
   service: (id) => `/api/services/${id}/`,

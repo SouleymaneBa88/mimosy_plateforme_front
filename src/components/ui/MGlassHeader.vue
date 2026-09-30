@@ -23,6 +23,7 @@ import { Menu, X } from 'lucide-vue-next'
 
 import { useScrolled } from '@/composables/useScrolled'
 
+// Props : style de barre, largeur où le menu mobile disparaît, libellé, verre dense forcé.
 const props = defineProps({
   variant: { type: String, default: 'bar', validator: (v) => ['floating', 'bar'].includes(v) },
   // Largeur à partir de laquelle la nav desktop remplace le burger.
@@ -32,25 +33,32 @@ const props = defineProps({
   dense: { type: Boolean, default: false },
 })
 
+// Les slots fournis, la route actuelle, et "scrolled" (true après un petit défilement).
 const slots = useSlots()
 const route = useRoute()
 const { scrolled } = useScrolled(8)
 
+// Le menu mobile est-il ouvert ? + identifiant unique du menu.
 const menuOuvert = ref(false)
 const menuId = `m-glass-menu-${useId()}`
 
+// Le verre devient dense si demandé, après défilement, ou menu ouvert.
 const estDense = computed(() => props.dense || scrolled.value || menuOuvert.value)
 
+// Ferme le menu mobile.
 function fermer() {
   menuOuvert.value = false
 }
 
+// Touche Échap : ferme le menu.
 function onKeydown(evenement) {
   if (evenement.key === 'Escape' && menuOuvert.value) fermer()
 }
 
+// Quand on change de page, on ferme le menu.
 watch(() => route?.fullPath, fermer)
 
+// On écoute le clavier pendant que le composant est affiché.
 onMounted(() => window.addEventListener('keydown', onKeydown))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 </script>
@@ -62,12 +70,15 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   >
     <div class="m-glass-header__shell">
       <div class="m-glass-header__row">
+        <!-- Logo. -->
         <div class="m-glass-header__brand"><slot name="brand" /></div>
 
+        <!-- Navigation (écran large). -->
         <nav v-if="slots.nav" class="m-glass-header__nav" :aria-label="label">
           <slot name="nav" />
         </nav>
 
+        <!-- Actions + bouton "burger" (menu mobile). -->
         <div class="m-glass-header__actions">
           <slot name="actions" />
 
@@ -86,6 +97,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
         </div>
       </div>
 
+      <!-- Menu mobile déroulant. -->
       <Transition name="m-drop">
         <div v-if="slots.mobile && menuOuvert" :id="menuId" class="m-glass-header__mobile">
           <slot name="mobile" :close="fermer" />

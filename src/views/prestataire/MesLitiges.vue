@@ -1,19 +1,28 @@
+<!--
+  Page "Mes litiges" du prestataire : la liste des litiges ouverts sur ses prestations.
+  Chaque litige est affiché avec le composant LitigeCard.
+-->
 <script setup>
+// Outils Vue.
 import { onMounted, ref } from 'vue'
 
+// Les composants de la page.
 import AppLayout from '@/components/layout/AppLayout.vue'
 import ClientHeader from '@/components/client/ClientHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import ErrorState from '@/components/common/ErrorState.vue'
 import Loader from '@/components/common/Loader.vue'
 import LitigeCard from '@/components/disputes/LitigeCard.vue'
+// Appels à l'API des litiges et abonnement au temps réel.
 import * as disputeService from '@/services/disputeService'
 import { useEvenementTempsReel } from '@/composables/useEvenementTempsReel'
 
+// La liste des litiges, et les états de chargement et d'erreur.
 const litiges = ref([])
 const loading = ref(false)
 const errorMessage = ref('')
 
+// Charge les litiges depuis le serveur.
 async function charger() {
   loading.value = true
   errorMessage.value = ''
@@ -27,6 +36,7 @@ async function charger() {
   }
 }
 
+// On charge au montage, et on recharge à chaque événement "litige" reçu en temps réel.
 onMounted(charger)
 useEvenementTempsReel(['litige.nouveau', 'litige.statut', 'litige.preuve'], () => charger())
 </script>
@@ -36,6 +46,7 @@ useEvenementTempsReel(['litige.nouveau', 'litige.statut', 'litige.preuve'], () =
     <div class="mx-auto flex w-full  flex-col gap-6">
       <ClientHeader title="Mes litiges" subtitle="Suivez les litiges ouverts sur vos prestations." />
 
+      <!-- États : chargement, erreur, vide, ou liste des litiges. -->
       <Loader v-if="loading" />
       <ErrorState v-else-if="errorMessage" message="Impossible de charger vos litiges." @retry="charger" />
       <EmptyState

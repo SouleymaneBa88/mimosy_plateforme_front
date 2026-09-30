@@ -7,8 +7,10 @@
  * qui documente explicitement cette limite). Elle n'est jamais
  * présentée comme un verdict, seulement comme une aide de lecture.
  */
+// Outils Vue.
 import { computed, onMounted, ref } from 'vue'
 
+// Les composants de la page.
 import AppLayout from '@/components/layout/AppLayout.vue'
 import ClientHeader from '@/components/client/ClientHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -16,15 +18,19 @@ import ErrorState from '@/components/common/ErrorState.vue'
 import Loader from '@/components/common/Loader.vue'
 import Modal from '@/components/common/Modal.vue'
 import Pagination from '@/components/common/Pagination.vue'
+// Composable des listes admin, toasts, API admin et temps réel.
 import { useAdminListe } from '@/composables/useAdminListe'
 import { useToast } from '@/composables/useToast'
 import * as adminService from '@/services/adminService'
 import { useEvenementTempsReel } from '@/composables/useEvenementTempsReel'
 
+// Liste paginée des litiges, avec un filtre statut.
 const { items: litiges, count, page, pageSize, loading, errorMessage, filtres, charger, rechercher, changerPage } =
   useAdminListe(adminService.listLitiges, { statut: '' })
+// Fonctions pour afficher un toast.
 const { succes, erreur } = useToast()
 
+// Les statuts proposés dans le filtre.
 const statuts = [
   '',
   'EN_ATTENTE',
@@ -36,6 +42,7 @@ const statuts = [
   'RESOLU',
   'REJETE',
 ]
+// Libellés lisibles des statuts.
 const libellesStatut = {
   EN_ATTENTE: 'En attente',
   EN_COURS: 'En cours',
@@ -46,6 +53,7 @@ const libellesStatut = {
   RESOLU: 'Résolu',
   REJETE: 'Rejeté',
 }
+// Couleurs des badges de statut.
 const classeStatut = {
   RESOLU: 'bg-[#EAF8F2] text-[#16805B]',
   REJETE: 'bg-[#FFF0EE] text-[#A85148]',
@@ -61,12 +69,15 @@ const classeStatut = {
 // exactement les statuts non terminaux exposés par le backend).
 const STATUTS_ACTIONNABLES = ['EN_ATTENTE', 'EN_COURS']
 
+// Litige en cours de traitement, décision en cours, texte de la décision,
+// résultats des analyses (par litige) et analyse en cours.
 const actionEnCours = ref('')
 const decision = ref(null) // { litige, type: 'resoudre' | 'rejeter' | 'reprise' }
 const texteDecision = ref('')
 const analyses = ref({}) // litigeId -> résultat d'analyse
 const analyseEnCours = ref('')
 
+// Prendre en charge un litige, puis recharger la liste.
 async function prendreEnCharge(litige) {
   actionEnCours.value = litige.id
   try {
@@ -80,6 +91,7 @@ async function prendreEnCharge(litige) {
   }
 }
 
+// Demande la synthèse factuelle d'un litige et la garde en mémoire.
 async function analyser(litige) {
   analyseEnCours.value = litige.id
   try {
@@ -91,17 +103,20 @@ async function analyser(litige) {
   }
 }
 
+// Ouvre la fenêtre de décision (résoudre, rejeter ou reprise).
 function ouvrirDecision(litige, type) {
   decision.value = { litige, type }
   texteDecision.value = ''
 }
 
+// Titres de la fenêtre selon le type de décision.
 const libellesDecision = {
   resoudre: 'Résoudre le litige',
   rejeter: 'Rejeter le litige',
   reprise: 'Demander une reprise sous 24h',
 }
 
+// Confirme la décision : le texte doit faire au moins 10 caractères.
 async function confirmerDecision() {
   if (!decision.value || texteDecision.value.trim().length < 10) {
     erreur('Merci de motiver la décision (10 caractères minimum).')
@@ -111,6 +126,7 @@ async function confirmerDecision() {
   const { litige, type } = decision.value
   actionEnCours.value = litige.id
   try {
+    // On appelle la bonne action selon le type de décision.
     if (type === 'resoudre') {
       await adminService.resoudreLitige(litige.id, texteDecision.value.trim())
       succes('Litige marqué comme résolu. Les fonds gelés ont été débloqués vers le prestataire.')
@@ -132,15 +148,18 @@ async function confirmerDecision() {
 
 /* ───────────────────────── Réattribution ───────────────────────── */
 
+// Le litige à réattribuer, les prestataires vérifiés, le chargement, et le choix de l'admin.
 const reattribution = ref(null) // litige en cours de réattribution
 const prestatairesDisponibles = ref([])
 const prestatairesChargement = ref(false)
 const nouveauPrestataireId = ref('')
 
+// Les prestataires proposés : tous les vérifiés, sauf le prestataire actuel.
 const prestatairesEligibles = computed(() =>
   prestatairesDisponibles.value.filter((prestataire) => prestataire.id !== reattribution.value?.prestataire),
 )
 
+// Ouvre la fenêtre de réattribution et charge les prestataires vérifiés.
 async function ouvrirReattribution(litige) {
   reattribution.value = litige
   nouveauPrestataireId.value = ''
@@ -155,6 +174,7 @@ async function ouvrirReattribution(litige) {
   }
 }
 
+// Confirme la réattribution au prestataire choisi.
 async function confirmerReattribution() {
   if (!reattribution.value || !nouveauPrestataireId.value) {
     erreur('Choisissez un prestataire pour reprendre la prestation.')
@@ -174,6 +194,7 @@ async function confirmerReattribution() {
   }
 }
 
+// On charge au montage, et on recharge à chaque événement "litige" reçu.
 onMounted(charger)
 useEvenementTempsReel(['litige.nouveau', 'litige.statut', 'litige.preuve'], () => charger())
 </script>
@@ -183,14 +204,17 @@ useEvenementTempsReel(['litige.nouveau', 'litige.statut', 'litige.preuve'], () =
     <div class="mx-auto flex w-full flex-col gap-6">
       <ClientHeader title="Litiges" subtitle="Désaccords ouverts entre clients et prestataires." />
 
+      <!-- Filtre par statut. -->
       <select v-model="filtres.statut" class="w-fit rounded-xl border border-[#E2E8F0] px-3 py-2 text-sm text-black" @change="rechercher">
         <option v-for="statut in statuts" :key="statut" :value="statut">{{ statut || 'Tous les statuts' }}</option>
       </select>
 
+      <!-- États : chargement, erreur, vide. -->
       <Loader v-if="loading" />
       <ErrorState v-else-if="errorMessage" :message="errorMessage" @retry="charger" />
       <EmptyState v-else-if="!litiges.length" title="Aucun litige" message="Aucun litige ne correspond à ces critères." />
 
+      <!-- Une carte par litige. -->
       <div v-else class="grid gap-4">
         <article v-for="litige in litiges" :key="litige.id" class="rounded-2xl border border-[#E2E8F0] bg-white p-5">
           <div class="flex flex-wrap items-start justify-between gap-3">
@@ -325,6 +349,7 @@ useEvenementTempsReel(['litige.nouveau', 'litige.statut', 'litige.preuve'], () =
       </div>
     </div>
 
+    <!-- Fenêtre de décision (résoudre / rejeter / reprise). -->
     <Modal
       :model-value="!!decision"
       :title="libellesDecision[decision?.type] || 'Décision'"
@@ -355,6 +380,7 @@ useEvenementTempsReel(['litige.nouveau', 'litige.statut', 'litige.preuve'], () =
       </div>
     </Modal>
 
+    <!-- Fenêtre de réattribution. -->
     <Modal :model-value="!!reattribution" title="Réattribuer la prestation" @update:model-value="reattribution = null">
       <p class="text-sm text-[#334155]">
         75 % du montant gelé ({{ Number(reattribution?.montant_concerne || 0).toLocaleString('fr-FR') }} FCFA) iront

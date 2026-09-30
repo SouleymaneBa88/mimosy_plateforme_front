@@ -8,6 +8,7 @@ import { computed } from 'vue'
 
 import { useClientProfilStore } from '@/stores/clientProfil'
 
+// Props : nom, titre, sous-titre, adresse (tous facultatifs).
 const props = defineProps({
   userName: {
     type: String,
@@ -32,6 +33,7 @@ const props = defineProps({
   },
 })
 
+// Le store du profil (pour afficher le nom du client).
 const clientProfilStore = useClientProfilStore()
 
 // Le header utilise le profil global, sauf si une page fournit explicitement une valeur.
@@ -40,10 +42,12 @@ const displayName = computed(() => props.userName || clientProfilStore.nomComple
 
 <template>
   <header class="w-full">
+    <!-- Le titre : celui fourni, sinon "Bonjour, <nom>". -->
     <h1 class="truncate text-[22px] font-extrabold leading-8 tracking-[0.03px] text-[#051F20] sm:text-[25px] sm:leading-9 lg:text-[28px] lg:leading-[42px]">
       {{ title || `Bonjour, ${displayName}` }}
     </h1>
 
+    <!-- Le sous-titre, ou l'adresse. -->
     <p
       v-if="subtitle || address"
       class="mt-1 line-clamp-2 text-[13px] font-normal leading-5 text-[#64748B] sm:text-[14px] sm:leading-[21px]"

@@ -10,6 +10,7 @@ import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import { ArrowDownRight, ArrowUpRight } from 'lucide-vue-next'
 
+// Props : libellé, valeur, texte d'aide, variation en % (delta), icône, lien...
 const props = defineProps({
   label: { type: String, required: true },
   value: { type: [String, Number], default: null },
@@ -24,13 +25,16 @@ const props = defineProps({
   size: { type: String, default: 'md', validator: (v) => ['sm', 'md', 'lg'].includes(v) },
 })
 
+// La valeur affichée : un tiret si aucune valeur n'est fournie.
 const valeurAffichee = computed(() =>
   props.value === null || props.value === undefined || props.value === '' ? '—' : props.value,
 )
 
+// Y a-t-il une variation à afficher ? Est-ce une hausse ? Est-ce une bonne nouvelle ?
 const aDelta = computed(() => typeof props.delta === 'number' && Number.isFinite(props.delta))
 const hausse = computed(() => props.delta > 0)
 const favorable = computed(() => (props.invertDelta ? props.delta < 0 : props.delta > 0))
+// Texte de la variation, ex. "+12,5 %".
 const deltaTexte = computed(() => {
   const arrondi = Math.round(Math.abs(props.delta) * 10) / 10
   return `${props.delta > 0 ? '+' : props.delta < 0 ? '−' : ''}${String(arrondi).replace('.', ',')} %`
@@ -38,6 +42,7 @@ const deltaTexte = computed(() => {
 </script>
 
 <template>
+  <!-- Un lien si "to" est fourni, sinon une simple <div>. -->
   <component
     :is="to ? RouterLink : 'div'"
     :to="to || undefined"
@@ -50,10 +55,12 @@ const deltaTexte = computed(() => {
       <component :is="icon" v-if="icon" class="m-stat__icon" :size="16" :stroke-width="1.7" aria-hidden="true" />
     </div>
 
+    <!-- Pendant le chargement : un bloc gris animé ; sinon la valeur. -->
     <span v-if="loading" class="m-stat__skeleton" aria-hidden="true" />
     <span v-else class="m-stat__value tabular">{{ valeurAffichee }}</span>
     <span v-if="loading" class="sr-only">Chargement de {{ label }}</span>
 
+    <!-- Le pied : la variation et/ou le texte d'aide. -->
     <div v-if="!loading && (aDelta || hint)" class="m-stat__foot">
       <span
         v-if="aDelta && delta !== 0"

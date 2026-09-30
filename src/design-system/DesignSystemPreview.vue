@@ -4,9 +4,11 @@
  * Les contenus ci-dessous sont des libellés d'exemple pour montrer les
  * composants : aucune donnée métier, aucun chiffre présenté comme réel.
  */
+// Outils Vue et icônes.
 import { ref } from 'vue'
 import { ArrowRight, Bell, ClipboardList, Inbox, MapPin, Plus, Search, SlidersHorizontal } from 'lucide-vue-next'
 
+// Tous les composants du design system, pour les montrer sur cette page.
 import {
   AuroraBackground,
   GlassPanel,
@@ -30,6 +32,7 @@ import {
   MTabs,
 } from '@/components/ui'
 
+// Les couleurs du thème à afficher (nom de la variable CSS + libellé).
 const couleurs = [
   ['--mimosy-green', 'Vert MIMOSY'],
   ['--mimosy-green-light', 'Vert clair'],
@@ -44,9 +47,11 @@ const couleurs = [
   ['--mimosy-muted', 'Discret'],
 ]
 
+// Les tons de badge, et des exemples de statuts venant du serveur.
 const semantiques = ['success', 'warning', 'danger', 'info', 'neutral']
 const statutsBackend = ['EN_ATTENTE', 'ACCEPTEE', 'EN_COURS', 'TERMINEE', 'REFUSE', 'NON_SOUMIS', 'EN_ANALYSE', 'A_VERIFIER', 'VALIDE', 'REJETE']
 
+// Valeurs d'exemple pour les champs, onglets, pagination, fenêtres...
 const texte = ref('')
 const email = ref('adresse@invalide')
 const choix = ref('')
@@ -58,11 +63,13 @@ const tiroirOuvert = ref(false)
 const tiroirBasOuvert = ref(false)
 const chargement = ref(false)
 
+// Simule un chargement de 1,5 s (pour montrer le bouton en chargement).
 function simulerChargement() {
   chargement.value = true
   setTimeout(() => (chargement.value = false), 1400)
 }
 
+// Colonnes et lignes d'exemple pour le tableau.
 const colonnes = [
   { key: 'reference', label: 'Référence', primary: true },
   { key: 'personne', label: 'Personne' },

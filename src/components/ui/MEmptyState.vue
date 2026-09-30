@@ -6,6 +6,7 @@
  */
 import MButton from './MButton.vue'
 
+// Props : titre, description, icône, bouton d'action facultatif.
 defineProps({
   title: { type: String, default: 'Rien pour le moment' },
   description: { type: String, default: '' },
@@ -15,6 +16,7 @@ defineProps({
   compact: { type: Boolean, default: false },
 })
 
+// Événement envoyé au clic sur le bouton (si pas de lien).
 defineEmits(['action'])
 </script>
 

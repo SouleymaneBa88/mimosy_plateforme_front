@@ -12,25 +12,32 @@
  * jamais enregistrer une coordonnée inventée. Refuser la permission
  * navigateur ne bloque jamais la saisie du reste du formulaire.
  */
+// Outils Vue et icône.
 import { onMounted, reactive, ref } from 'vue'
 import { MapPin } from 'lucide-vue-next'
 
+// Les appels à l'API de localisation et le composable GPS.
 import { getMyLocation, saveLocation } from '@/services/locationService'
 import { useLocation } from '@/composables/useLocation'
 
+// La localisation enregistrée, et l'état de son chargement.
 const localisation = ref(null)
 const chargement = ref(true)
 const erreurChargement = ref('')
 
+// Mode édition, et état de l'enregistrement.
 const enEdition = ref(false)
 const enregistrement = ref(false)
 const erreurEnregistrement = ref('')
 const succesEnregistrement = ref('')
 
+// Les valeurs du formulaire.
 const form = reactive({ adresse: '', ville: '', quartier: '', latitude: null, longitude: null })
 
+// Les outils de géolocalisation du navigateur.
 const { loading: gpsChargement, error: gpsErreur, requestLocation } = useLocation()
 
+// Charge la localisation enregistrée depuis le serveur.
 async function charger() {
   chargement.value = true
   erreurChargement.value = ''
@@ -43,8 +50,10 @@ async function charger() {
   }
 }
 
+// On charge dès que le composant apparaît.
 onMounted(charger)
 
+// Passe en mode édition en recopiant les valeurs actuelles dans le formulaire.
 function activerEdition() {
   form.adresse = localisation.value?.adresse || ''
   form.ville = localisation.value?.ville || ''
@@ -56,11 +65,13 @@ function activerEdition() {
   enEdition.value = true
 }
 
+// Quitte le mode édition sans enregistrer.
 function annulerEdition() {
   enEdition.value = false
   erreurEnregistrement.value = ''
 }
 
+// Récupère la position GPS et la met dans le formulaire.
 async function utiliserPosition() {
   try {
     const position = await requestLocation()
@@ -71,9 +82,11 @@ async function utiliserPosition() {
   }
 }
 
+// Enregistre la localisation.
 async function enregistrer() {
   erreurEnregistrement.value = ''
 
+  // Vérifications avant l'envoi : champs texte et coordonnées obligatoires.
   if (!form.adresse.trim() || !form.ville.trim() || !form.quartier.trim()) {
     erreurEnregistrement.value = 'Adresse, ville et quartier sont obligatoires.'
     return
@@ -84,6 +97,7 @@ async function enregistrer() {
   }
 
   enregistrement.value = true
+  // Envoi au serveur, avec les textes nettoyés.
   try {
     localisation.value = await saveLocation({
       adresse: form.adresse.trim(),
@@ -101,6 +115,7 @@ async function enregistrer() {
   }
 }
 
+// Met une date au format français (ex. "12 mars 2026, 14:30").
 function formaterDate(date) {
   if (!date) return ''
   const formatee = new Date(date)
@@ -111,6 +126,7 @@ function formaterDate(date) {
 
 <template>
   <section class="rounded-[8px] border border-[#E2E8F0] bg-white p-5  sm:p-6">
+    <!-- En-tête : icône, titre, et bouton Ajouter / Modifier. -->
     <div class="flex items-center justify-between gap-3">
       <div class="flex items-center gap-3">
         <span class="flex h-10 w-10 items-center justify-center rounded-[10px] bg-[#FFF3ED] text-[#2F6250]">
@@ -132,6 +148,7 @@ function formaterDate(date) {
       </button>
     </div>
 
+    <!-- États : chargement ou erreur. -->
     <div v-if="chargement" class="mt-5 text-sm text-[#64748B]">Chargement de votre localisation...</div>
     <div v-else-if="erreurChargement" class="mt-5 rounded-[8px] bg-[#FFF0EE] p-4 text-sm text-[#C53B35]">{{ erreurChargement }}</div>
 
@@ -156,6 +173,7 @@ function formaterDate(date) {
       </div>
     </div>
 
+    <!-- Aucune localisation enregistrée. -->
     <div v-else-if="!enEdition" class="mt-5 rounded-[8px] border border-dashed border-[#CBD5E1] p-4 text-sm text-[#64748B]">
       Aucune localisation enregistrée. Cliquez sur « Ajouter » pour la renseigner.
     </div>

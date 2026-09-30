@@ -2,6 +2,7 @@
 import { API_ENDPOINTS } from '@/config/api'
 import { apiFetch } from './api'
 
+// Lecture du catalogue : catégories, services, offres et prestataires.
 export const listCategories = () => apiFetch(API_ENDPOINTS.categories)
 export const listServices = () => apiFetch(API_ENDPOINTS.services)
 export const listServiceOffers = (serviceId) => apiFetch(API_ENDPOINTS.serviceOffers(serviceId))
@@ -25,8 +26,10 @@ export const supprimerService = (id) => apiFetch(API_ENDPOINTS.service(id), { me
  * ni déclencher de filtre côté backend avec une valeur vide.
  */
 export function searchOffers(params = {}) {
+  // On construit les paramètres de l'URL (ex. ?ville=Dakar&service=3).
   const query = new URLSearchParams()
 
+  // On n'ajoute que les paramètres qui ont une vraie valeur.
   Object.entries(params).forEach(([cle, valeur]) => {
     if (valeur !== undefined && valeur !== null && valeur !== '') {
       query.set(cle, valeur)
@@ -44,13 +47,16 @@ export function searchOffers(params = {}) {
  * URL, jamais l'URL absolue telle quelle.
  */
 export function fetchSearchPage(url) {
+  // On découpe l'URL complète pour ne garder que le chemin et les paramètres.
   const cible = new URL(url, window.location.origin)
   return apiFetch(`${cible.pathname}${cible.search}`)
 }
 
 /** Recherche en langage naturel : interprète le texte puis délègue à la recherche structurée. */
 export function searchIntelligente(query, position = null) {
+  // Le texte tapé par le client.
   const body = { query }
+  // Si on connaît la position GPS, on l'envoie aussi (pour trier par distance).
   if (position) {
     body.latitude = position.lat
     body.longitude = position.lng

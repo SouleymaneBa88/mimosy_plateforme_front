@@ -10,6 +10,7 @@
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 
+// Props : style de carte, balise HTML, lien, teinte de fond, sans marge intérieure.
 const props = defineProps({
   variant: {
     type: String,
@@ -22,6 +23,7 @@ const props = defineProps({
   flush: { type: Boolean, default: false },
 })
 
+// Si "to" est fourni, la carte devient un lien ; sinon on utilise la balise "as".
 const balise = computed(() => (props.to ? RouterLink : props.as))
 </script>
 

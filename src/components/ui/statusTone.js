@@ -5,6 +5,7 @@
  * de utils/verification.js. Un statut inconnu retombe sur « neutral »
  * plutôt que d'être deviné.
  */
+// Pour chaque "ton" (couleur du badge), la liste des statuts concernés.
 const TONS = {
   success: [
     'VALIDE', 'VERIFIE', 'ACCEPTE', 'ACCEPTEE', 'CONFIRME', 'TERMINE', 'TERMINEE',
@@ -21,10 +22,12 @@ const TONS = {
   neutral: ['NON_SOUMIS', 'ANNULE', 'ANNULEE', 'INACTIVE'],
 }
 
+// On construit un index inversé : statut -> ton (ex. 'VALIDE' -> 'success').
 const INDEX = Object.fromEntries(
   Object.entries(TONS).flatMap(([ton, statuts]) => statuts.map((statut) => [statut, ton])),
 )
 
+// Renvoie le ton d'un statut (neutral si inconnu).
 export function toneForStatus(statut) {
   return INDEX[String(statut || '').toUpperCase()] || 'neutral'
 }
@@ -47,8 +50,10 @@ const LIBELLES = {
 // « EN_ATTENTE » → « En attente » : libellé de secours quand la page n'en
 // fournit pas.
 export function humanizeStatus(statut) {
+  // Si un libellé existe, on le renvoie.
   const code = String(statut || '').toUpperCase()
   if (LIBELLES[code]) return LIBELLES[code]
+  // Sinon on fabrique un libellé : "MON_STATUT" -> "Mon statut".
   const texte = String(statut || '').replace(/_/g, ' ').toLowerCase()
   return texte.charAt(0).toUpperCase() + texte.slice(1)
 }

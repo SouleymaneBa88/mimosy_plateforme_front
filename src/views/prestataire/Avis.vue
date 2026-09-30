@@ -1,16 +1,25 @@
+<!--
+  Page "Avis" du prestataire : la note moyenne, le nombre d'avis,
+  et la liste des avis publiés par ses clients.
+-->
 <script setup>
+// Outils Vue.
 import { computed, onMounted, ref } from 'vue'
 
+// Les composants de la page.
 import AppLayout from '@/components/layout/AppLayout.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import AvisCard from '@/components/prestataire/avis/AvisCard.vue'
 import AvisSummary from '@/components/prestataire/avis/AvisSummary.vue'
 
+// Le store de connexion et les appels à l'API des avis.
 import { useAuthStore } from '@/stores/auth'
 import * as reviewService from '@/services/reviewService'
 
+// Le store de connexion (pour le nom du prestataire).
 const authStore = useAuthStore()
 
+// État de chargement, message d'erreur, et la liste brute des avis.
 const loading = ref(false)
 const errorMessage = ref('')
 const avis = ref([])
@@ -21,6 +30,7 @@ const avis = ref([])
 |--------------------------------------------------------------------------
 */
 
+// Le nom du prestataire connecté.
 const userName = computed(() => {
   const parts = [
     authStore.user?.first_name,
@@ -43,6 +53,7 @@ const avisVisibles = computed(() =>
   avis.value
     .filter((item) => item?.statut === 'PUBLIE')
     .map((item) => {
+      // On récupère l'identifiant et le nom du service de la prestation (objet ou simple id).
       const prestation = item?.prestation
 
       const prestationId =
@@ -96,6 +107,7 @@ const noteMoyenne = computed(() => {
     return '0,0'
   }
 
+  // On garde seulement les notes valides.
   const notes = avisVisibles.value
     .map((item) => Number(item?.note))
     .filter((note) => Number.isFinite(note))
@@ -104,6 +116,7 @@ const noteMoyenne = computed(() => {
     return '0,0'
   }
 
+  // Somme des notes, puis moyenne avec une décimale et une virgule (ex. "4,5").
   const total = notes.reduce(
     (somme, note) => somme + note,
     0,
@@ -125,6 +138,7 @@ async function chargerAvis() {
   errorMessage.value = ''
 
   try {
+    // On accepte une liste simple ou une réponse paginée.
     const data = await reviewService.listReviews()
 
     avis.value = Array.isArray(data)
@@ -142,6 +156,7 @@ async function chargerAvis() {
   }
 }
 
+// On charge les avis au montage.
 onMounted(chargerAvis)
 </script>
 

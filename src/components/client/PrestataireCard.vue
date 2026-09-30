@@ -12,10 +12,12 @@
  * prestataire (PrestataireProfil.vue), qui contient déjà les vrais
  * formulaires (prestation / devis / rendez-vous).
  */
+// computed : valeur calculée ; les icônes ; la mise en forme des distances.
 import { computed } from 'vue'
 import { BadgeCheck, MapPin, Star, UserRound } from 'lucide-vue-next'
 import { formaterDistanceKm } from '@/utils/format'
 
+// Prop : le prestataire à afficher.
 const props = defineProps({
   prestataire: {
     type: Object,
@@ -23,6 +25,7 @@ const props = defineProps({
   },
 })
 
+// Événement envoyé quand on veut voir le profil.
 const emit = defineEmits(['view-profile'])
 
 // Heuristique de couleur par catégorie, reprise du principe de
@@ -35,15 +38,18 @@ const stylesCategorie = [
   { mots: ['nettoy', 'ménage', 'menage'], fond: 'var(--color-mimosy-tealBg)', texte: 'var(--color-mimosy-teal)' },
 ]
 
+// On cherche un mot-clé dans le nom de la catégorie pour choisir les couleurs.
 const styleCategorie = computed(() => {
   const nom = (props.prestataire.entreprise || '').toLowerCase()
   const trouve = stylesCategorie.find((style) => style.mots.some((mot) => nom.includes(mot)))
   return trouve || { fond: 'var(--color-mimosy-grayBg)', texte: 'var(--color-mimosy-gray)' }
 })
 
+// Le prix et la distance mis en forme (ou null s'ils sont absents).
 const prix = computed(() => (props.prestataire.prix != null ? Number(props.prestataire.prix).toLocaleString('fr-FR') : null))
 const distance = computed(() => (props.prestataire.distance != null ? formaterDistanceKm(props.prestataire.distance) : null))
 
+// Envoie le prestataire au parent pour ouvrir son profil.
 function voirProfil() {
   emit('view-profile', props.prestataire)
 }

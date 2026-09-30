@@ -7,27 +7,34 @@
  */
 import { nextTick, ref } from 'vue'
 
+// v-model : la valeur de l'onglet sélectionné.
 const model = defineModel({ type: [String, Number], default: '' })
 
+// Props : la liste des onglets, un libellé pour l'accessibilité, et le style.
 const props = defineProps({
   tabs: { type: Array, required: true },
   label: { type: String, default: 'Filtres' },
   variant: { type: String, default: 'line', validator: (v) => ['line', 'pill'].includes(v) },
 })
 
+// Références vers les boutons (pour déplacer le focus au clavier).
 const boutons = ref([])
 
+// Sélectionne un onglet.
 function selectionner(valeur) {
   model.value = valeur
 }
 
+// Navigation au clavier : flèches, Début et Fin.
 async function onKeydown(evenement, index) {
   const dernier = props.tabs.length - 1
+  // Pour chaque touche, l'index de l'onglet à atteindre (on boucle aux extrémités).
   const cibles = { ArrowRight: index === dernier ? 0 : index + 1, ArrowLeft: index === 0 ? dernier : index - 1, Home: 0, End: dernier }
   if (!(evenement.key in cibles)) return
   evenement.preventDefault()
   const cible = cibles[evenement.key]
   selectionner(props.tabs[cible].value)
+  // On attend la mise à jour de l'affichage, puis on place le focus sur le nouvel onglet.
   await nextTick()
   boutons.value[cible]?.focus()
 }
@@ -48,6 +55,7 @@ async function onKeydown(evenement, index) {
       @keydown="onKeydown($event, index)"
     >
       {{ tab.label }}
+      <!-- Le compteur n'est affiché que s'il est fourni. -->
       <span v-if="tab.count !== undefined && tab.count !== null" class="m-tabs__count tabular">{{ tab.count }}</span>
     </button>
   </div>

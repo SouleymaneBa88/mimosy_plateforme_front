@@ -14,12 +14,14 @@ import { apiFetch } from './api'
 // Construit une chaîne de requête en ignorant les valeurs vides, pour ne
 // jamais envoyer un filtre "statut=" ou "recherche=" vide au backend.
 function buildQuery(params = {}) {
+  // On parcourt chaque paramètre et on garde seulement ceux qui ont une valeur.
   const query = new URLSearchParams()
   Object.entries(params).forEach(([cle, valeur]) => {
     if (valeur !== undefined && valeur !== null && valeur !== '') {
       query.set(cle, valeur)
     }
   })
+  // On renvoie "?cle=valeur&..." ou une chaîne vide.
   const queryString = query.toString()
   return queryString ? `?${queryString}` : ''
 }
@@ -37,11 +39,13 @@ export const rejeterDocument = (id, motif) =>
 // puis URL locale en mémoire que l'appelant doit révoquer
 // (URL.revokeObjectURL) dès qu'elle n'est plus affichée.
 export async function recupererFichierDocument(id) {
+  // On récupère le jeton, car cette requête n'utilise pas apiFetch.
   const token = localStorage.getItem('mimosy_access_token')
   const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.verificationDocumentFichier(id)}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   })
 
+  // En cas d'erreur, on choisit un message clair selon le code HTTP.
   if (!response.ok) {
     const messages = {
       401: 'Session expirée : rechargez la page pour afficher le document.',
@@ -53,6 +57,7 @@ export async function recupererFichierDocument(id) {
     throw error
   }
 
+  // On transforme le fichier reçu en adresse locale affichable dans une <img>.
   const blob = await response.blob()
   return URL.createObjectURL(blob)
 }

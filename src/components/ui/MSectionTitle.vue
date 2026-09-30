@@ -6,6 +6,7 @@
  * - variant="plain"     : titre DM Sans compact, pour les dashboards.
  * Slot `action` : lien « Tout voir » ou bouton aligné à droite.
  */
+// Props : titre, surtitre, numéro, description, style, balise HTML du titre.
 defineProps({
   title: { type: String, required: true },
   eyebrow: { type: String, default: '' },
@@ -20,10 +21,12 @@ defineProps({
 <template>
   <div class="m-section-title" :class="`m-section-title--${variant}`">
     <div class="m-section-title__text">
+      <!-- Surtitre (petit texte au-dessus du titre), avec numéro facultatif. -->
       <p v-if="eyebrow || number" class="m-section-title__eyebrow text-eyebrow">
         <span v-if="number" class="m-section-title__number tabular">{{ number }}</span>
         <span v-if="eyebrow">{{ eyebrow }}</span>
       </p>
+      <!-- Le titre, dans la balise choisie (h2 par défaut). -->
       <component :is="as" :id="id || undefined" class="m-section-title__title">{{ title }}</component>
       <p v-if="description" class="m-section-title__description">{{ description }}</p>
     </div>

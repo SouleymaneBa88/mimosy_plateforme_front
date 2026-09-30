@@ -6,8 +6,10 @@
  * son propre état de chargement, mais ne recharge ses données qu'à la
  * première visite.
  */
+// Outils Vue.
 import { reactive, ref } from 'vue'
 
+// Les composants de la page et les appels à l'API admin.
 import AppLayout from '@/components/layout/AppLayout.vue'
 import ClientHeader from '@/components/client/ClientHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -15,6 +17,7 @@ import ErrorState from '@/components/common/ErrorState.vue'
 import Loader from '@/components/common/Loader.vue'
 import * as adminService from '@/services/adminService'
 
+// Les trois onglets de la page, et l'onglet ouvert.
 const onglets = [
   { id: 'paiements', label: 'Paiements' },
   { id: 'retraits', label: 'Retraits' },
@@ -22,13 +25,16 @@ const onglets = [
 ]
 const ongletActif = ref('paiements')
 
+// L'état de chaque onglet : ses éléments, chargement, erreur, "déjà chargé ?", et filtre.
 const paiements = reactive({ items: [], loading: false, error: '', charge: false, statut: '' })
 const retraits = reactive({ items: [], loading: false, error: '', charge: false, statut: '' })
 const transactions = reactive({ items: [], loading: false, error: '', charge: false })
 
 // A_REMBOURSER : payé en double chez PayDunya, à rembourser à la main.
 const statutsPaiement = ['', 'INITIE', 'EN_ATTENTE', 'REUSSI', 'ECHOUE', 'ANNULE', 'REMBOURSE', 'A_REMBOURSER']
-const statutsRetrait = ['', 'EN_ATTENTE', 'EN_COURS', 'REUSSI', 'ECHOUE', 'ANNULE']
+// SIMULE : retrait de démonstration (PAYDUNYA_PAYOUT_DEMO), aucun déboursement PayDunya.
+const statutsRetrait = ['', 'EN_ATTENTE', 'EN_COURS', 'REUSSI', 'ECHOUE', 'ANNULE', 'SIMULE']
+// Libellés lisibles des types de transaction.
 const typeLabels = {
   BLOCAGE: 'Fonds bloqués',
   COMMISSION: 'Commission MIMOSY',
@@ -37,13 +43,16 @@ const typeLabels = {
   REMBOURSEMENT: 'Remboursement',
 }
 
+// Couleurs du badge selon le statut (gris par défaut).
 const statutClasses = {
   REUSSI: 'bg-[#EAF8F2] text-[#16805B]',
   ECHOUE: 'bg-[#FFF0EE] text-[#A85148]',
   A_REMBOURSER: 'bg-[#FFFBF0] text-[#9A723C]',
+  SIMULE: 'bg-[#FFF4DB] text-[#8A5A00]',
 }
 const classeStatut = (statut) => statutClasses[statut] || 'bg-[#F1F5F9] text-[#64748B]'
 
+// Charge la liste des paiements (avec le filtre statut).
 async function chargerPaiements() {
   paiements.loading = true
   paiements.error = ''
@@ -57,6 +66,7 @@ async function chargerPaiements() {
   }
 }
 
+// Charge la liste des retraits (avec le filtre statut).
 async function chargerRetraits() {
   retraits.loading = true
   retraits.error = ''
@@ -70,6 +80,7 @@ async function chargerRetraits() {
   }
 }
 
+// Charge le journal des transactions.
 async function chargerTransactions() {
   transactions.loading = true
   transactions.error = ''
@@ -83,6 +94,7 @@ async function chargerTransactions() {
   }
 }
 
+// Ouvre un onglet et le charge s'il ne l'a jamais été.
 function ouvrirOnglet(id) {
   ongletActif.value = id
   if (id === 'paiements' && !paiements.charge) chargerPaiements()
@@ -90,6 +102,7 @@ function ouvrirOnglet(id) {
   if (id === 'transactions' && !transactions.charge) chargerTransactions()
 }
 
+// Au démarrage, on charge l'onglet "Paiements".
 chargerPaiements()
 </script>
 
@@ -98,6 +111,7 @@ chargerPaiements()
     <div class="mx-auto flex w-full flex-col gap-6">
       <ClientHeader title="Paiements" subtitle="Paiements, retraits et transactions financières MIMOSY." />
 
+      <!-- Barre des onglets. -->
       <div class="flex gap-1 border-b border-[#E2E8F0]">
         <button
           v-for="onglet in onglets"

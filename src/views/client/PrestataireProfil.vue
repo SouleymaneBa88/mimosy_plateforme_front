@@ -14,6 +14,7 @@
  * ------------------------------------------------------------------
  */
 
+// Outils Vue, routeur et icônes.
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
@@ -26,6 +27,7 @@ import {
   X,
 } from 'lucide-vue-next'
 
+// La mise en page, les stores et les appels à l'API.
 import ClientLayout from '@/components/layout/ClientLayout.vue'
 import { useDemandePrestationStore } from '@/stores/demandePrestation'
 import { usePrestataireStore } from '@/stores/prestataire'
@@ -33,6 +35,7 @@ import { useRendezVousStore } from '@/stores/rendezVous'
 import * as devisService from '@/services/devisService'
 import * as rendezVousService from '@/services/rendezVousService'
 
+// La route (pour lire l'id du prestataire), le routeur et les stores.
 const route = useRoute()
 const router = useRouter()
 const prestataireStore = usePrestataireStore()
@@ -53,6 +56,7 @@ const rendezVousEnvoye = ref(false)
 const rendezVousError = ref('')
 const rendezVousLoading = ref(false)
 
+// Les valeurs des formulaires "demande de prestation" et "demande de devis".
 const demandeForm = reactive({ service: '', description: '', date_souhaitee: '', budget: '' })
 const devisForm = reactive({ service: '', description: '', date_souhaitee: '', budget_estime: '' })
 
@@ -61,14 +65,17 @@ const devisForm = reactive({ service: '', description: '', date_souhaitee: '', b
  * le backend (jamais recalculés côté frontend) -> créneau choisi.
  * ---------------------------------------------------------------- */
 const rendezVousForm = reactive({ service: '', date: '', creneau: null, notes: '' })
+// Les créneaux libres proposés par le serveur pour la date choisie, et leur chargement.
 const creneauxDisponibles = ref([])
 const creneauxLoading = ref(false)
 const creneauxError = ref('')
 
+// Met une heure au format "14:30".
 function formaterHeure(isoString) {
   return new Date(isoString).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
 }
 
+// Charge les créneaux libres du prestataire pour la date choisie.
 async function chargerCreneaux() {
   creneauxDisponibles.value = []
   rendezVousForm.creneau = null
@@ -125,6 +132,7 @@ const displayName = computed(
   () => [prestataire.value?.user_first_name, prestataire.value?.user_last_name].filter(Boolean).join(' ') || 'Prestataire',
 )
 
+// true pendant le chargement du prestataire.
 const isLoading = computed(() => prestataireStore.isLoading)
 
 // Une modale est-elle ouverte ? (sert au verrouillage du défilement)
@@ -139,6 +147,7 @@ watch(anyModalOpen, (open) => {
   document.body.style.overflow = open ? 'hidden' : ''
 })
 
+// Touche Échap : ferme la fenêtre ouverte.
 function onKeydown(event) {
   if (event.key !== 'Escape') return
   if (devisModalOpen.value) fermerDevisModal()
@@ -161,6 +170,7 @@ onMounted(async () => {
   }
 })
 
+// En quittant la page : on arrête d'écouter le clavier et on débloque le défilement.
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeydown)
   document.body.style.overflow = ''
@@ -184,6 +194,7 @@ function demanderPrestation() {
   demandeModalOpen.value = true
 }
 
+// Envoie la demande de prestation (tous les champs sont obligatoires).
 async function envoyerDemande() {
   if (!prestataire.value?.id || !demandeForm.service || !demandeForm.description.trim() || !demandeForm.date_souhaitee || !demandeForm.budget) {
     demandeStore.errorMessage = 'Veuillez renseigner tous les champs de la demande.'
@@ -208,6 +219,7 @@ async function envoyerDemande() {
   }
 }
 
+// Ferme la fenêtre de demande.
 function fermerDemandeModal() {
   demandeModalOpen.value = false
   demandeStore.errorMessage = ''
@@ -223,6 +235,7 @@ function demanderDevis() {
   devisModalOpen.value = true
 }
 
+// Envoie la demande de devis.
 async function envoyerDevis() {
   if (!prestataire.value?.id || !devisForm.service || !devisForm.description.trim() || !devisForm.date_souhaitee || !devisForm.budget_estime) {
     devisError.value = 'Veuillez renseigner tous les champs de la demande de devis.'
@@ -251,6 +264,7 @@ async function envoyerDevis() {
   }
 }
 
+// Ferme la fenêtre de devis.
 function fermerDevisModal() {
   devisModalOpen.value = false
   devisError.value = ''
@@ -270,6 +284,7 @@ function prendreRendezVous() {
   rendezVousModalOpen.value = true
 }
 
+// Envoie la demande de rendez-vous sur le créneau choisi.
 async function envoyerRendezVous() {
   if (!prestataire.value?.id || !rendezVousForm.service || !rendezVousForm.creneau) {
     rendezVousError.value = 'Veuillez choisir un service et un créneau disponible.'
@@ -294,11 +309,13 @@ async function envoyerRendezVous() {
   }
 }
 
+// Ferme la fenêtre de rendez-vous.
 function fermerRendezVousModal() {
   rendezVousModalOpen.value = false
   rendezVousError.value = ''
 }
 
+// Quand la date du rendez-vous change, on recharge les créneaux libres.
 watch(() => rendezVousForm.date, chargerCreneaux)
 </script>
 

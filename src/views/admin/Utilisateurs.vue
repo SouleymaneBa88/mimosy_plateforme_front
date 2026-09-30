@@ -9,8 +9,10 @@
  * du compte est possible, et le backend (apps.adminpanel) refuse de
  * toute façon tout champ "role" envoyé depuis cette page.
  */
+// Outils Vue.
 import { computed, onMounted, reactive, ref } from 'vue'
 
+// Les composants de la page.
 import AppLayout from '@/components/layout/AppLayout.vue'
 import ClientHeader from '@/components/client/ClientHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -18,22 +20,26 @@ import ErrorState from '@/components/common/ErrorState.vue'
 import Loader from '@/components/common/Loader.vue'
 import Modal from '@/components/common/Modal.vue'
 import Pagination from '@/components/common/Pagination.vue'
+// Composable des listes admin, toasts, store de connexion et API admin.
 import { useAdminListe } from '@/composables/useAdminListe'
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
 import * as adminService from '@/services/adminService'
 
+// Les trois onglets de la page.
 const vues = [
   { id: 'TOUS', label: 'Tous les utilisateurs' },
   { id: 'CLIENT', label: 'Clients' },
   { id: 'PRESTATAIRE', label: 'Prestataires' },
 ]
 
+// Toasts, store de connexion, compte à confirmer, et compte en cours de traitement.
 const { succes, erreur } = useToast()
 const authStore = useAuthStore()
 const cibleConfirmation = ref(null)
 const actionEnCours = ref('')
 
+// L'onglet sélectionné.
 const vueActive = ref('TOUS')
 
 // Trois instances indépendantes plutôt qu'une seule recréée à chaque
@@ -44,6 +50,7 @@ const listeTous = useAdminListe(adminService.listUtilisateurs, { role: '', is_ac
 const listeClients = useAdminListe(adminService.listClientsAdmin, { is_active: '', recherche: '' })
 const listePrestataires = useAdminListe(adminService.listPrestatairesAdmin, { statut_verification: '', is_active: '', recherche: '' })
 
+// La liste qui correspond à l'onglet actif.
 const listesParVue = { TOUS: listeTous, CLIENT: listeClients, PRESTATAIRE: listePrestataires }
 const etatSource = computed(() => listesParVue[vueActive.value])
 
@@ -66,11 +73,13 @@ const etat = reactive({
   changerPage: (p) => etatSource.value.changerPage(p),
 })
 
+// Change d'onglet, et charge sa liste si elle est encore vide.
 function changerVue(vue) {
   vueActive.value = vue
   if (!etat.items.length && !etat.loading) etat.charger()
 }
 
+// Options des filtres "rôle" et "vérification", et couleurs des badges.
 const roles = ['', 'CLIENT', 'PRESTATAIRE', 'ADMIN']
 const statutsVerification = ['', 'EN_ATTENTE', 'VERIFIE', 'REJETE']
 const classeVerification = {
@@ -79,6 +88,8 @@ const classeVerification = {
   EN_ATTENTE: 'bg-[#FFF7E6] text-[#9A723C]',
 }
 
+// Attendre 350 ms après la dernière frappe avant de lancer la recherche
+// (évite d'appeler le serveur à chaque lettre tapée).
 let debounce = null
 function surRechercheChangee() {
   clearTimeout(debounce)
@@ -99,6 +110,7 @@ function estMonPropreCompte(item) {
   return String(idCompte(item)) === String(authStore.user?.id)
 }
 
+// Ouvre la fenêtre de confirmation pour activer / désactiver un compte.
 function demanderChangementStatut(item) {
   cibleConfirmation.value = item
 }
@@ -109,6 +121,7 @@ function demanderChangementStatut(item) {
 const scoreAffiche = ref(null)
 const chargementScore = ref(false)
 
+// Charge et affiche le score de confiance d'un prestataire.
 async function afficherScore(item) {
   chargementScore.value = true
   scoreAffiche.value = { prestataire: item, resultat: null }
@@ -122,6 +135,7 @@ async function afficherScore(item) {
   }
 }
 
+// Libellés lisibles des facteurs du score.
 const libellesFacteurs = {
   identite: 'Identité vérifiée',
   documents: 'Documents professionnels',
@@ -131,6 +145,7 @@ const libellesFacteurs = {
   avis: 'Avis clients',
 }
 
+// Confirme l'activation / désactivation du compte, puis recharge la liste.
 async function confirmerChangementStatut() {
   const item = cibleConfirmation.value
   if (!item) return
@@ -148,6 +163,7 @@ async function confirmerChangementStatut() {
   }
 }
 
+// On charge la liste au montage.
 onMounted(() => etat.charger())
 </script>
 
@@ -156,6 +172,7 @@ onMounted(() => etat.charger())
     <div class="mx-auto flex w-full  flex-col gap-6">
       <ClientHeader title="Utilisateurs" subtitle="Comptes clients, prestataires et administrateurs de la plateforme." />
 
+      <!-- Onglets : tous / clients / prestataires. -->
       <div class="flex gap-1 border-b border-[#E2E8F0]">
         <button
           v-for="vue in vues"
@@ -169,6 +186,7 @@ onMounted(() => etat.charger())
         </button>
       </div>
 
+      <!-- Recherche et filtres. -->
       <div class="flex flex-wrap items-center gap-2 text-black">
         <input
           v-model="etat.filtres.recherche"
@@ -190,10 +208,12 @@ onMounted(() => etat.charger())
         </select>
       </div>
 
+      <!-- États : chargement, erreur, vide. -->
       <Loader v-if="etat.loading" />
       <ErrorState v-else-if="etat.errorMessage" :message="etat.errorMessage" @retry="etat.charger" />
       <EmptyState v-else-if="!etat.items.length" title="Aucun utilisateur trouvé" message="Aucun compte ne correspond à ces critères." />
 
+      <!-- Tableau des utilisateurs. -->
       <div v-else class="overflow-x-auto rounded-2xl border border-[#E2E8F0] bg-white">
         <table class="w-full text-sm">
           <thead class="bg-[#F8FAFC] text-left text-xs uppercase text-[#94A3B8]">
@@ -270,6 +290,7 @@ onMounted(() => etat.charger())
       </div>
     </div>
 
+    <!-- Fenêtre de confirmation (activer / désactiver). -->
     <Modal :model-value="!!cibleConfirmation" title="Confirmer l'action" @update:model-value="cibleConfirmation = null">
       <p class="text-sm text-[#334155]" v-if="cibleConfirmation">
         {{ cibleConfirmation.is_active ? 'Désactiver' : 'Activer' }} le compte de
@@ -286,6 +307,7 @@ onMounted(() => etat.charger())
       </div>
     </Modal>
 
+    <!-- Fenêtre du score de confiance. -->
     <Modal :model-value="!!scoreAffiche" title="Score de confiance" @update:model-value="scoreAffiche = null">
       <template v-if="scoreAffiche">
         <p class="text-sm font-bold text-[#051F20]">{{ scoreAffiche.prestataire.nom_complet }}</p>

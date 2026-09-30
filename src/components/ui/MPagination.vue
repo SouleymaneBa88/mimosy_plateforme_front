@@ -8,15 +8,19 @@
 import { computed } from 'vue'
 import { ChevronLeft, ChevronRight } from 'lucide-vue-next'
 
+// Props : page actuelle, nombre total d'éléments, taille d'une page.
 const props = defineProps({
   page: { type: Number, required: true },
   count: { type: Number, required: true },
   pageSize: { type: Number, default: 20 },
 })
+// Événement envoyé quand on change de page.
 const emit = defineEmits(['update:page'])
 
+// Nombre total de pages (au moins 1).
 const totalPages = computed(() => Math.max(1, Math.ceil(props.count / props.pageSize)))
 
+// Va à une page si elle existe et si elle est différente de la page actuelle.
 function aller(page) {
   if (page < 1 || page > totalPages.value || page === props.page) return
   emit('update:page', page)
@@ -26,11 +30,14 @@ function aller(page) {
 const numeros = computed(() => {
   const total = totalPages.value
   const courante = props.page
+  // 7 pages ou moins : on les affiche toutes.
   if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
 
+  // Sinon : première, dernière, et les pages autour de la page actuelle.
   const pages = new Set([1, total, courante - 1, courante, courante + 1])
   const tries = [...pages].filter((p) => p >= 1 && p <= total).sort((a, b) => a - b)
   const resultat = []
+  // On ajoute "…" quand il y a un trou entre deux numéros.
   tries.forEach((p, i) => {
     if (i && p - tries[i - 1] > 1) resultat.push(`ellipse-${p}`)
     resultat.push(p)
@@ -38,12 +45,14 @@ const numeros = computed(() => {
   return resultat
 })
 
+// Numéros du premier et du dernier élément affichés (ex. "21–40 sur 95").
 const debut = computed(() => (props.page - 1) * props.pageSize + 1)
 const fin = computed(() => Math.min(props.page * props.pageSize, props.count))
 </script>
 
 <template>
   <nav v-if="totalPages > 1" class="m-pagination" aria-label="Pagination">
+    <!-- Résumé : "21–40 sur 95 résultats". -->
     <p class="m-pagination__summary tabular">
       {{ debut }}–{{ fin }} sur {{ count }} résultat{{ count > 1 ? 's' : '' }}
     </p>
@@ -60,6 +69,7 @@ const fin = computed(() => Math.min(props.page * props.pageSize, props.count))
         <span class="m-pagination__nav-label">Précédent</span>
       </button>
 
+      <!-- Les numéros de page (et les "…"). -->
       <ul class="m-pagination__pages">
         <li v-for="numero in numeros" :key="numero">
           <span v-if="typeof numero === 'string'" class="m-pagination__ellipsis" aria-hidden="true">…</span>
@@ -76,6 +86,7 @@ const fin = computed(() => Math.min(props.page * props.pageSize, props.count))
         </li>
       </ul>
 
+      <!-- Version courte "2 / 5", affichée sur petit écran. -->
       <span class="m-pagination__compact tabular" aria-hidden="true">{{ page }} / {{ totalPages }}</span>
 
       <button

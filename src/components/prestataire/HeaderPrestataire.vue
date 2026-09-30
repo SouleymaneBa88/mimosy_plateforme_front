@@ -1,7 +1,14 @@
+<!--
+  HeaderPrestataire : la barre du haut de l'espace prestataire.
+  Elle affiche le titre de la page, la cloche des notifications
+  et le nom + la photo du prestataire (lien vers son profil).
+-->
 <script setup>
+// Outils Vue et routeur.
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+// Les composants de notifications et les stores utilisés.
 import NotificationButton from '@/components/notifications/NotificationButton.vue'
 import NotificationPanel from '@/components/notifications/NotificationPanel.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -10,6 +17,7 @@ import {
   useNotificationsStore,
 } from '@/stores/notifications'
 
+// La route actuelle, le routeur, et les stores de connexion et de notifications.
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
@@ -18,8 +26,10 @@ const notificationsStore = useNotificationsStore()
 /* ---------------------------------------------------------
  * Notifications
  * ------------------------------------------------------- */
+// Le panneau des notifications est-il ouvert ?
 const notificationsOpen = ref(false)
 
+// Nombre de notifications non lues (pour la pastille).
 const unreadCount = computed(() => notificationsStore.nombreNonLues)
 
 // Le panneau n'affiche que les non-lues, mises à la forme attendue par
@@ -35,6 +45,8 @@ const notificationsAffichees = computed(() =>
   })),
 )
 
+// Clic sur une notification : on ferme le panneau, on la marque comme lue,
+// puis on va sur la page concernée.
 async function ouvrirNotification(id) {
   const notification = notificationsStore.notifications.find(
     (item) => item.id === id,
@@ -47,6 +59,7 @@ async function ouvrirNotification(id) {
   if (destination) router.push(destination)
 }
 
+// Au montage, on charge les notifications.
 onMounted(() => {
   notificationsStore.chargerNotifications()
 })
@@ -56,6 +69,7 @@ onMounted(() => {
  * ------------------------------------------------------- */
 const TITRE_PAR_DEFAUT = 'Aperçu de l’activité'
 
+// Le titre à afficher pour chaque adresse.
 const pageTitles = {
   '/prestataire': TITRE_PAR_DEFAUT,
   '/prestataire/demandes': 'Demandes',
@@ -89,6 +103,7 @@ const pageTitle = computed(() => {
 /* ---------------------------------------------------------
  * Prestataire connecté
  * ------------------------------------------------------- */
+// Le nom affiché : prénom + nom, sinon d'autres champs disponibles.
 const displayName = computed(() => {
   const user = authStore.user || {}
 
@@ -101,11 +116,13 @@ const displayName = computed(() => {
 
 const roleLabel = 'Prestataire Expert'
 
+// La photo de profil (si elle existe).
 const photoProfil = computed(() => {
   const user = authStore.user || {}
   return user.photo_profil || user.photo || ''
 })
 
+// La première lettre du nom (affichée s'il n'y a pas de photo).
 const initiale = computed(() => {
   return displayName.value
     ? displayName.value.charAt(0).toUpperCase()

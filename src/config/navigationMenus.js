@@ -1,3 +1,9 @@
+// ------------------------------------------------------------------
+// Les menus de navigation (barre latérale) de chaque rôle.
+// Chaque entrée : label = texte affiché, path = adresse, icon = icône.
+// ------------------------------------------------------------------
+
+// Les icônes viennent de la librairie "lucide".
 import {
   House,
   Search,
@@ -20,7 +26,9 @@ import {
   Sparkles,
 } from 'lucide-vue-next'
 
+// Un menu par rôle : CLIENT, PRESTATAIRE et ADMIN.
 export const navigationByRole = {
+  // Menu du client.
   CLIENT: [
     {
       label: 'Accueil',
@@ -69,6 +77,7 @@ export const navigationByRole = {
     },
   ],
 
+  // Menu du prestataire.
   PRESTATAIRE: [
     {
       label: 'Accueil',
@@ -169,16 +178,17 @@ export const navigationByRole = {
       path: '/admin/verifications',
       icon: ShieldCheck,
     },
+    // Entrée désactivée : la modération des avis n'est pas affichée dans le menu.
     // {
     //   label: 'Modération avis',
     //   path: '/admin/avis',
     //   icon: Star,
     // },
-    {
-      label: 'Signalements',
-      path: '/admin/signalements',
-      icon: FileWarning,
-    },
+    // {
+    //   label: 'Signalements',
+    //   path: '/admin/signalements',
+    //   icon: FileWarning,
+    // },
     {
       label: 'Litiges',
       path: '/admin/litiges',

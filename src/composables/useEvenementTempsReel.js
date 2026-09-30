@@ -17,12 +17,15 @@ import { onBeforeUnmount, onMounted } from 'vue'
 import { ecouter } from '@/services/realtime'
 
 export function useEvenementTempsReel(types, action) {
+  // Les fonctions pour se désabonner, gardées pour le démontage.
   let desabonnements = []
 
+  // Quand le composant apparaît : on s'abonne à chaque type d'événement.
   onMounted(() => {
     desabonnements = [...types, 'realtime.reconnecte'].map((type) => ecouter(type, action))
   })
 
+  // Quand le composant disparaît : on se désabonne de tout.
   onBeforeUnmount(() => {
     desabonnements.forEach((desabonner) => desabonner())
     desabonnements = []

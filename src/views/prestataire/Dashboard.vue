@@ -1,4 +1,9 @@
+<!--
+  Tableau de bord du PRESTATAIRE : chiffres clés (offres, note, demandes),
+  demandes en attente, et un bandeau qui l'aide à compléter son profil.
+-->
 <script setup>
+// Outils Vue, routeur et icônes.
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {
@@ -13,29 +18,38 @@ import {
   MessageSquare,
 } from 'lucide-vue-next'
 
+// Les composants de la page.
 import AppLayout from '@/components/layout/AppLayout.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 // L'en-tête prestataire est rendu automatiquement par AppLayout pour
 // role="prestataire" : pas besoin de l'importer ici.
 
+// Les stores et les appels à l'API.
 import { useAuthStore } from '@/stores/auth'
 import { useDemandePrestationStore } from '@/stores/demandePrestation'
+import { useRendezVousStore } from '@/stores/rendezVous'
 
 import * as prestataireService from '@/services/prestataireService'
 import * as reviewService from '@/services/reviewService'
 
+// Le routeur et les stores.
 const router = useRouter()
 
 const authStore = useAuthStore()
 const demandeStore = useDemandePrestationStore()
+// Le store centralise les rendez-vous du prestataire connecté.
+const rendezVousStore = useRendezVousStore()
 
+// États : chargement et erreur.
 const loading = ref(false)
 const error = ref('')
 
+// Les offres de services, les avis et le profil du prestataire.
 const offres = ref([])
 const avis = ref([])
 const profil = ref(null)
 
+// Le bandeau d'aide a-t-il été fermé ? (mémorisé pour la session du navigateur)
 const bandeauFerme = ref(
   sessionStorage.getItem('mimosy_onboarding_ferme') === '1',
 )
@@ -51,6 +65,7 @@ const userName = computed(() => {
   )
 })
 
+// La date du jour en toutes lettres.
 const dateDuJour = computed(() => {
   const texte = new Date().toLocaleDateString('fr-FR', {
     weekday: 'long',
@@ -67,6 +82,7 @@ const avisPublies = computed(() => {
   return avis.value.filter((item) => item.statut === 'PUBLIE')
 })
 
+// La note moyenne (nombre) calculée sur les avis publiés.
 const noteMoyenneValeur = computed(() => {
   if (!avisPublies.value.length) return 0
 
@@ -78,14 +94,17 @@ const noteMoyenneValeur = computed(() => {
   return total / avisPublies.value.length
 })
 
+// La note moyenne affichée (texte).
 const noteMoyenne = computed(() => {
   return `${noteMoyenneValeur.value.toFixed(1).replace('.', ',')} / 5`
 })
 
+// Nombre d'offres actives.
 const offresActives = computed(() => {
   return offres.value.filter((item) => item.disponible)
 })
 
+// Les chiffres clés affichés en haut.
 const stats = computed(() => [
   {
     label: 'Offres disponibles',
@@ -105,18 +124,58 @@ const stats = computed(() => [
 ])
 
 /* ---------------------------------------------------------
+ * Rendez-vous
+ * ------------------------------------------------------- */
+// Seuls les rendez-vous futurs encore actifs sont utiles dans le dashboard.
+// Le tri explicite protège l'affichage même si l'ordre de l'API évolue.
+const rendezVousAVenir = computed(() => {
+  const maintenant = new Date()
+  const statutsActifs = ['EN_ATTENTE', 'CONFIRME']
+
+  return rendezVousStore.rendezVous
+    .filter((rendezVous) =>
+      statutsActifs.includes(rendezVous.statut) &&
+      new Date(rendezVous.date_heure_debut) >= maintenant,
+    )
+    .sort(
+      (premier, second) =>
+        new Date(premier.date_heure_debut) - new Date(second.date_heure_debut),
+    )
+})
+
+// La liste latérale reste courte, le compteur conserve le total réel.
+const prochainsRendezVous = computed(() => rendezVousAVenir.value.slice(0, 3))
+const nombreRendezVousAVenir = computed(() => rendezVousAVenir.value.length)
+
+const rendezVousStatutLabels = {
+  EN_ATTENTE: 'En attente',
+  CONFIRME: 'Confirmé',
+}
+
+// Les trois avis les plus récents alimentent l'aperçu latéral.
+const avisRecents = computed(() =>
+  [...avisPublies.value]
+    .sort((premier, second) =>
+      new Date(second.date_creation) - new Date(premier.date_creation),
+    )
+    .slice(0, 3),
+)
+
+/* ---------------------------------------------------------
  * Demandes
  * ------------------------------------------------------- */
 const demandesRecentes = computed(() => {
   return demandeStore.demandes.slice(0, 5)
 })
 
+// Les demandes encore en attente de réponse.
 const demandesEnAttente = computed(() => {
   return demandeStore.demandes.filter(
     (demande) => demande.statut === 'EN_ATTENTE',
   ).length
 })
 
+// Libellés lisibles et couleurs des statuts.
 const statutLabels = {
   EN_ATTENTE: 'En attente',
   ACCEPTEE: 'Acceptée',
@@ -135,12 +194,26 @@ const statutClasses = {
   ANNULEE: 'bg-[#FEE2E2] text-[#991B1B]',
 }
 
+// Première lettre d'un nom (pour l'avatar).
 function initiale(nom) {
   return (nom || 'C').charAt(0).toUpperCase()
 }
 
+// Met une date au format français.
 function formatDate(date) {
   return date ? new Date(date).toLocaleDateString('fr-FR') : '—'
+}
+
+// Formate un créneau lisible, par exemple « 5 oct. · 09:30 ».
+function formatDateHeure(date) {
+  if (!date) return '—'
+
+  return new Date(date).toLocaleString('fr-FR', {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
 /* ---------------------------------------------------------
@@ -155,8 +228,10 @@ const LIBELLES_ETAPES = {
   verification_identite: "Vérification d'identité",
 }
 
+// Le pourcentage de complétion du profil (calculé par le serveur).
 const completion = computed(() => profil.value?.completion || null)
 
+// Les étapes de complétion à afficher, et celles qui restent.
 const etapesAffichees = computed(() => {
   if (!completion.value) return []
 
@@ -171,10 +246,12 @@ const etapesRestantes = computed(() => {
   return etapesAffichees.value.filter((etape) => !etape.complete).length
 })
 
+// Le profil est-il incomplet ?
 const profilIncomplet = computed(() => {
   return completion.value ? !completion.value.est_publiable : false
 })
 
+// Ferme le bandeau d'aide et s'en souvient.
 function fermerBandeau() {
   bandeauFerme.value = true
   sessionStorage.setItem('mimosy_onboarding_ferme', '1')
@@ -195,6 +272,15 @@ function completerProfil() {
   router.push('/prestataire/profil')
 }
 
+// Les deux aperçus renvoient vers leurs pages complètes.
+function voirRendezVous() {
+  router.push('/prestataire/rendez-vous')
+}
+
+function voirTousLesAvis() {
+  router.push('/prestataire/avis')
+}
+
 /* ---------------------------------------------------------
  * Chargement
  * ------------------------------------------------------- */
@@ -207,7 +293,8 @@ async function chargerTableauDeBord() {
       prestataireService.listMyServiceOffers(),
       reviewService.listReviews(),
       prestataireService.getMyProviderProfile(),
-      demandeStore.chargerDemandes(),
+      demandeStore.chargerDemandes(true),
+      rendezVousStore.chargerRendezVous(),
     ])
 
     offres.value = Array.isArray(offersData)
@@ -228,6 +315,7 @@ async function chargerTableauDeBord() {
   }
 }
 
+// On charge le tableau de bord au montage.
 onMounted(chargerTableauDeBord)
 </script>
 
@@ -429,22 +517,29 @@ onMounted(chargerTableauDeBord)
                 </div>
               </button>
 
-              <!-- Rendez-vous -->
-              <article class="flex min-h-[168px] flex-col justify-between gap-4 border border-[#E5E7E2] bg-[#FAFAF8] p-6 lg:p-8 rounded-2xl">
+              <!-- Rendez-vous : compteur réellement calculé depuis le store. -->
+              <button
+                type="button"
+                class="group flex min-h-[168px] cursor-pointer flex-col justify-between gap-4 border border-[#E5E7E2] bg-[#FAFAF8] p-6 text-left transition-colors hover:border-[#2D6A4F]/40 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2D6A4F] focus-visible:ring-offset-2 lg:p-8 rounded-2xl"
+                @click="voirRendezVous"
+              >
                 <p class="font-['DM_Sans'] text-xs font-bold uppercase leading-4 tracking-[1.2px] text-[#1A1C1A] opacity-50">
                   Rendez-vous à venir
                 </p>
 
                 <div class="flex items-end justify-between gap-4">
                   <span class="font-['Instrument_Serif'] text-5xl font-normal leading-[48px] text-[#1A1C1A]">
-                    —
+                    {{ nombreRendezVousAVenir }}
                   </span>
 
-                  <span class="font-['DM_Sans'] text-sm italic leading-5 text-[#1A1C1A] opacity-40">
-                    Aucun aperçu disponible
+                  <span class="flex items-center gap-1 font-['DM_Sans'] text-sm leading-5 text-[#2D6A4F]">
+                    Voir l'agenda
+                    <ArrowUpRight
+                      class="h-4 w-4 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 motion-reduce:transition-none"
+                    />
                   </span>
                 </div>
-              </article>
+              </button>
 
               <!-- Revenus -->
               <article class="flex min-h-[168px] flex-col justify-between gap-4 border border-[#2D6A4F] bg-[#2D6A4F] p-6 lg:p-8 rounded-2xl">
@@ -472,7 +567,7 @@ onMounted(chargerTableauDeBord)
             <!-- ============================================= -->
             <!-- INDICATEURS SECONDAIRES -->
             <!-- ============================================= -->
-            <!-- <section
+            <section
               class="grid grid-cols-1 divide-y divide-[#E5E7E2] border border-[#E5E7E2] bg-[#FAFAF8] sm:grid-cols-3 sm:divide-x sm:divide-y-0"
               aria-label="Vos indicateurs"
             >
@@ -497,7 +592,7 @@ onMounted(chargerTableauDeBord)
                   </p>
                 </div>
               </div>
-            </section> -->
+            </section>
 
             <!-- ============================================= -->
             <!-- DEMANDES + COLONNE LATÉRALE -->
@@ -633,24 +728,89 @@ onMounted(chargerTableauDeBord)
               <!-- Colonne latérale -->
               <div class="flex flex-col gap-6">
 
-                <!-- Prochains rendez-vous -->
+                <!-- Prochains rendez-vous : aperçu des trois prochains créneaux actifs. -->
                 <section class="flex-1 border border-[#E5E7E2] bg-[#FAFAF8] p-5 sm:p-6 lg:p-8 rounded-2xl">
-                  <h2 class="pb-6 font-['Instrument_Serif'] text-2xl font-normal leading-8 text-[#1A1C1A]">
-                    Prochains RDV
-                  </h2>
+                  <div class="flex items-center justify-between gap-3 pb-6">
+                    <h2 class="font-['Instrument_Serif'] text-2xl font-normal leading-8 text-[#1A1C1A]">
+                      Prochains RDV
+                    </h2>
+                    <button
+                      v-if="prochainsRendezVous.length"
+                      type="button"
+                      class="border-b border-[#1A1C1A] pb-1 font-['DM_Sans'] text-xs font-bold uppercase tracking-[1.2px] text-[#1A1C1A]"
+                      @click="voirRendezVous"
+                    >
+                      Voir tout
+                    </button>
+                  </div>
 
-                  <!--
-                    Les rendez-vous seront branchés sur le store
-                    rendezVous lors de l'intégration des données réelles.
-                  -->
-                  <div class="flex flex-col items-center justify-center gap-3 border border-dashed border-[#E5E7E2] px-4 py-8 text-center">
+                  <div
+                    v-if="!prochainsRendezVous.length"
+                    class="flex flex-col items-center justify-center gap-3 border border-dashed border-[#E5E7E2] px-4 py-8 text-center"
+                  >
                     <span class="flex h-10 w-10 items-center justify-center rounded-full border border-[#E5E7E2] bg-white text-[#2D6A4F]">
                       <CalendarDays class="h-4 w-4" :stroke-width="2" />
                     </span>
                     <p class="font-['DM_Sans'] text-sm text-[#1A1C1A] opacity-50">
-                      Aucun rendez-vous à afficher.
+                      Aucun rendez-vous à venir.
                     </p>
                   </div>
+
+                  <ul v-else class="flex flex-col divide-y divide-[#E5E7E2]">
+                    <li
+                      v-for="rendezVous in prochainsRendezVous"
+                      :key="rendezVous.id"
+                      class="py-3 first:pt-0 last:pb-0"
+                    >
+                      <p class="truncate font-['DM_Sans'] text-sm font-semibold text-[#1A1C1A]">
+                        {{ rendezVous.client_nom || 'Client' }}
+                      </p>
+                      <p class="mt-1 truncate font-['DM_Sans'] text-xs text-[#1A1C1A] opacity-60">
+                        {{ rendezVous.service_nom || 'Service' }} · {{ formatDateHeure(rendezVous.date_heure_debut) }}
+                      </p>
+                      <span class="mt-2 inline-flex bg-[#E2EAE4] px-2 py-0.5 font-['DM_Sans'] text-[10px] font-bold uppercase text-[#2D6A4F]">
+                        {{ rendezVousStatutLabels[rendezVous.statut] || rendezVous.statut }}
+                      </span>
+                    </li>
+                  </ul>
+                </section>
+
+                <!-- Derniers avis : seuls les avis publiés sont accessibles au prestataire. -->
+                <section class="border border-[#E5E7E2] bg-[#FAFAF8] p-5 sm:p-6 rounded-2xl">
+                  <div class="flex items-center justify-between gap-3 pb-5">
+                    <h2 class="font-['Instrument_Serif'] text-2xl font-normal leading-8 text-[#1A1C1A]">
+                      Derniers avis
+                    </h2>
+                    <button
+                      v-if="avisRecents.length"
+                      type="button"
+                      class="border-b border-[#1A1C1A] pb-1 font-['DM_Sans'] text-xs font-bold uppercase tracking-[1.2px] text-[#1A1C1A]"
+                      @click="voirTousLesAvis"
+                    >
+                      Voir tout
+                    </button>
+                  </div>
+
+                  <p v-if="!avisRecents.length" class="font-['DM_Sans'] text-sm text-[#1A1C1A] opacity-50">
+                    Aucun avis publié pour le moment.
+                  </p>
+
+                  <ul v-else class="flex flex-col divide-y divide-[#E5E7E2]">
+                    <li v-for="avisItem in avisRecents" :key="avisItem.id" class="py-3 first:pt-0 last:pb-0">
+                      <div class="flex items-center justify-between gap-3">
+                        <span class="flex items-center gap-1 font-['DM_Sans'] text-sm font-semibold text-[#1A1C1A]">
+                          <Star class="h-4 w-4 fill-[#D99A36] text-[#D99A36]" :stroke-width="1.5" />
+                          {{ avisItem.note }} / 5
+                        </span>
+                        <span class="font-['DM_Sans'] text-xs text-[#1A1C1A] opacity-50">
+                          {{ formatDate(avisItem.date_creation) }}
+                        </span>
+                      </div>
+                      <p v-if="avisItem.commentaire" class="mt-2 line-clamp-2 font-['DM_Sans'] text-xs leading-5 text-[#1A1C1A] opacity-60">
+                        {{ avisItem.commentaire }}
+                      </p>
+                    </li>
+                  </ul>
                 </section>
 
                 <!-- Ajouter un service -->
@@ -680,7 +840,7 @@ onMounted(chargerTableauDeBord)
             <!-- ============================================= -->
             <!-- PERFORMANCES FINANCIÈRES -->
             <!-- ============================================= -->
-            <section class="border border-[#E5E7E2] bg-[#FAFAF8] p-5 sm:p-6 lg:p-8 rounded-2xl">
+            <!-- <section class="border border-[#E5E7E2] bg-[#FAFAF8] p-5 sm:p-6 lg:p-8 rounded-2xl">
               <div class="flex flex-wrap items-center justify-between gap-4">
                 <h2 class="font-['Instrument_Serif'] text-2xl font-normal leading-8 text-[#1A1C1A]">
                   Performances financières
@@ -701,10 +861,10 @@ onMounted(chargerTableauDeBord)
                     </span>
                   </span>
                 </div>
-              </div>
+              </div> -->
 
               <!-- Graphique fantôme en attendant les données -->
-              <div class="relative mt-8 h-44 border-t border-[#E5E7E2]">
+              <!-- <div class="relative mt-8 h-44 border-t border-[#E5E7E2]">
                 <div class="absolute inset-x-0 bottom-0 flex h-full items-end gap-2 px-1 pt-6 opacity-[0.08] sm:gap-3" aria-hidden="true">
                   <div
                     v-for="(h, i) in [35, 55, 40, 70, 50, 65, 45, 80, 60, 75, 55, 90]"
@@ -720,7 +880,7 @@ onMounted(chargerTableauDeBord)
                   </p>
                 </div>
               </div>
-            </section>
+            </section> -->
 
           </template>
     </div>

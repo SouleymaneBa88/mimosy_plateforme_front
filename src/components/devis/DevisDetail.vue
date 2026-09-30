@@ -10,20 +10,24 @@
  */
 import { computed } from 'vue'
 
+// Props : la réponse de devis et le nom du service.
 const props = defineProps({
   reponse: { type: Object, required: true },
   // Nom du service, quand la réponse ne le porte pas elle-même.
   service: { type: String, default: '' },
 })
 
+// Met un montant au format "12 500 FCFA".
 function fcfa(valeur) {
   return `${Number(valeur || 0).toLocaleString('fr-FR')} FCFA`
 }
 
+// Met une quantité au format français.
 function quantite(valeur) {
   return Number(valeur || 0).toLocaleString('fr-FR')
 }
 
+// Met une date au format "12 mars 2026" (avec l'heure si demandé).
 function formatDate(valeur, avecHeure = false) {
   if (!valeur) return ''
   const date = new Date(valeur)
@@ -36,6 +40,7 @@ function formatDate(valeur, avecHeure = false) {
   })
 }
 
+// Les lignes de matériaux, le nom du service, et la présence de frais.
 const lignes = computed(() => props.reponse?.lignes_materiaux || [])
 const nomService = computed(() => props.service || props.reponse?.demande_service_nom || 'Prestation')
 const aDesFrais = computed(() => Number(props.reponse?.montant_frais || 0) > 0)

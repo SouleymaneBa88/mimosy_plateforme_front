@@ -1,4 +1,13 @@
+<!--
+  Page "Wallet" (portefeuille) du prestataire :
+  - ses soldes (disponible, bloqué) et ses gains ;
+  - l'historique des transactions (filtres, pagination, export CSV) ;
+  - une courbe d'évolution des gains ;
+  - la demande de retrait vers Wave ou Orange Money (en 3 étapes :
+    formulaire -> récapitulatif -> résultat).
+-->
 <script setup>
+// Outils Vue et icônes.
 import { computed, onMounted, reactive, ref } from 'vue'
 import {
   ArrowDownToLine,
@@ -16,17 +25,21 @@ import {
   X,
 } from 'lucide-vue-next'
 
+// Les composants de la page et les appels à l'API du wallet.
 import AppLayout from '@/components/layout/AppLayout.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import * as walletService from '@/services/walletService'
 
+// Le wallet (soldes), les transactions et les retraits.
 const wallet = ref(null)
 const transactions = ref([])
 const retraits = ref([])
 
+// États : chargement et erreur.
 const loading = ref(false)
 const errorMessage = ref('')
 
+// Filtre ouvert ? Statut filtré ? Page actuelle ? Nombre de lignes par page.
 const filtreOuvert = ref(false)
 const filtreStatut = ref('TOUS')
 const page = ref(1)
@@ -35,16 +48,19 @@ const parPage = 5
 // 'ferme' | 'formulaire' | 'recap' | 'resultat'
 const etape = ref('ferme')
 
+// Les valeurs du formulaire de retrait.
 const form = reactive({
   montant: '',
   provider: 'WAVE',
   destination: '',
 })
 
+// Erreur du formulaire, envoi en cours, et dernier retrait demandé (pour l'étape "résultat").
 const formulaireErreur = ref('')
 const formulaireEnvoi = ref(false)
 const dernierRetrait = ref(null)
 
+// Les moyens de retrait proposés.
 const MOYENS = [
   {
     value: 'WAVE',
@@ -56,6 +72,7 @@ const MOYENS = [
   },
 ]
 
+// Libellés lisibles des types de transactions.
 const typeLabels = {
   BLOCAGE: 'Fonds bloqués',
   COMMISSION: 'Commission MIMOSY',
@@ -64,12 +81,15 @@ const typeLabels = {
   REMBOURSEMENT: 'Remboursement',
 }
 
+// Libellés et couleurs des statuts de retrait.
 const statutRetraitLabels = {
   EN_ATTENTE: 'En attente',
   EN_COURS: 'En cours',
   REUSSI: 'Réussi',
   ECHOUE: 'Échoué',
   ANNULE: 'Annulé',
+  // Démonstration (PAYDUNYA_PAYOUT_DEMO) : aucun déboursement PayDunya réel.
+  SIMULE: 'Simulation (démo)',
 }
 
 const statutRetraitCouleur = {
@@ -78,8 +98,10 @@ const statutRetraitCouleur = {
   REUSSI: 'bg-[#E2EAE4] text-[#2D6A4F]',
   ECHOUE: 'bg-[#F7DBDB] text-[#991B1B]',
   ANNULE: 'bg-[#F2F3F0] text-[#64748B]',
+  SIMULE: 'bg-[#FFF4DB] text-[#8A5A00]',
 }
 
+// Le nom du moyen de retrait choisi.
 const moyenLabel = computed(() =>
   MOYENS.find((moyen) => moyen.value === form.provider)?.label ||
   form.provider,
@@ -89,6 +111,7 @@ const moyenLabel = computed(() =>
 /* Formatage                                                                  */
 /* -------------------------------------------------------------------------- */
 
+// Mise en forme des montants et des dates.
 function formaterMontant(valeur) {
   const nombre = Number(valeur || 0)
 
@@ -135,6 +158,7 @@ function formaterDateComplete(valeur) {
 /* Données wallet                                                              */
 /* -------------------------------------------------------------------------- */
 
+// Solde disponible (retirable) et solde bloqué (en attente de validation des prestations).
 const soldeDisponible = computed(() =>
   Number(wallet.value?.solde_disponible || 0),
 )
@@ -143,6 +167,7 @@ const soldeBloque = computed(() =>
   Number(wallet.value?.solde_bloque || 0),
 )
 
+// Total gagné.
 const totalGagne = computed(() => {
   if (wallet.value?.total_gagne !== undefined) {
     return Number(wallet.value.total_gagne || 0)
@@ -156,6 +181,7 @@ const totalGagne = computed(() => {
     )
 })
 
+// Les transactions avec leur statut calculé.
 const transactionsAvecStatut = computed(() =>
   transactions.value.map((transaction) => ({
     ...transaction,
@@ -176,6 +202,7 @@ const transactionsAvecStatut = computed(() =>
 /* Statistiques                                                                */
 /* -------------------------------------------------------------------------- */
 
+// Retraits en attente et montant total en attente.
 const retraitsEnAttente = computed(() =>
   retraits.value.filter((retrait) =>
     ['EN_ATTENTE', 'EN_COURS'].includes(retrait.statut),
@@ -189,6 +216,7 @@ const montantEnAttente = computed(() =>
   ),
 )
 
+// Les transactions filtrées par statut.
 const transactionsFiltrees = computed(() => {
   if (filtreStatut.value === 'TOUS') {
     return transactionsAvecStatut.value
@@ -199,6 +227,7 @@ const transactionsFiltrees = computed(() => {
   )
 })
 
+// Pagination : nombre de pages, lignes de la page, numéros affichés.
 const totalPages = computed(() =>
   Math.max(
     1,
@@ -262,6 +291,7 @@ const pagesVisibles = computed(() => {
 /* Évolution                                                                  */
 /* -------------------------------------------------------------------------- */
 
+// Les points de la courbe d'évolution des gains (si le serveur les fournit).
 const evolution = computed(() => {
   const source =
     wallet.value?.evolution ||
@@ -291,6 +321,7 @@ const evolution = computed(() => {
     .filter((item) => item.date)
 })
 
+// Calcule le tracé SVG de la courbe (points, zone colorée, graduations).
 const graphique = computed(() => {
   if (!evolution.value.length) {
     return {
@@ -350,6 +381,7 @@ const graphique = computed(() => {
   }
 })
 
+// Les graduations de l'axe vertical.
 const graduationsGraphique = computed(() => {
   const maximum = graphique.value.maximum
 
@@ -371,6 +403,7 @@ const graduationsGraphique = computed(() => {
 /* Statuts historique                                                         */
 /* -------------------------------------------------------------------------- */
 
+// Statut, couleurs, montant net et commission d'une transaction.
 function statutTransaction(transaction) {
   const statut = transaction.statutAffiche
 
@@ -455,6 +488,7 @@ function commissionTransaction(transaction) {
 /* Chargement                                                                  */
 /* -------------------------------------------------------------------------- */
 
+// Charge le wallet, les transactions et les retraits.
 async function chargerDonnees() {
   loading.value = true
   errorMessage.value = ''
@@ -492,6 +526,7 @@ async function chargerDonnees() {
 /* Pagination                                                                  */
 /* -------------------------------------------------------------------------- */
 
+// Va à une autre page.
 function changerPage(nouvellePage) {
   if (
     nouvellePage < 1 ||
@@ -503,6 +538,7 @@ function changerPage(nouvellePage) {
   page.value = nouvellePage
 }
 
+// Applique un filtre de statut (et revient à la page 1).
 function appliquerFiltre(statut) {
   filtreStatut.value = statut
   page.value = 1
@@ -513,12 +549,14 @@ function appliquerFiltre(statut) {
 /* Export CSV                                                                  */
 /* -------------------------------------------------------------------------- */
 
+// Protège une valeur pour le fichier CSV (guillemets doublés).
 function echapperCSV(valeur) {
   const texte = String(valeur ?? '')
 
   return `"${texte.replaceAll('"', '""')}"`
 }
 
+// Exporte les transactions en fichier CSV.
 function exporterCSV() {
   const lignes = [
     [
@@ -580,6 +618,7 @@ function exporterCSV() {
 /* Retrait                                                                     */
 /* -------------------------------------------------------------------------- */
 
+// Étape 1 : ouvre le formulaire de retrait vide.
 function ouvrirFormulaire() {
   form.montant = ''
   form.provider = 'WAVE'
@@ -591,12 +630,14 @@ function ouvrirFormulaire() {
   etape.value = 'formulaire'
 }
 
+// Ferme toute la fenêtre de retrait.
 function fermerFlux() {
   etape.value = 'ferme'
   dernierRetrait.value = null
   formulaireErreur.value = ''
 }
 
+// Étape 2 : vérifie le formulaire puis affiche le récapitulatif.
 function allerAuRecapitulatif() {
   formulaireErreur.value = ''
 
@@ -629,6 +670,7 @@ function allerAuRecapitulatif() {
   etape.value = 'recap'
 }
 
+// Étape 3 : envoie la demande de retrait au serveur.
 async function confirmerRetrait() {
   formulaireEnvoi.value = true
   formulaireErreur.value = ''
@@ -665,6 +707,7 @@ async function confirmerRetrait() {
   }
 }
 
+// On charge les données au montage.
 onMounted(chargerDonnees)
 </script>
 
@@ -1029,6 +1072,33 @@ onMounted(chargerDonnees)
                 Votre demande a été transmise à PayDunya.
                 Le solde a été pris en compte et sera recrédité
                 automatiquement si le retrait échoue.
+              </p>
+            </template>
+
+            <template
+              v-else-if="dernierRetrait?.statut === 'SIMULE'"
+            >
+              <div class="mx-auto flex h-12 w-12 items-center justify-center bg-[#FFF4DB]">
+                <Clock3
+                  :size="22"
+                  class="text-[#8A5A00]"
+                />
+              </div>
+
+              <h2 class="mt-4 font-['Instrument_Serif'] text-[24px] text-[#1C2420]">
+                Simulation de démonstration
+              </h2>
+
+              <p class="mx-auto mt-2 max-w-lg text-sm leading-6 text-[#7A847E]">
+                Le parcours de retrait de
+                {{ formaterMontant(dernierRetrait?.montant) }}
+                vers {{ dernierRetrait?.destination || form.destination }}
+                a été exécuté dans MIMOSY, mais <strong>aucun déboursement PayDunya
+                n'a été effectué</strong> : aucun argent n'a été envoyé sur ce numéro.
+              </p>
+
+              <p class="mt-2 text-xs text-[#7A847E]">
+                Référence interne : {{ dernierRetrait?.reference_externe }}
               </p>
             </template>
 

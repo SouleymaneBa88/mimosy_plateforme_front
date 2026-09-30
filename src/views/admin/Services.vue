@@ -9,8 +9,10 @@
  * côté backend (Service.categorie a on_delete=CASCADE). On propose
  * alors la désactivation (statut=INACTIVE), une suppression logique.
  */
+// Outils Vue.
 import { computed, onMounted, ref } from 'vue'
 
+// Les composants de la page, les toasts et les appels à l'API du catalogue.
 import AppLayout from '@/components/layout/AppLayout.vue'
 import ClientHeader from '@/components/client/ClientHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -20,18 +22,21 @@ import Modal from '@/components/common/Modal.vue'
 import { useToast } from '@/composables/useToast'
 import * as catalogueService from '@/services/catalogueService'
 
+// Les deux onglets, et l'onglet ouvert.
 const onglets = [
   { id: 'services', label: 'Services' },
   { id: 'categories', label: 'Catégories' },
 ]
 const ongletActif = ref('services')
 
+// Les services, les catégories, et les états de chargement et d'erreur.
 const services = ref([])
 const categories = ref([])
 const loading = ref(false)
 const errorMessage = ref('')
 const { succes, erreur } = useToast()
 
+// Charge services et catégories en même temps.
 async function charger() {
   loading.value = true
   errorMessage.value = ''
@@ -51,6 +56,7 @@ async function charger() {
 
 // --- Services ---
 
+// Filtres, formulaire (ouvert ? service modifié ? valeurs ?), enregistrement, suppression demandée.
 const filtreCategorie = ref('')
 const rechercheService = ref('')
 const formulaireServiceOuvert = ref(false)
@@ -59,6 +65,7 @@ const formulaireService = ref({ nom: '', description: '', categorie: '' })
 const enregistrementService = ref(false)
 const suppressionServiceCiblee = ref(null)
 
+// Les services affichés selon le filtre catégorie et le texte de recherche.
 const servicesFiltres = computed(() => services.value.filter((service) => {
   const correspondCategorie = !filtreCategorie.value || service.categorie === filtreCategorie.value
   const texte = rechercheService.value.trim().toLowerCase()
@@ -66,18 +73,21 @@ const servicesFiltres = computed(() => services.value.filter((service) => {
   return correspondCategorie && correspondTexte
 }))
 
+// Ouvre le formulaire vide pour créer un service.
 function ouvrirCreationService() {
   serviceEnEdition.value = null
   formulaireService.value = { nom: '', description: '', categorie: categories.value[0]?.id || '' }
   formulaireServiceOuvert.value = true
 }
 
+// Ouvre le formulaire rempli pour modifier un service.
 function ouvrirEditionService(service) {
   serviceEnEdition.value = service
   formulaireService.value = { nom: service.nom, description: service.description, categorie: service.categorie }
   formulaireServiceOuvert.value = true
 }
 
+// Enregistre le service (création ou modification). Nom et catégorie obligatoires.
 async function enregistrerService() {
   if (!formulaireService.value.nom.trim() || !formulaireService.value.categorie) {
     erreur('Le nom et la catégorie sont obligatoires.')
@@ -102,10 +112,12 @@ async function enregistrerService() {
   }
 }
 
+// Demande confirmation avant de supprimer un service.
 function demanderSuppressionService(service) {
   suppressionServiceCiblee.value = service
 }
 
+// Supprime le service après confirmation.
 async function confirmerSuppressionService() {
   const service = suppressionServiceCiblee.value
   if (!service) return
@@ -122,24 +134,28 @@ async function confirmerSuppressionService() {
 
 // --- Catégories ---
 
+// Formulaire catégorie : ouvert ? catégorie modifiée ? valeurs ? enregistrement ? suppression ?
 const formulaireCategorieOuvert = ref(false)
 const categorieEnEdition = ref(null)
 const formulaireCategorie = ref({ nom: '', description: '', statut: 'ACTIVE' })
 const enregistrementCategorie = ref(false)
 const suppressionCategorieCiblee = ref(null)
 
+// Ouvre le formulaire vide pour créer une catégorie.
 function ouvrirCreationCategorie() {
   categorieEnEdition.value = null
   formulaireCategorie.value = { nom: '', description: '', statut: 'ACTIVE' }
   formulaireCategorieOuvert.value = true
 }
 
+// Ouvre le formulaire rempli pour modifier une catégorie.
 function ouvrirEditionCategorie(categorie) {
   categorieEnEdition.value = categorie
   formulaireCategorie.value = { nom: categorie.nom, description: categorie.description, statut: categorie.statut }
   formulaireCategorieOuvert.value = true
 }
 
+// Enregistre la catégorie (création ou modification). Le nom est obligatoire.
 async function enregistrerCategorie() {
   if (!formulaireCategorie.value.nom.trim()) {
     erreur('Le nom de la catégorie est obligatoire.')
@@ -164,6 +180,7 @@ async function enregistrerCategorie() {
   }
 }
 
+// Active / désactive une catégorie (suppression "logique", sans rien effacer).
 async function basculerStatutCategorie(categorie) {
   try {
     await catalogueService.modifierCategorie(categorie.id, {
@@ -176,10 +193,12 @@ async function basculerStatutCategorie(categorie) {
   }
 }
 
+// Demande confirmation avant de supprimer une catégorie.
 function demanderSuppressionCategorie(categorie) {
   suppressionCategorieCiblee.value = categorie
 }
 
+// Supprime la catégorie après confirmation.
 async function confirmerSuppressionCategorie() {
   const categorie = suppressionCategorieCiblee.value
   if (!categorie) return
@@ -194,6 +213,7 @@ async function confirmerSuppressionCategorie() {
   }
 }
 
+// On charge le catalogue au montage.
 onMounted(charger)
 </script>
 
@@ -220,6 +240,7 @@ onMounted(charger)
         </button>
       </div>
 
+      <!-- Onglets : Services / Catégories. -->
       <div class="flex gap-1 border-b border-[#E2E8F0]">
         <button
           v-for="onglet in onglets"
@@ -233,6 +254,7 @@ onMounted(charger)
         </button>
       </div>
 
+      <!-- États : chargement, erreur. -->
       <Loader v-if="loading" />
       <ErrorState v-else-if="errorMessage" :message="errorMessage" @retry="charger" />
 
@@ -362,6 +384,7 @@ onMounted(charger)
       </div>
     </Modal>
 
+    <!-- Fenêtre de confirmation de suppression d'un service. -->
     <Modal :model-value="!!suppressionServiceCiblee" title="Supprimer le service" @update:model-value="suppressionServiceCiblee = null">
       <p class="text-sm text-[#334155]" v-if="suppressionServiceCiblee">
         Supprimer définitivement <strong>{{ suppressionServiceCiblee.nom }}</strong> ? Cette action peut affecter les offres de prestataires associées et est irréversible.
@@ -405,6 +428,7 @@ onMounted(charger)
       </div>
     </Modal>
 
+    <!-- Fenêtre de confirmation de suppression d'une catégorie. -->
     <Modal :model-value="!!suppressionCategorieCiblee" title="Supprimer la catégorie" @update:model-value="suppressionCategorieCiblee = null">
       <p class="text-sm text-[#334155]" v-if="suppressionCategorieCiblee">
         Supprimer définitivement <strong>{{ suppressionCategorieCiblee.nom }}</strong> ? Cette action est irréversible.

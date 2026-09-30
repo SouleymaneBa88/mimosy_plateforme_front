@@ -9,13 +9,17 @@
  * pouvoir aussi être utilisée sur la page de recherche complète, sans
  * dupliquer toute la logique Leaflet à deux endroits.
  */
+// Outils Vue.
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
+// Leaflet : la librairie de cartes, et son CSS.
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
+// Mise en forme des distances.
 import { formaterDistanceKm } from '@/utils/format'
 
+// Props : position du client, libellé, liste des prestataires, rayon, centre par défaut.
 const props = defineProps({
   // Position utilisée pour la recherche en cours : { lat, lng }.
   // Toujours la même source que la requête API, jamais une deuxième
@@ -57,15 +61,20 @@ const props = defineProps({
   },
 })
 
+// Événement envoyé pour ouvrir le profil d'un prestataire.
 const emit = defineEmits(['view-profile'])
 
+// Référence vers la <div> qui contient la carte.
 const mapContainer = ref(null)
 
+// Variables Leaflet : la carte, le marqueur du client, le cercle du rayon,
+// et les marqueurs des prestataires (rangés par identifiant).
 let map = null
 let clientMarker = null
 let clientCircle = null
 const providerMarkers = new Map()
 
+// L'icône (rond vert) de la position du client.
 const clientIcon = L.divIcon({
   className: 'mimosy-client-marker',
   html: `
@@ -80,6 +89,7 @@ const clientIcon = L.divIcon({
   iconAnchor: [20, 20],
 })
 
+// L'icône (épingle verte) d'un prestataire.
 const providerIcon = L.divIcon({
   className: 'mimosy-provider-marker',
   html: `
@@ -116,9 +126,11 @@ function providersLocalises() {
   return Array.from(parPrestataire.values())
 }
 
+// Ajuste le zoom pour que tous les points soient visibles.
 function cadrerCarte() {
   if (!map) return
 
+  // On rassemble les points : prestataires + client.
   const points = providersLocalises().map((provider) => [provider.latitude, provider.longitude])
 
   if (props.clientLocation) {
@@ -127,17 +139,21 @@ function cadrerCarte() {
 
   if (points.length === 0) return
 
+  // Un seul point : on centre dessus.
   if (points.length === 1) {
     map.setView(points[0], 14)
     return
   }
 
+  // Plusieurs points : on zoome pour tous les voir.
   map.fitBounds(points, { padding: [40, 40], maxZoom: 15 })
 }
 
+// Dessine (ou redessine) la position du client et le cercle du rayon.
 function dessinerClient() {
   if (!map) return
 
+  // On efface l'ancien marqueur et l'ancien cercle.
   if (clientMarker) {
     map.removeLayer(clientMarker)
     clientMarker = null
@@ -151,10 +167,12 @@ function dessinerClient() {
 
   const position = [props.clientLocation.lat, props.clientLocation.lng]
 
+  // On ajoute le marqueur du client avec une petite bulle.
   clientMarker = L.marker(position, { icon: clientIcon })
     .addTo(map)
     .bindPopup(`<strong>${props.clientLabel}</strong>`)
 
+  // On dessine le cercle du rayon de recherche (en mètres).
   if (props.rayonKm) {
     clientCircle = L.circle(position, {
       radius: props.rayonKm * 1000,
@@ -166,12 +184,15 @@ function dessinerClient() {
   }
 }
 
+// Dessine (ou redessine) les marqueurs des prestataires.
 function dessinerPrestataires() {
   if (!map) return
 
+  // On efface tous les anciens marqueurs.
   providerMarkers.forEach((marker) => map.removeLayer(marker))
   providerMarkers.clear()
 
+  // Un marqueur par prestataire localisé.
   providersLocalises().forEach((provider) => {
     const marker = L.marker([provider.latitude, provider.longitude], { icon: providerIcon }).addTo(map)
 
@@ -201,6 +222,7 @@ function dessinerPrestataires() {
       { maxWidth: 180, autoPanPadding: [24, 24] },
     )
 
+    // Quand la bulle s'ouvre, on branche le bouton "Voir le profil".
     marker.on('popupopen', () => {
       const bouton = marker.getPopup()?.getElement()?.querySelector('.mimosy-popup-bouton')
       bouton?.addEventListener('click', () => emit('view-profile', provider), { once: true })
@@ -210,25 +232,31 @@ function dessinerPrestataires() {
   })
 }
 
+// Crée la carte (une seule fois).
 async function initialiser() {
+  // On attend que la <div> soit bien affichée.
   await nextTick()
 
   if (!mapContainer.value || map) return
 
+  // Point de départ : la position du client, sinon Dakar.
   const vueInitiale = props.clientLocation
     ? [props.clientLocation.lat, props.clientLocation.lng]
     : props.centreDefaut
 
+  // On crée la carte Leaflet.
   map = L.map(mapContainer.value, {
     zoomControl: true,
     attributionControl: true,
   }).setView(vueInitiale, props.clientLocation ? 13 : 12)
 
+  // On ajoute le fond de carte OpenStreetMap.
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   }).addTo(map)
 
+  // On dessine tout, puis on cadre.
   dessinerClient()
   dessinerPrestataires()
   cadrerCarte()
@@ -239,6 +267,7 @@ async function initialiser() {
   }, 100)
 }
 
+// Bouton "Recentrer".
 function recentrer() {
   cadrerCarte()
 }
@@ -253,8 +282,10 @@ function centrerSur(id) {
   marker.openPopup()
 }
 
+// Crée la carte au montage.
 onMounted(initialiser)
 
+// Quand la liste des prestataires change : on redessine.
 watch(
   () => props.providers,
   () => {
@@ -264,6 +295,7 @@ watch(
   { deep: true },
 )
 
+// Quand la position du client change : on crée la carte si besoin, sinon on redessine.
 watch(
   () => props.clientLocation,
   async () => {
@@ -276,8 +308,10 @@ watch(
   },
 )
 
+// Quand le rayon change : on redessine le cercle.
 watch(() => props.rayonKm, dessinerClient)
 
+// Au démontage : on détruit la carte proprement.
 onBeforeUnmount(() => {
   if (map) {
     map.remove()
@@ -289,13 +323,16 @@ onBeforeUnmount(() => {
   providerMarkers.clear()
 })
 
+// Fonctions accessibles depuis le parent (via une ref).
 defineExpose({ centrerSur, recentrer })
 </script>
 
 <template>
   <div class="relative h-full min-h-[280px] w-full overflow-hidden rounded-[20px] border border-[#E2E8F0] bg-[#E8ECEB]">
+    <!-- La zone où Leaflet dessine la carte. -->
     <div ref="mapContainer" class="absolute inset-0 z-0"></div>
 
+    <!-- Bouton pour recentrer la carte. -->
     <button
       type="button"
       class="absolute right-3 top-3 z-[1000] flex h-9 w-9 items-center justify-center rounded-full border border-[#E2E8F0] bg-white text-[#2F6250] shadow-sm transition hover:bg-[#F5F6F4] sm:right-4 sm:top-4 sm:h-10 sm:w-10"

@@ -1,4 +1,5 @@
 <script setup>
+// Les icônes appareil photo et utilisateur.
 import { Camera, UserRound } from 'lucide-vue-next'
 
 /**
@@ -9,6 +10,7 @@ import { Camera, UserRound } from 'lucide-vue-next'
  * - L'upload reste volontairement cote front ici : le parent recoit le fichier
  *   via l'evenement `selected` pour l'envoyer ensuite au back-end.
  */
+// Props : adresse de la photo, nom, email, modifiable ou non, taille.
 defineProps({
   photo: {
     type: String,
@@ -33,24 +35,29 @@ defineProps({
   },
 })
 
+// Événements : nouvelle image d'aperçu, et fichier choisi.
 const emit = defineEmits(['update:photo', 'selected'])
 
 // Id unique pour lier le label visible a l'input file cache.
 const inputId = `photo-profil-${Math.random().toString(36).slice(2)}`
 
+// Appelée quand l'utilisateur choisit un fichier.
 function onPhotoSelectionnee(event) {
+  // On prend le premier fichier choisi.
   const fichier = event.target.files?.[0]
 
   if (!fichier) {
     return
   }
 
+  // On refuse ce qui n'est pas une image.
   if (!fichier.type.startsWith('image/')) {
     console.warn("Le fichier sélectionné n'est pas une image")
     event.target.value = ''
     return
   }
 
+  // On refuse les images de plus de 5 Mo.
   const tailleMax = 5 * 1024 * 1024
 
   if (fichier.size > tailleMax) {
@@ -59,6 +66,7 @@ function onPhotoSelectionnee(event) {
     return
   }
 
+  // On crée une adresse locale pour afficher l'image tout de suite.
   const previewUrl = URL.createObjectURL(fichier)
   // Met a jour l'aperçu immediatement, puis remonte le vrai fichier au parent.
   emit('update:photo', previewUrl)
@@ -72,6 +80,7 @@ function onPhotoSelectionnee(event) {
     class="flex min-w-0 items-center"
     :class="size === 'large' ? 'gap-4' : 'gap-2'"
   >
+    <!-- Le rond : la photo, ou une icône par défaut. -->
     <div
       class="relative shrink-0 overflow-hidden rounded-full border border-[#E2E8F0] bg-[#FFF3ED]"
       :class="size === 'large' ? 'h-20 w-20' : 'h-[42px] w-[42px]'"
@@ -91,6 +100,7 @@ function onPhotoSelectionnee(event) {
       </div>
     </div>
 
+    <!-- En grand format : nom, email et bouton pour changer la photo. -->
     <div v-if="size === 'large'" class="min-w-0 flex-1">
       <p class="truncate text-base font-extrabold text-[#051F20]">{{ name }}</p>
       <p v-if="email" class="truncate text-sm text-[#64748B]">{{ email }}</p>
@@ -104,6 +114,7 @@ function onPhotoSelectionnee(event) {
         Modifier la photo
       </label>
 
+      <!-- Le vrai champ fichier est caché ; le libellé ci-dessus sert de bouton. -->
       <input
         v-if="editable"
         :id="inputId"

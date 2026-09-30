@@ -1,4 +1,11 @@
+<!--
+  Tableau de bord ADMIN : les chiffres clés (demandes, vérifications,
+  litiges, paiements), la liste des choses "à traiter", l'activité
+  récente et une courbe des revenus. Les données se rechargent
+  automatiquement toutes les 60 secondes.
+-->
 <script setup>
+// Outils Vue (defineComponent et h servent à créer de petits composants dans ce fichier).
 import {
   computed,
   defineComponent,
@@ -8,8 +15,10 @@ import {
   ref,
   watch,
 } from 'vue'
+// Le routeur (pour ouvrir les autres pages admin).
 import { useRouter } from 'vue-router'
 
+// Les composants de la page et les appels à l'API admin.
 import AppLayout from '@/components/layout/AppLayout.vue'
 import ErrorState from '@/components/common/ErrorState.vue'
 
@@ -19,12 +28,17 @@ import * as adminService from '@/services/adminService'
 /* CONSTANTES                                                          */
 /* ================================================================== */
 
+// Recharger les données toutes les 60 s.
 const INTERVALLE_AUTO_REFRESH = 60_000
+// Mettre à jour l'heure affichée toutes les 30 s.
 const INTERVALLE_HORLOGE = 30_000
+// Nombre d'éléments "à traiter" affichés, et nombre d'activités affichées avant "voir plus".
 const NB_A_TRAITER = 3
 const NB_ACTIVITE = 4
+// Jours par défaut pour l'axe du graphique.
 const JOURS_DEFAUT = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
 
+// true si l'utilisateur préfère réduire les animations.
 const mouvementReduit =
   typeof window !== 'undefined' &&
   window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
@@ -33,6 +47,7 @@ const mouvementReduit =
 /* ICÔNES & NOMBRE ANIMÉ                                               */
 /* ================================================================== */
 
+// Le dessin (en SVG) de chaque petite icône.
 const ICONES = {
   hausse: 'M12 19V5 M6 11l6-6 6 6',
   baisse: 'M12 5v14 M6 13l6 6 6-6',
@@ -43,6 +58,7 @@ const ICONES = {
   alerte: 'M12 8v5 M12 16.5h.01 M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z',
 }
 
+// Petit composant "Icone" : dessine l'icône demandée en SVG.
 const Icone = defineComponent({
   props: {
     nom: { type: String, required: true },
@@ -69,13 +85,16 @@ const Icone = defineComponent({
   },
 })
 
+// Outil pour afficher les nombres au format français (ex. 1 248).
 const formateurNombre = new Intl.NumberFormat('fr-FR')
 
+// Affiche un nombre ; avec "padding", les nombres < 10 ont un zéro devant (ex. "07").
 function formaterValeur(n, padding) {
   if (padding && n >= 0 && n < 10) return `0${n}`
   return formateurNombre.format(n)
 }
 
+// Petit composant "NombreAnime" : le nombre "défile" jusqu'à sa nouvelle valeur.
 const NombreAnime = defineComponent({
   props: {
     valeur: { type: Number, default: 0 },
@@ -85,6 +104,7 @@ const NombreAnime = defineComponent({
     const affiche = ref(0)
     let frame = null
 
+    // À chaque changement de valeur, on anime de l'ancienne vers la nouvelle en 0,7 s.
     watch(
       () => props.valeur,
       (cible, precedent) => {
@@ -98,6 +118,7 @@ const NombreAnime = defineComponent({
         const debut = performance.now()
         const etape = (t) => {
           const p = Math.min((t - debut) / 700, 1)
+          // Effet "ralenti à la fin" (courbe d'animation).
           affiche.value = Math.round(depart + (arrivee - depart) * (1 - Math.pow(1 - p, 3)))
           if (p < 1) frame = requestAnimationFrame(etape)
         }
@@ -118,29 +139,36 @@ const NombreAnime = defineComponent({
 
 const router = useRouter()
 
+// États : premier chargement, rechargement discret, et erreurs.
 const loading = ref(true)
 const rafraichissement = ref(false)
 const errorMessage = ref('')
 const erreurRafraichissement = ref('')
 
+// Les statistiques et l'activité récente reçues du serveur.
 const stats = ref(null)
 const activite = ref([])
 
+// Les listes d'éléments à traiter : documents, avis, retraits.
 const listeDocuments = ref([])
 const listeAvis = ref([])
 const listeRetraits = ref([])
 
+// Les compteurs affichés.
 const documentsAVerifier = ref(0)
 const avisEnAttente = ref(0)
 const retraitsEnAttente = ref(0)
 const paiementsReussis = ref(0)
 
+// Valeurs du chargement précédent (pour afficher les variations), dernière mise à jour, heure actuelle,
+// activité dépliée ou non, et point du graphique survolé par la souris.
 const valeursPrecedentes = ref(null)
 const derniereMiseAJour = ref(null)
 const maintenant = ref(Date.now())
 const activiteDepliee = ref(false)
 const pointSurvole = ref(null)
 
+// Les minuteurs (rechargement automatique et horloge).
 let minuteurRefresh = null
 let minuteurHorloge = null
 
@@ -148,6 +176,8 @@ let minuteurHorloge = null
 /* CHARGEMENT                                                          */
 /* ================================================================== */
 
+// Charge toutes les données du tableau de bord.
+// silencieux=true : rechargement discret, sans remplacer tout l'écran par un chargement.
 async function charger({ silencieux = false } = {}) {
   const dejaCharge = stats.value !== null
 
@@ -158,6 +188,7 @@ async function charger({ silencieux = false } = {}) {
   erreurRafraichissement.value = ''
 
   try {
+    // On lance les 5 requêtes en même temps.
     const [dashboard, activiteData, documents, avis, retraits] = await Promise.all([
       adminService.getDashboardStats(),
       adminService.getActiviteRecente(12),
@@ -166,6 +197,7 @@ async function charger({ silencieux = false } = {}) {
       adminService.listRetraits('EN_ATTENTE'),
     ])
 
+    // On garde les anciennes valeurs pour calculer les variations.
     if (dejaCharge) {
       valeursPrecedentes.value = Object.fromEntries(
         statistiquesPrincipales.value.map((s) => [s.type, s.valeur]),
@@ -196,11 +228,13 @@ async function charger({ silencieux = false } = {}) {
   }
 }
 
+// Rechargement manuel (bouton), sauf si un chargement est déjà en cours.
 function actualiser() {
   if (loading.value || rafraichissement.value) return
   charger({ silencieux: true })
 }
 
+// Quand l'onglet redevient visible, on recharge si les données sont trop anciennes.
 function surVisibilite() {
   if (document.visibilityState !== 'visible') return
   maintenant.value = Date.now()
@@ -220,6 +254,7 @@ function lire(objet, ...chemins) {
   return null
 }
 
+// Renvoie le nom d'une personne, en cherchant dans plusieurs champs possibles.
 function nomPersonne(objet, ...racines) {
   for (const racine of racines) {
     const p = racine ? lire(objet, racine) : objet
@@ -235,10 +270,12 @@ function nomPersonne(objet, ...racines) {
   return null
 }
 
+// Renvoie la date d'un objet, en essayant plusieurs noms de champ.
 function extraireDate(objet) {
   return lire(objet, 'date_creation', 'created_at', 'date_soumission', 'date_demande', 'date', 'updated_at')
 }
 
+// Transforme une date en nombre (millisecondes), 0 si la date est invalide.
 function horodatage(date) {
   const t = new Date(date ?? NaN).getTime()
   return Number.isNaN(t) ? 0 : t
@@ -248,15 +285,18 @@ function horodatage(date) {
 /* KPI                                                                 */
 /* ================================================================== */
 
+// Nombre de litiges ouverts (en attente + en cours).
 const nombreLitiges = computed(
   () => (stats.value?.litiges?.en_attente ?? 0) + (stats.value?.litiges?.en_cours ?? 0),
 )
 
+// Montant total des paiements, si le serveur le fournit.
 const montantPaiements = computed(() => {
   const m = lire(stats.value, 'paiements.montant_total', 'paiements.montant', 'paiements.total_montant')
   return m !== null && Number.isFinite(Number(m)) ? Number(m) : null
 })
 
+// Les 4 chiffres clés affichés en haut.
 const statistiquesPrincipales = computed(() => [
   {
     type: 'demande',
@@ -287,6 +327,7 @@ const statistiquesPrincipales = computed(() => [
   },
 ])
 
+// Différence avec le chargement précédent (0 si pas de changement).
 function variation(type, valeur) {
   const avant = valeursPrecedentes.value?.[type]
   if (avant === undefined || avant === valeur) return 0
@@ -297,6 +338,7 @@ function variation(type, valeur) {
 /* À TRAITER : éléments réels, du plus récent au plus ancien           */
 /* ================================================================== */
 
+// Construit la liste des éléments à traiter (documents, retraits, avis), du plus récent au plus ancien.
 const elementsATraiter = computed(() => {
   const elements = []
 
@@ -362,14 +404,17 @@ const elementsATraiter = computed(() => {
   return elements
 })
 
+// Seuls les premiers éléments sont affichés.
 const elementsATraiterAffiches = computed(() => elementsATraiter.value.slice(0, NB_A_TRAITER))
 
+// "Système opérationnel" s'il n'y a aucune erreur.
 const systemeOperationnel = computed(() => !errorMessage.value && !erreurRafraichissement.value)
 
 /* ================================================================== */
 /* ACTIVITÉ                                                            */
 /* ================================================================== */
 
+// Libellés lisibles des types d'activité.
 const libellesActivite = {
   NOUVEL_UTILISATEUR: 'Nouvel utilisateur',
   NOUVELLE_DEMANDE: 'Nouvelle demande',
@@ -380,8 +425,10 @@ const libellesActivite = {
   PAIEMENT_REUSSI: 'Paiement réussi',
 }
 
+// Types d'activité mis en évidence (litiges et signalements).
 const typesSensibles = ['NOUVEAU_LITIGE', 'NOUVEAU_SIGNALEMENT']
 
+// Petites fonctions d'affichage de l'activité : libellé, acteur, avatar, initiales.
 function libelleActivite(type) {
   return libellesActivite[type] || type || 'Activité'
 }
@@ -399,6 +446,7 @@ function initiales(nom) {
   return nom.trim().split(/\s+/).slice(0, 2).map((m) => m[0]?.toUpperCase() ?? '').join('')
 }
 
+// L'activité affichée : tout, ou seulement les premières lignes.
 const activiteAffichee = computed(() =>
   activiteDepliee.value ? activite.value : activite.value.slice(0, NB_ACTIVITE),
 )
@@ -407,6 +455,7 @@ const activiteAffichee = computed(() =>
 /* REVENUS                                                             */
 /* ================================================================== */
 
+// Les points de la courbe des revenus (si le serveur les fournit).
 const historiqueRevenus = computed(() => {
   const source =
     lire(stats.value, 'revenus.historique', 'revenus_hebdomadaires') ??
@@ -423,15 +472,18 @@ const historiqueRevenus = computed(() => {
     .filter((p) => Number.isFinite(p.valeur))
 })
 
+// L'objectif global de revenus (si fourni).
 const objectifGlobal = computed(() => {
   const o = lire(stats.value, 'revenus.objectif')
   return o !== null && Number.isFinite(Number(o)) ? Number(o) : null
 })
 
+// Y a-t-il un objectif à afficher ?
 const aObjectif = computed(
   () => objectifGlobal.value !== null || historiqueRevenus.value.some((p) => p.objectif !== null),
 )
 
+// L'échelle verticale du graphique : un maximum "rond" et 5 graduations.
 const echelle = computed(() => {
   const valeurs = historiqueRevenus.value.flatMap((p) => [p.valeur, p.objectif ?? 0])
   if (objectifGlobal.value !== null) valeurs.push(objectifGlobal.value)
@@ -445,11 +497,13 @@ const echelle = computed(() => {
   return { max: pas * 4, graduations: [4, 3, 2, 1, 0].map((i) => i * pas) }
 })
 
+// Affiche un montant en milliers (ex. 12 000 -> "12k").
 function formaterK(valeur) {
   if (valeur >= 1000) return `${formateurNombre.format(Math.round(valeur / 1000))}k`
   return `${formateurNombre.format(valeur)}`
 }
 
+// Position (x, y) de chaque point dans le graphique, en pourcentage.
 const points = computed(() => {
   const liste = historiqueRevenus.value
   const n = liste.length
@@ -464,12 +518,14 @@ const points = computed(() => {
   })
 })
 
+// Étiquettes de l'axe horizontal.
 const etiquettesX = computed(() =>
   points.value.length
     ? points.value.map((p) => ({ label: p.label, x: p.x }))
     : JOURS_DEFAUT.map((label, i) => ({ label, x: (i / 6) * 100 })),
 )
 
+// Les tracés SVG : la ligne, la zone colorée sous la ligne, et la ligne d'objectif.
 const cheminLigne = computed(() =>
   points.value.map((p, i) => `${i ? 'L' : 'M'}${p.x},${p.y}`).join(' '),
 )
@@ -491,6 +547,7 @@ const cheminObjectif = computed(() =>
 /* TEMPS                                                               */
 /* ================================================================== */
 
+// Texte du type "Il y a 5 min", "Hier", "Il y a 3 j".
 function tempsRelatif(date) {
   const t = horodatage(date)
   if (!t) return ''
@@ -502,6 +559,7 @@ function tempsRelatif(date) {
   return jours === 1 ? 'Hier' : `Il y a ${jours} j`
 }
 
+// Heure du type "14:30", "Hier, 14:30" ou "12 Mar, 14:30".
 function formaterHeure(date) {
   const t = horodatage(date)
   if (!t) return ''
@@ -519,6 +577,7 @@ function formaterHeure(date) {
   return `${jour} ${mois.charAt(0).toUpperCase()}${mois.slice(1)}, ${heure}`
 }
 
+// Nom court du jour (ex. "Lun").
 function libelleJour(date) {
   const t = horodatage(date)
   if (!t) return null
@@ -526,6 +585,7 @@ function libelleJour(date) {
   return j.charAt(0).toUpperCase() + j.slice(1)
 }
 
+// Ouvre une autre page admin.
 function ouvrirSection(route) {
   if (route) router.push({ name: route })
 }
@@ -534,6 +594,7 @@ function ouvrirSection(route) {
 /* CYCLE DE VIE                                                        */
 /* ================================================================== */
 
+// Au montage : premier chargement, horloge, rechargement automatique, et écoute de la visibilité de l'onglet.
 onMounted(() => {
   charger()
   minuteurHorloge = setInterval(() => (maintenant.value = Date.now()), INTERVALLE_HORLOGE)
@@ -543,6 +604,7 @@ onMounted(() => {
   document.addEventListener('visibilitychange', surVisibilite)
 })
 
+// Au démontage : on arrête tout.
 onBeforeUnmount(() => {
   clearInterval(minuteurRefresh)
   clearInterval(minuteurHorloge)

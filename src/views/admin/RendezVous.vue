@@ -1,20 +1,30 @@
+<!--
+  Page admin "Rendez-vous" : tous les rendez-vous de la plateforme,
+  avec filtres (statut, période) et détection des conflits d'agenda.
+-->
 <script setup>
+// onMounted : exécuter du code quand la page s'affiche.
 import { onMounted } from 'vue'
 
+// Les composants utilisés sur la page.
 import AppLayout from '@/components/layout/AppLayout.vue'
 import ClientHeader from '@/components/client/ClientHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import ErrorState from '@/components/common/ErrorState.vue'
 import Loader from '@/components/common/Loader.vue'
 import Pagination from '@/components/common/Pagination.vue'
+// Le composable des listes admin et les appels à l'API admin.
 import { useAdminListe } from '@/composables/useAdminListe'
 import * as adminService from '@/services/adminService'
 
+// Liste paginée des rendez-vous, avec filtres statut + dates.
 const { items: rendezVous, count, page, pageSize, loading, errorMessage, filtres, charger, rechercher, changerPage } =
   useAdminListe(adminService.listRendezVousAdmin, { statut: '', date_debut: '', date_fin: '' })
 
+// Les statuts proposés dans le filtre.
 const statuts = ['', 'EN_ATTENTE', 'CONFIRME', 'REFUSE', 'ANNULE', 'TERMINE']
 
+// Couleurs du badge selon le statut.
 const classeStatut = {
   CONFIRME: 'bg-[#EAF8F2] text-[#16805B]',
   TERMINE: 'bg-[#EAF8F2] text-[#16805B]',
@@ -23,6 +33,7 @@ const classeStatut = {
   EN_ATTENTE: 'bg-[#FFF7E6] text-[#9A723C]',
 }
 
+// On charge la liste dès que la page s'affiche.
 onMounted(charger)
 </script>
 
@@ -31,6 +42,7 @@ onMounted(charger)
     <div class="mx-auto flex w-full  flex-col gap-6">
       <ClientHeader title="Rendez-vous" subtitle="Agenda complet des rendez-vous, avec détection des conflits." />
 
+      <!-- Filtres : statut, date de début, date de fin. -->
       <div class="flex flex-wrap items-center gap-2 text-black">
         <select v-model="filtres.statut" class="rounded-xl border border-[#E2E8F0] px-3 py-2 text-sm" @change="rechercher">
           <option v-for="statut in statuts" :key="statut" :value="statut">{{ statut || 'Tous les statuts' }}</option>
@@ -39,10 +51,12 @@ onMounted(charger)
         <input v-model="filtres.date_fin" type="date" class="rounded-xl border border-[#E2E8F0] px-3 py-2 text-sm" @change="rechercher" />
       </div>
 
+      <!-- États : chargement, erreur, vide. -->
       <Loader v-if="loading" />
       <ErrorState v-else-if="errorMessage" :message="errorMessage" @retry="charger" />
       <EmptyState v-else-if="!rendezVous.length" title="Aucun rendez-vous trouvé" message="Aucun rendez-vous ne correspond à ces critères." />
 
+      <!-- Tableau des rendez-vous ; la colonne "Conflit" signale un chevauchement. -->
       <div v-else class="overflow-x-auto rounded-2xl border border-[#E2E8F0] bg-white">
         <table class="w-full text-sm">
           <thead class="bg-[#F8FAFC] text-left text-xs uppercase text-[#94A3B8]">
