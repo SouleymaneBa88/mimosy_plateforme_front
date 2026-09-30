@@ -27,6 +27,7 @@
  * pas d'emoji, jetons de couleur --pp-* fixés localement pour ne pas dépendre
  * d'un thème hérité.
  */
+// Outils Vue et la fenêtre modale commune.
 import { computed, reactive, ref, watch } from 'vue'
 import Modal from '@/components/common/Modal.vue'
 
@@ -49,8 +50,10 @@ const props = defineProps({
   errorMessage: { type: String, default: '' },
 })
 
+// Événements : fermer la fenêtre, enregistrer.
 const emit = defineEmits(['update:modelValue', 'save'])
 
+// Les valeurs du formulaire.
 const form = reactive({
   service: '',
   description: '',
@@ -65,8 +68,10 @@ const form = reactive({
  */
 const submitted = ref(false)
 
+// true en mode modification (un service existant a été fourni).
 const isEdition = computed(() => Boolean(props.service))
 
+// Les messages d'erreur de chaque champ (vide = pas d'erreur).
 const errors = computed(() => ({
   service: !form.service ? 'Choisissez un service du catalogue.' : '',
   prix:
@@ -76,6 +81,7 @@ const errors = computed(() => ({
   unite: !form.unite?.trim() ? "Précisez l'unité facturée." : '',
 }))
 
+// Le formulaire est valide si aucun champ n'a d'erreur.
 const isValid = computed(() => Object.values(errors.value).every((message) => !message))
 
 /** Aperçu formaté du tarif, pour relire le montant sans compter les zéros. */
@@ -96,6 +102,7 @@ function hydrate(service) {
   })
 }
 
+// Quand le service à modifier change, on remplit le formulaire.
 watch(() => props.service, hydrate, { immediate: true })
 
 // À chaque réouverture, on repart d'un formulaire propre : sans cela, une
@@ -109,10 +116,12 @@ watch(
   },
 )
 
+// Ferme la fenêtre.
 function close() {
   emit('update:modelValue', false)
 }
 
+// Clic sur "Enregistrer" : on affiche les erreurs, et on envoie seulement si tout est valide.
 function save() {
   submitted.value = true
   if (!isValid.value || props.isSaving) return
@@ -230,8 +239,10 @@ function save() {
         </span>
       </label>
 
+      <!-- Erreur renvoyée par le serveur. -->
       <p v-if="errorMessage" class="sm-server-error" role="alert">{{ errorMessage }}</p>
 
+      <!-- Boutons Annuler / Enregistrer. -->
       <div class="sm-actions">
         <button type="button" class="sm-btn sm-btn--ghost" :disabled="isSaving" @click="close">
           Annuler

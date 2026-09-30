@@ -15,6 +15,7 @@ import { BadgeCheck } from 'lucide-vue-next'
 
 import { humanizeStatus, toneForStatus } from './statusTone'
 
+// Props : couleur, statut backend, libellé, taille, point, icône.
 const props = defineProps({
   variant: {
     type: String,
@@ -28,13 +29,17 @@ const props = defineProps({
   icon: { type: [Object, Function], default: null },
 })
 
+// La couleur : celle choisie, sinon déduite du statut, sinon "neutral".
 const ton = computed(() => props.variant || (props.status ? toneForStatus(props.status) : 'neutral'))
+// Le texte : celui fourni, sinon un libellé fabriqué à partir du statut.
 const texteDeSecours = computed(() => props.label || (props.status ? humanizeStatus(props.status) : ''))
+// L'icône : celle fournie, ou une coche pour "verified".
 const iconeAffichee = computed(() => props.icon || (ton.value === 'verified' ? BadgeCheck : null))
 </script>
 
 <template>
   <span class="m-badge" :class="[`m-badge--${ton}`, `m-badge--${size}`]">
+    <!-- Petit point de couleur, ou icône, avant le texte. -->
     <span v-if="dot" class="m-badge__dot" aria-hidden="true" />
     <component :is="iconeAffichee" v-else-if="iconeAffichee" :size="size === 'sm' ? 12 : 14" :stroke-width="2" aria-hidden="true" />
     <slot>{{ texteDeSecours }}</slot>

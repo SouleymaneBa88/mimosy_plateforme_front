@@ -1,6 +1,10 @@
+// Store Pinia du profil du client connecté.
+// Ce store est écrit avec la syntaxe "options" (state / getters / actions).
 import { defineStore } from 'pinia'
 import * as profileService from '@/services/profileService'
 
+// Transforme la réponse de Django (first_name, last_name...) en objet
+// plus pratique pour le frontend (firstName, lastName...).
 function normaliserProfil(data) {
   return {
     id: data.id ?? null,
@@ -17,6 +21,7 @@ function normaliserProfil(data) {
 
 // Source unique du profil client, alimentee par l'API Django authentifiee.
 export const useClientProfilStore = defineStore('clientProfil', {
+  // state : les données du store.
   state: () => ({
     profil: {
       id: null,
@@ -34,12 +39,15 @@ export const useClientProfilStore = defineStore('clientProfil', {
     errorMessage: '',
   }),
 
+  // getters : des valeurs calculées à partir des données.
   getters: {
     nomComplet: (state) => state.profil.nomComplet || 'Utilisateur Mimosy',
     photoProfil: (state) => state.profil.photo,
   },
 
+  // actions : les fonctions qui modifient les données.
   actions: {
+    // Charge le profil depuis le serveur.
     async chargerProfil() {
       this.isLoading = true
       this.errorMessage = ''
@@ -47,6 +55,7 @@ export const useClientProfilStore = defineStore('clientProfil', {
       try {
         const data = await profileService.getProfile()
 
+        // On copie les nouvelles valeurs dans le profil.
         Object.assign(this.profil, normaliserProfil(data))
         this.isLoaded = true
       } catch (error) {
@@ -57,6 +66,7 @@ export const useClientProfilStore = defineStore('clientProfil', {
       }
     },
 
+    // Enregistre le prénom et le nom modifiés.
     async mettreAJourProfil(payload) {
       this.isLoading = true
       this.errorMessage = ''
@@ -79,6 +89,7 @@ export const useClientProfilStore = defineStore('clientProfil', {
       }
     },
 
+    // Envoie une nouvelle photo de profil.
     async mettreAJourPhoto(fichier) {
       this.isLoading = true
       this.errorMessage = ''

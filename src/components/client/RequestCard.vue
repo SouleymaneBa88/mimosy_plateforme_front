@@ -4,6 +4,7 @@
  * (radius, bordure, hiérarchie d'actions) : action primaire = bouton
  * plein mimosy-primary, action secondaire = bouton contour.
  */
+// Props : icône, titre, statut (texte + couleurs), infos, textes des deux boutons.
 defineProps({
   icon: {
     // Emoji simple, comme dans la maquette
@@ -58,13 +59,16 @@ defineProps({
   },
 })
 
+// Événements envoyés au clic sur les deux boutons.
 const emit = defineEmits(['primary-action', 'secondary-action'])
 </script>
 
 <template>
   <article class="flex flex-col gap-5 rounded-[24px] border border-mimosy-border bg-mimosy-surface p-5 sm:flex-row sm:items-center sm:gap-6 sm:p-6" :class="muted ? 'opacity-90' : ''">
+    <!-- L'icône de la demande. -->
     <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-2xl sm:h-16 sm:w-16 sm:text-[30px]" :style="{ backgroundColor: iconBackground }">{{ icon }}</div>
 
+    <!-- Le texte : titre, statut, infos, et contenu libre (slot). -->
     <div class="min-w-0 flex-1">
       <div class="flex flex-wrap items-start justify-between gap-2">
         <h3 class="font-sans text-[16px] font-bold leading-6 text-mimosy-text sm:text-[17px] sm:leading-[25.5px]">{{ title }}</h3>
@@ -76,6 +80,7 @@ const emit = defineEmits(['primary-action', 'secondary-action'])
       <div class="mt-2"><slot /></div>
     </div>
 
+    <!-- Les deux boutons : action principale et action secondaire. -->
     <div class="flex gap-2 sm:min-w-[140px] sm:flex-col">
       <button type="button" class="flex-1 rounded-xl bg-mimosy-primary px-4 py-2.5 font-sans text-sm font-bold text-white transition hover:opacity-90 sm:flex-none" @click="emit('primary-action')">
         {{ primaryLabel }}

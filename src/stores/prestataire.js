@@ -1,9 +1,11 @@
+// Store Pinia des prestataires et de la recherche.
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import * as catalogueService from '@/services/catalogueService'
 
 /** État des profils prestataires issus du catalogue Django. */
 export const usePrestataireStore = defineStore('prestataire', () => {
+  // La liste des prestataires, celui affiché en détail, et l'état de chargement.
   const prestataires = ref([])
   const prestataireSelectionne = ref(null)
   const isLoading = ref(false)
@@ -17,7 +19,13 @@ export const usePrestataireStore = defineStore('prestataire', () => {
   const isSearching = ref(false)
   const searchErrorMessage = ref('')
   const interpretationRecherche = ref(null)
+  // Fallback IA (recherche intelligente sans résultat) : des pistes de
+  // recherche issues du catalogue réel, jamais des prestataires. Toujours
+  // stockées à part de resultatsRecherche pour ne jamais être affichées
+  // comme des cartes de prestataires.
+  const suggestionsIA = ref(null)
 
+  // Charge la liste de tous les prestataires.
   async function chargerPrestataires() {
     isLoading.value = true
     errorMessage.value = ''
@@ -32,6 +40,7 @@ export const usePrestataireStore = defineStore('prestataire', () => {
     }
   }
 
+  // Charge un prestataire précis (page de profil).
   async function chargerPrestataire(id) {
     isLoading.value = true
     errorMessage.value = ''
@@ -50,8 +59,10 @@ export const usePrestataireStore = defineStore('prestataire', () => {
   async function rechercher(params) {
     isSearching.value = true
     searchErrorMessage.value = ''
+    suggestionsIA.value = null
     try {
       const data = await catalogueService.searchOffers(params)
+      // On garde les résultats et les infos de pagination (nombre total, page suivante...).
       resultatsRecherche.value = data.results || []
       paginationRecherche.value = {
         count: data.count ?? 0,
@@ -70,6 +81,7 @@ export const usePrestataireStore = defineStore('prestataire', () => {
   async function rechercherIntelligente(query, position = null) {
     isSearching.value = true
     searchErrorMessage.value = ''
+    suggestionsIA.value = null
     try {
       const data = await catalogueService.searchIntelligente(query, position)
       resultatsRecherche.value = data.results || []
@@ -78,7 +90,9 @@ export const usePrestataireStore = defineStore('prestataire', () => {
         next: data.pagination?.next ?? null,
         previous: data.pagination?.previous ?? null,
       }
+      // On garde aussi ce que le serveur a compris du texte (pour l'afficher).
       interpretationRecherche.value = data.interpretation || null
+      suggestionsIA.value = data.suggestions_ia || null
     } catch (error) {
       searchErrorMessage.value = error.message
       throw error
@@ -89,12 +103,14 @@ export const usePrestataireStore = defineStore('prestataire', () => {
 
   /** Ajoute la page suivante de résultats à la suite de la recherche en cours. */
   async function chargerPageSuivante() {
+    // Pas de page suivante : rien à faire.
     if (!paginationRecherche.value.next) return
 
     isSearching.value = true
     searchErrorMessage.value = ''
     try {
       const data = await catalogueService.fetchSearchPage(paginationRecherche.value.next)
+      // On ajoute les nouveaux résultats à la suite des anciens.
       resultatsRecherche.value = [...resultatsRecherche.value, ...(data.results || [])]
       paginationRecherche.value = {
         count: data.count ?? paginationRecherche.value.count,
@@ -109,6 +125,7 @@ export const usePrestataireStore = defineStore('prestataire', () => {
     }
   }
 
+  // Ce que le store met à disposition des pages.
   return {
     prestataires,
     prestataireSelectionne,
@@ -121,6 +138,7 @@ export const usePrestataireStore = defineStore('prestataire', () => {
     isSearching,
     searchErrorMessage,
     interpretationRecherche,
+    suggestionsIA,
     rechercher,
     rechercherIntelligente,
     chargerPageSuivante,

@@ -7,20 +7,28 @@
  */
 import { reactive, ref } from 'vue'
 
+// "fetchFn" = la fonction du service qui charge la liste (ex. listUtilisateurs).
+// "filtresInitiaux" = les filtres de départ (ex. { role: '' }).
 export function useAdminListe(fetchFn, filtresInitiaux = {}) {
+  // Les éléments affichés, le nombre total, la page actuelle et la taille d'une page.
   const items = ref([])
   const count = ref(0)
   const page = ref(1)
   const pageSize = 20
+  // L'état de chargement et le message d'erreur.
   const loading = ref(false)
   const errorMessage = ref('')
+  // Les filtres de recherche (reactive : l'affichage suit leurs changements).
   const filtres = reactive({ ...filtresInitiaux })
 
+  // Charge la page actuelle avec les filtres actuels.
   async function charger() {
     loading.value = true
     errorMessage.value = ''
     try {
+      // On envoie les filtres + le numéro de page au serveur.
       const data = await fetchFn({ ...filtres, page: page.value, page_size: pageSize })
+      // On accepte une liste simple ou une réponse paginée.
       items.value = Array.isArray(data) ? data : data?.results || []
       count.value = Array.isArray(data) ? items.value.length : (data?.count ?? items.value.length)
     } catch (error) {
@@ -37,10 +45,12 @@ export function useAdminListe(fetchFn, filtresInitiaux = {}) {
     return charger()
   }
 
+  // Va à une autre page et la charge.
   function changerPage(nouvellePage) {
     page.value = nouvellePage
     return charger()
   }
 
+  // Ce que le composable met à disposition de la page.
   return { items, count, page, pageSize, loading, errorMessage, filtres, charger, rechercher, changerPage }
 }

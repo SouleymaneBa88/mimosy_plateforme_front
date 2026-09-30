@@ -1,4 +1,9 @@
+<!--
+  Page "Profil et paramètres" du prestataire : photo, nom, coordonnées,
+  profil professionnel, statut de vérification et localisation.
+-->
 <script setup>
+// Outils Vue et icônes.
 import { computed, onMounted, ref } from 'vue'
 import {
   Lock,
@@ -10,6 +15,7 @@ import {
   Phone,
 } from 'lucide-vue-next'
 
+// Les composants de la page.
 import AppLayout from '@/components/layout/AppLayout.vue'
 import PhotoProfil from '@/components/client/PhotoProfil.vue'
 import Loader from '@/components/common/Loader.vue'
@@ -17,13 +23,17 @@ import LocationCard from '@/components/profile/LocationCard.vue'
 import ProfilModal from '@/components/prestataire/profil/ProfilModal.vue'
 import VerificationStatus from '@/components/prestataire/verification/VerificationStatus.vue'
 
+// Le store du profil et les appels à l'API prestataire.
 import { useClientProfilStore } from '@/stores/clientProfil'
 import * as prestataireService from '@/services/prestataireService'
 
+// Le store du profil de l'utilisateur connecté.
 const profileStore = useClientProfilStore()
 
+// Fenêtre de modification du profil ouverte ?
 const showModal = ref(false)
 
+// Le profil professionnel (description, expérience, disponibilité...).
 const profil = ref({
   description: '',
   experience: '',
@@ -31,6 +41,7 @@ const profil = ref({
   statut_verification: '',
 })
 
+// États : chargement, enregistrement, erreurs.
 const loading = ref(false)
 const saving = ref(false)
 const errorMessage = ref('')
@@ -42,6 +53,7 @@ const modalError = ref('')
 |--------------------------------------------------------------------------
 */
 
+// Nom, photo, email et téléphone, lus dans le store du profil.
 const nom = computed(() => profileStore.nomComplet || 'Prestataire')
 
 const photo = computed(() => profileStore.photoProfil)
@@ -50,6 +62,7 @@ const email = computed(() => profileStore.profil.email)
 
 const telephone = computed(() => profileStore.profil.telephone)
 
+// Libellés lisibles du statut de vérification.
 const LABELS_STATUT_VERIFICATION = {
   EN_ATTENTE: 'Identité en attente',
   VERIFIE: 'Identité vérifiée',
@@ -66,12 +79,14 @@ const statutLabel = computed(
 |--------------------------------------------------------------------------
 */
 
+// Modification du nom : ouverte ? prénom et nom tapés ? enregistrement ? erreur ?
 const editionNomOuverte = ref(false)
 const prenomEdite = ref('')
 const nomEdite = ref('')
 const enregistrementNom = ref(false)
 const erreurNom = ref('')
 
+// Ouvre la modification du nom.
 function ouvrirEditionNom() {
   prenomEdite.value = profileStore.profil.firstName || ''
   nomEdite.value = profileStore.profil.lastName || ''
@@ -79,6 +94,7 @@ function ouvrirEditionNom() {
   editionNomOuverte.value = true
 }
 
+// Annule la modification du nom.
 function annulerEditionNom() {
   if (enregistrementNom.value) return
 
@@ -86,6 +102,7 @@ function annulerEditionNom() {
   erreurNom.value = ''
 }
 
+// Enregistre le nouveau prénom et le nouveau nom.
 async function enregistrerNom() {
   if (!prenomEdite.value.trim() || !nomEdite.value.trim()) {
     erreurNom.value = 'Le prénom et le nom sont obligatoires.'
@@ -116,6 +133,7 @@ async function enregistrerNom() {
 |--------------------------------------------------------------------------
 */
 
+// Charge le profil de l'utilisateur et son profil professionnel.
 async function chargerProfil() {
   loading.value = true
   errorMessage.value = ''
@@ -133,6 +151,7 @@ async function chargerProfil() {
   }
 }
 
+// On charge au montage.
 onMounted(chargerProfil)
 
 /*
@@ -141,6 +160,7 @@ onMounted(chargerProfil)
 |--------------------------------------------------------------------------
 */
 
+// Enregistre le profil professionnel modifié dans la fenêtre.
 async function save(value) {
   saving.value = true
   modalError.value = ''
@@ -164,6 +184,7 @@ async function save(value) {
 |--------------------------------------------------------------------------
 */
 
+// Envoie une nouvelle photo de profil.
 async function envoyerPhotoProfil(fichier) {
   try {
     await profileStore.mettreAJourPhoto(fichier)

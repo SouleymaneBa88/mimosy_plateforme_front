@@ -1,5 +1,12 @@
+<!--
+  ErrorState : bloc affiché quand un chargement a échoué.
+  Il montre le message d'erreur et un bouton "Réessayer"
+  qui envoie l'événement "retry" au parent.
+-->
 <script setup>
+// Prop : le message d'erreur à afficher.
 defineProps({ message: { type: String, default: 'Une erreur est survenue.' } })
+// Événement envoyé au parent quand on clique sur "Réessayer".
 defineEmits(['retry'])
 </script>
 

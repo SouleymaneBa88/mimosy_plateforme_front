@@ -1,5 +1,6 @@
 <script setup>
 /** File de modération des avis flagués par l'analyse IA (sentiment/toxicité). */
+// Outils Vue, composants et appels à l'API admin.
 import { onMounted, ref } from 'vue'
 
 import AppLayout from '@/components/layout/AppLayout.vue'
@@ -7,11 +8,13 @@ import ClientHeader from '@/components/client/ClientHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import * as adminService from '@/services/adminService'
 
+// La liste des avis, les états de chargement et d'erreur, et l'avis en cours de traitement.
 const avis = ref([])
 const loading = ref(false)
 const errorMessage = ref('')
 const actionEnCours = ref('')
 
+// Charge les avis en attente de modération.
 async function charger() {
   loading.value = true
   errorMessage.value = ''
@@ -24,6 +27,7 @@ async function charger() {
   }
 }
 
+// Approuve un avis puis le retire de la liste.
 async function approuver(item) {
   actionEnCours.value = item.id
   try {
@@ -36,6 +40,7 @@ async function approuver(item) {
   }
 }
 
+// Bloque un avis puis le retire de la liste.
 async function bloquer(item) {
   actionEnCours.value = item.id
   try {
@@ -48,6 +53,7 @@ async function bloquer(item) {
   }
 }
 
+// On charge dès que la page s'affiche.
 onMounted(charger)
 </script>
 
@@ -56,11 +62,13 @@ onMounted(charger)
     <div class="mx-auto flex w-full  flex-col gap-6">
       <ClientHeader title="Modération des avis" subtitle="Avis mis en attente par l'analyse automatique." />
 
+      <!-- États : chargement, erreur, vide. -->
       <p v-if="loading" class="rounded-lg bg-white p-8 text-center text-[#64748B]">Chargement...</p>
       <p v-else-if="errorMessage" class="rounded-lg bg-[#FFF0EE] p-4 text-center text-sm text-[#A85148]">{{ errorMessage }}</p>
 
       <EmptyState v-else-if="!avis.length" title="Aucun avis en attente" message="Les avis signalés par l'analyse automatique apparaîtront ici." />
 
+      <!-- Une carte par avis : note, analyse IA, commentaire et boutons. -->
       <div v-else class="grid gap-4">
         <article v-for="item in avis" :key="item.id" class="rounded-2xl border border-[#E2E8F0] bg-white p-5">
           <div class="flex flex-wrap items-center justify-between gap-2">

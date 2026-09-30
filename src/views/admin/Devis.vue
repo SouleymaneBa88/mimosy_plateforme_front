@@ -1,20 +1,30 @@
+<!--
+  Page admin "Devis" : la liste de toutes les demandes de devis de la
+  plateforme, avec un filtre par statut et une pagination.
+-->
 <script setup>
+// onMounted : exécuter du code quand la page s'affiche.
 import { onMounted } from 'vue'
 
+// Les composants utilisés sur la page.
 import AppLayout from '@/components/layout/AppLayout.vue'
 import ClientHeader from '@/components/client/ClientHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import ErrorState from '@/components/common/ErrorState.vue'
 import Loader from '@/components/common/Loader.vue'
 import Pagination from '@/components/common/Pagination.vue'
+// Le composable des listes admin et les appels à l'API admin.
 import { useAdminListe } from '@/composables/useAdminListe'
 import * as adminService from '@/services/adminService'
 
+// On prépare la liste paginée des devis, avec un filtre "statut" vide au départ.
 const { items: devis, count, page, pageSize, loading, errorMessage, filtres, charger, rechercher, changerPage } =
   useAdminListe(adminService.listDevisAdmin, { statut: '' })
 
+// Les statuts proposés dans le filtre ('' = tous).
 const statuts = ['', 'EN_ATTENTE', 'ACCEPTE', 'REFUSE', 'EXPIRE']
 
+// Couleurs du badge selon le statut.
 const classeStatut = {
   ACCEPTE: 'bg-[#EAF8F2] text-[#16805B]',
   REFUSE: 'bg-[#FFF0EE] text-[#A85148]',
@@ -22,6 +32,7 @@ const classeStatut = {
   EN_ATTENTE: 'bg-[#FFF7E6] text-[#9A723C]',
 }
 
+// On charge la liste dès que la page s'affiche.
 onMounted(charger)
 </script>
 
@@ -30,14 +41,17 @@ onMounted(charger)
     <div class="mx-auto flex w-full  flex-col gap-6">
       <ClientHeader title="Devis" subtitle="Historique complet des demandes de devis." />
 
+      <!-- Filtre par statut : chaque changement relance la recherche. -->
       <select v-model="filtres.statut" class="w-fit rounded-xl border border-[#E2E8F0] px-3 py-2 text-sm text-black" @change="rechercher">
         <option v-for="statut in statuts" :key="statut" :value="statut">{{ statut || 'Tous les statuts' }}</option>
       </select>
 
+      <!-- Trois états possibles avant le tableau : chargement, erreur, liste vide. -->
       <Loader v-if="loading" />
       <ErrorState v-else-if="errorMessage" :message="errorMessage" @retry="charger" />
       <EmptyState v-else-if="!devis.length" title="Aucun devis trouvé" message="Aucune demande de devis ne correspond à ce filtre." />
 
+      <!-- Le tableau des devis. -->
       <div v-else class="overflow-x-auto rounded-2xl border border-[#E2E8F0] bg-white">
         <table class="w-full text-sm">
           <thead class="bg-[#F8FAFC] text-left text-xs uppercase text-[#94A3B8]">

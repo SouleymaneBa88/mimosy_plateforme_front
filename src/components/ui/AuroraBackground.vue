@@ -12,6 +12,7 @@
  * `intensity` : subtle (défaut) ou soft (un peu plus présent).
  * Avec prefers-reduced-motion, les nappes restent fixes.
  */
+// Props : intensité de l'effet et fondu en bas.
 defineProps({
   intensity: { type: String, default: 'subtle', validator: (v) => ['subtle', 'soft'].includes(v) },
   // Fondu vers le fond de page en bas, pour raccorder avec la section suivante.
@@ -21,6 +22,7 @@ defineProps({
 
 <template>
   <div class="m-aurora" :class="[`m-aurora--${intensity}`, { 'm-aurora--fade': fade }]" aria-hidden="true">
+    <!-- Les trois nappes de lumière (animées en CSS). -->
     <span class="m-aurora__layer m-aurora__layer--a" />
     <span class="m-aurora__layer m-aurora__layer--b" />
     <span class="m-aurora__layer m-aurora__layer--c" />

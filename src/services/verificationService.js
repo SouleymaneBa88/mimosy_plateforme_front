@@ -9,6 +9,7 @@ export const getMonDocument = (typeDocument) =>
 // Tous mes documents, tous types confondus (vue d'ensemble du dossier KYC).
 export const getMesDocuments = () => apiFetch(API_ENDPOINTS.verificationDocuments)
 
+// Envoie un document (fichier) pour vérification. Le fichier part dans un FormData.
 export const soumettreDocument = (fichier, typeDocument) => {
   const formData = new FormData()
   formData.append('fichier', fichier)

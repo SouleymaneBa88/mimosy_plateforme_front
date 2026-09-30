@@ -6,11 +6,14 @@
  * utilisateurs (voir apps.adminpanel.LocalisationAdminViewSet) :
  * aucune position n'est jamais devinée ni générée côté frontend.
  */
+// Outils Vue.
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
+// Leaflet (cartes) et son CSS.
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
+// Composants et appels à l'API admin.
 import AppLayout from '@/components/layout/AppLayout.vue'
 import ClientHeader from '@/components/client/ClientHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -18,17 +21,21 @@ import ErrorState from '@/components/common/ErrorState.vue'
 import Loader from '@/components/common/Loader.vue'
 import * as adminService from '@/services/adminService'
 
+// Les localisations, les états, et le filtre par rôle.
 const localisations = ref([])
 const loading = ref(true)
 const errorMessage = ref('')
 const filtreRole = ref('')
 
+// La <div> de la carte, la carte Leaflet, et la liste des marqueurs.
 const mapContainer = ref(null)
 let map = null
 const marqueurs = []
 
+// Couleur du point selon le rôle (bleu = client, vert = prestataire).
 const couleurParRole = { CLIENT: '#3267B1', PRESTATAIRE: '#2F6250' }
 
+// Crée un petit point coloré pour un rôle.
 function creerIcone(role) {
   const couleur = couleurParRole[role] || '#64748B'
   return L.divIcon({
@@ -39,12 +46,15 @@ function creerIcone(role) {
   })
 }
 
+// Dessine tous les marqueurs sur la carte.
 function dessiner() {
   if (!map) return
 
+  // On efface les anciens marqueurs.
   marqueurs.forEach((marker) => map.removeLayer(marker))
   marqueurs.length = 0
 
+  // Un marqueur par localisation, avec une bulle (nom, rôle, quartier, ville).
   localisations.value.forEach((loc) => {
     const marker = L.marker([Number(loc.latitude), Number(loc.longitude)], { icon: creerIcone(loc.role) })
       .addTo(map)
@@ -52,11 +62,13 @@ function dessiner() {
     marqueurs.push(marker)
   })
 
+  // On zoome pour voir tous les points.
   if (marqueurs.length) {
     map.fitBounds(marqueurs.map((marker) => marker.getLatLng()), { padding: [40, 40], maxZoom: 14 })
   }
 }
 
+// Charge les localisations (jusqu'à 500) puis les dessine.
 async function charger() {
   loading.value = true
   errorMessage.value = ''
@@ -72,6 +84,7 @@ async function charger() {
   }
 }
 
+// Au montage : on crée la carte, on ajoute le fond OpenStreetMap, puis on charge.
 onMounted(() => {
   map = L.map(mapContainer.value).setView([14.6928, -17.4467], 11) // Dakar, ajusté par fitBounds dès que des points existent
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -81,8 +94,10 @@ onMounted(() => {
   charger()
 })
 
+// Quand le filtre change, on recharge.
 watch(filtreRole, charger)
 
+// Au démontage : on détruit la carte.
 onBeforeUnmount(() => {
   map?.remove()
   map = null
@@ -94,16 +109,19 @@ onBeforeUnmount(() => {
     <div class="mx-auto flex w-full  flex-col gap-6">
       <ClientHeader title="Carte des localisations" subtitle="Répartition géographique réelle des clients et prestataires." />
 
+      <!-- Filtre par rôle. -->
       <select v-model="filtreRole" class="w-fit rounded-xl border border-[#E2E8F0] px-3 py-2 text-sm text-black">
         <option value="">Tous les rôles</option>
         <option value="CLIENT">Clients</option>
         <option value="PRESTATAIRE">Prestataires</option>
       </select>
 
+      <!-- États : erreur, chargement, vide. -->
       <ErrorState v-if="errorMessage" :message="errorMessage" @retry="charger" />
       <Loader v-else-if="loading && !localisations.length" />
       <EmptyState v-else-if="!loading && !localisations.length" title="Aucune localisation" message="Aucun utilisateur n'a encore renseigné de localisation." />
 
+      <!-- La carte. -->
       <div ref="mapContainer" class="h-[520px] w-full overflow-hidden rounded-2xl border border-[#E2E8F0]"></div>
 
       <p class="text-sm text-[#64748B]">{{ localisations.length }} localisation(s) affichée(s).</p>

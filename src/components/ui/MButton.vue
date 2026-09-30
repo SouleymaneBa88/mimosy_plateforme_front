@@ -8,6 +8,12 @@
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 
+// Les options du bouton :
+// variant = style (primary, secondary, outline, ghost, danger)
+// size    = taille (sm, md, lg)
+// to      = lien interne (RouterLink) ; href = lien externe (<a>)
+// loading = affiche un petit cercle qui tourne et désactive le bouton
+// icon / iconRight = icône à gauche / à droite du texte
 const props = defineProps({
   variant: {
     type: String,
@@ -31,24 +37,29 @@ const props = defineProps({
   iconRight: { type: [Object, Function], default: null },
 })
 
+// Le bouton est inactif s'il est désactivé OU en chargement.
 const inactif = computed(() => props.disabled || props.loading)
 
+// On choisit la balise HTML à utiliser : RouterLink, <a> ou <button>.
 const balise = computed(() => {
   if (props.to && !inactif.value) return RouterLink
   if (props.href && !inactif.value) return 'a'
   return 'button'
 })
 
+// Les attributs à mettre sur cette balise.
 const attributs = computed(() => {
   if (balise.value === RouterLink) return { to: props.to }
   if (balise.value === 'a') return { href: props.href }
   return { type: props.type, disabled: inactif.value }
 })
 
+// Taille de l'icône selon la taille du bouton.
 const tailleIcone = computed(() => ({ sm: 15, md: 16, lg: 18 })[props.size])
 </script>
 
 <template>
+  <!-- <component :is> affiche la balise choisie dans "balise". -->
   <component
     :is="balise"
     v-bind="attributs"
@@ -128,6 +139,7 @@ const tailleIcone = computed(() => ({ sm: 15, md: 16, lg: 18 })[props.size])
     cursor: progress;
   }
 
+    /* Tailles */
   /* Tailles — hauteur minimale ≥ 36px, 44px en lg pour les CTA tactiles */
   .m-btn--sm { min-height: 2.25rem; padding: 0 0.9rem; font-size: 0.8125rem; }
   .m-btn--md { min-height: 2.75rem; padding: 0 1.25rem; font-size: 0.875rem; }
@@ -139,6 +151,7 @@ const tailleIcone = computed(() => ({ sm: 15, md: 16, lg: 18 })[props.size])
 
   .m-btn--block { display: flex; width: 100%; }
 
+    /* Variantes de couleur */
   /* Variantes */
   .m-btn--primary {
     --btn-bg: var(--mimosy-green);

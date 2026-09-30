@@ -5,16 +5,20 @@
  * marquée comme lue par le parent (ClientNavbar.vue) et disparaît donc
  * immédiatement de cette liste, puisqu'elle est filtrée sur `!lu` en amont.
  */
+// Props : ouvert ou non, la liste des notifications, et l'état de chargement.
 defineProps({ modelValue: Boolean, notifications: { type: Array, default: () => [] }, loading: Boolean })
+// Événements : fermer le panneau, ou signaler qu'une notification a été cliquée ("read").
 defineEmits(['update:modelValue', 'read'])
 </script>
 
 <template>
   <div v-if="modelValue" class="absolute right-0 top-12 z-30 w-[min(360px,calc(100vw-2rem))] rounded-2xl border border-mimosy-border bg-mimosy-surface p-4 shadow-lg">
+    <!-- En-tête avec le titre et le bouton de fermeture. -->
     <div class="mb-3 flex items-center justify-between">
       <h2 class="font-sans font-bold text-mimosy-text">Notifications</h2>
       <button type="button" class="text-xl leading-none text-mimosy-secondary transition hover:text-mimosy-text" aria-label="Fermer" @click="$emit('update:modelValue', false)">×</button>
     </div>
+    <!-- Trois cas : chargement, liste vide, ou liste des notifications. -->
     <div v-if="loading" class="py-6 text-center font-sans text-sm text-mimosy-secondary">Chargement...</div>
     <div v-else-if="!notifications.length" class="py-6 text-center font-sans text-sm text-mimosy-secondary">Aucune notification.</div>
     <button

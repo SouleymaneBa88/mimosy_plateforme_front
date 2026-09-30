@@ -10,22 +10,28 @@
  * de l'accueil (HomeClient.vue, qui interroge /api/recherche/) : ce
  * diagnostic ne fait qu'y renvoyer avec les critères déjà identifiés.
  */
+// Outils Vue, routeur et icônes.
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowLeft, Sparkles, TriangleAlert } from 'lucide-vue-next'
 
+// La mise en page client, le chargement et l'appel à l'API du diagnostic.
 import ClientLayout from '@/components/layout/ClientLayout.vue'
 import Loader from '@/components/common/Loader.vue'
 import * as diagnosisService from '@/services/diagnosisService'
 
+// Le routeur (pour aller à la liste des prestataires).
 const router = useRouter()
 
+// Le texte du client, le résultat, et les états de chargement et d'erreur.
 const description = ref('')
 const resultat = ref(null)
 const loading = ref(false)
 const errorMessage = ref('')
 
+// Lance l'analyse du texte.
 async function analyser() {
+  // Texte vide : on affiche un message et on s'arrête.
   if (!description.value.trim()) {
     errorMessage.value = 'Décrivez votre problème avant de lancer l\'analyse.'
     return
@@ -35,6 +41,7 @@ async function analyser() {
   errorMessage.value = ''
   resultat.value = null
   try {
+    // On envoie le texte au serveur et on garde le résultat.
     resultat.value = await diagnosisService.diagnostiquer(description.value.trim())
   } catch (error) {
     errorMessage.value = error.message
@@ -71,6 +78,7 @@ function voirPrestataires() {
       </div>
 
       <div class="rounded-[24px] border border-mimosy-border bg-mimosy-surface p-6 sm:p-8">
+        <!-- Formulaire : description du problème + bouton "Analyser". -->
         <label class="font-sans text-sm font-bold text-mimosy-text" for="diagnostic-description">
           Décrivez votre problème
         </label>
@@ -95,6 +103,7 @@ function voirPrestataires() {
 
       <Loader v-if="loading" />
 
+      <!-- Résultat du diagnostic. -->
       <div v-if="resultat" class="rounded-[24px] border border-mimosy-border bg-mimosy-surface p-6 sm:p-8">
         <div class="flex flex-wrap items-center justify-between gap-2">
           <h2 class="font-sans font-extrabold text-mimosy-text">Résultat du diagnostic</h2>
@@ -106,6 +115,7 @@ function voirPrestataires() {
           </span>
         </div>
 
+        <!-- Cas 1 : un domaine a été identifié. -->
         <template v-if="resultat.status === 'identifie'">
           <dl class="mt-4 grid gap-4 sm:grid-cols-2">
             <div v-if="resultat.domaine">
@@ -127,6 +137,7 @@ function voirPrestataires() {
           </button>
         </template>
 
+        <!-- Cas 2 : rien d'identifié. -->
         <template v-else>
           <p class="mt-3 font-sans text-sm text-mimosy-secondary">
             Nous n'avons pas identifié de domaine précis à partir de votre description. Vous pouvez tout de même
@@ -137,6 +148,7 @@ function voirPrestataires() {
           </button>
         </template>
 
+        <!-- Avertissements renvoyés par le serveur. -->
         <div v-if="resultat.warnings?.length" class="mt-5 flex items-start gap-2.5 rounded-xl bg-mimosy-yellowBg p-3.5">
           <TriangleAlert class="mt-0.5 h-4 w-4 shrink-0 text-mimosy-yellow" />
           <div>

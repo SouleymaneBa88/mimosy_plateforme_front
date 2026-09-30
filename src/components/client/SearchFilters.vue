@@ -7,6 +7,7 @@
  * changement, pour rester libre de les afficher en panneau (desktop)
  * ou dans une modale (mobile).
  */
+// Props : la liste des catégories, "Autour de moi" actif ou non, et les valeurs des filtres.
 const props = defineProps({
   categories: {
     type: Array,
@@ -26,8 +27,10 @@ const props = defineProps({
   },
 })
 
+// Événements : valeurs modifiées, appliquer, réinitialiser.
 const emit = defineEmits(['update:modelValue', 'apply', 'reset'])
 
+// Change un seul filtre et envoie le nouvel objet complet au parent.
 function set(champ, valeur) {
   emit('update:modelValue', { ...props.modelValue, [champ]: valeur })
 }
@@ -35,6 +38,7 @@ function set(champ, valeur) {
 
 <template>
   <div class="flex flex-col gap-4">
+    <!-- Filtre : catégorie. -->
     <div>
       <label class="mb-1.5 block text-[12px] font-bold text-[#051F20]" for="filtre-categorie">
         Catégorie
@@ -52,6 +56,7 @@ function set(champ, valeur) {
       </select>
     </div>
 
+    <!-- Filtre : compétence. -->
     <div>
       <label class="mb-1.5 block text-[12px] font-bold text-[#051F20]" for="filtre-competence">
         Compétence
@@ -66,6 +71,7 @@ function set(champ, valeur) {
       />
     </div>
 
+    <!-- Filtre : ville. -->
     <div>
       <label class="mb-1.5 block text-[12px] font-bold text-[#051F20]" for="filtre-ville">
         Ville
@@ -80,6 +86,7 @@ function set(champ, valeur) {
       />
     </div>
 
+    <!-- Filtre : disponible uniquement. -->
     <label class="flex items-center gap-2.5 text-[13px] font-semibold text-[#051F20]">
       <input
         type="checkbox"
@@ -90,6 +97,7 @@ function set(champ, valeur) {
       Uniquement les prestataires disponibles
     </label>
 
+    <!-- Filtre : rayon (seulement si "Autour de moi" est actif). -->
     <div v-if="positionActive">
       <label class="mb-1.5 block text-[12px] font-bold text-[#051F20]" for="filtre-rayon">
         Rayon de recherche
@@ -107,6 +115,7 @@ function set(champ, valeur) {
       </select>
     </div>
 
+    <!-- Boutons Appliquer / Réinitialiser. -->
     <div class="flex gap-2 pt-1">
       <button
         type="button"

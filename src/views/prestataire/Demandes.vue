@@ -1,4 +1,10 @@
+<!--
+  Page "Demandes reçues" du prestataire : les demandes de prestation des
+  clients, avec statistiques, filtres, recherche, pagination, et un panneau
+  de détail pour accepter, refuser, terminer ou signaler un litige.
+-->
 <script setup>
+// Outils Vue et icônes.
 import { computed, onMounted, ref } from 'vue'
 import {
   Search,
@@ -8,6 +14,7 @@ import {
   ChevronRight,
 } from 'lucide-vue-next'
 
+// Les composants de la page.
 import AppLayout from '@/components/layout/AppLayout.vue'
 // L'en-tête prestataire est rendu automatiquement par AppLayout pour
 // role="prestataire" : pas besoin de l'importer ici.
@@ -15,39 +22,47 @@ import EmptyState from '@/components/common/EmptyState.vue'
 import Modal from '@/components/common/Modal.vue'
 import NouveauLitigeModal from '@/components/disputes/NouveauLitigeModal.vue'
 
+// Le store des demandes, les toasts et le temps réel.
 import { useDemandePrestationStore } from '@/stores/demandePrestation'
 import { useToast } from '@/composables/useToast'
 import { useEvenementTempsReel } from '@/composables/useEvenementTempsReel'
 
+// Le store des demandes de prestation.
 const demandeStore = useDemandePrestationStore()
 
 /* =========================================================
    ÉTAT DE LA PAGE
 ========================================================= */
 
+// Demande sélectionnée, texte de recherche, filtre actif, page actuelle, demandes par page.
 const selectedId = ref('')
 const recherche = ref('')
 const filtreActif = ref('TOUTES')
 const pageActuelle = ref(1)
 const demandesParPage = 5
 
+// Panneau de détail ouvert ? Action en cours ?
 const detailOuvert = ref(false)
 const actionEnCours = ref(false)
 
+// Fenêtre de litige ouverte ?
 const litigeModalOuvert = ref(false)
 
+// Fonctions pour afficher un toast.
 const { succes, erreur } = useToast()
 
 /* =========================================================
    DONNÉES
 ========================================================= */
 
+// La liste des demandes (lue dans le store).
 const demandes = computed(() => {
   return Array.isArray(demandeStore.demandes)
     ? demandeStore.demandes
     : []
 })
 
+// La demande actuellement sélectionnée.
 const demandeSelectionnee = computed(() => {
   return (
     demandes.value.find(
@@ -62,6 +77,7 @@ const demandeSelectionnee = computed(() => {
    STATUTS
 ========================================================= */
 
+// Libellés lisibles et couleurs des statuts.
 const statusLabels = {
   EN_ATTENTE: 'En attente',
   ACCEPTEE: 'Acceptée',
@@ -91,6 +107,7 @@ const statusBadgeClasses = {
     'bg-[#F2F3F0] text-[#7A847E] border border-[#E5E7E2]',
 }
 
+// Classes CSS du badge d'un statut.
 function badgeClass(statut) {
   return (
     statusBadgeClasses[statut] ||
@@ -102,6 +119,7 @@ function badgeClass(statut) {
    COMPTEURS
 ========================================================= */
 
+// Les demandes rangées par état (en attente, acceptées, à valider, terminées).
 const demandesEnAttente = computed(() =>
   demandes.value.filter(
     (demande) => demande.statut === 'EN_ATTENTE'
@@ -126,6 +144,7 @@ const demandesTerminees = computed(() =>
   )
 )
 
+// Taux d'acceptation (en %).
 const tauxAcceptation = computed(() => {
   if (!demandes.value.length) {
     return 0
@@ -142,6 +161,7 @@ const tauxAcceptation = computed(() => {
    FILTRES
 ========================================================= */
 
+// Les boutons de filtre (avec compteurs).
 const filtres = computed(() => [
   {
     key: 'TOUTES',
@@ -170,6 +190,7 @@ const filtres = computed(() => [
   },
 ])
 
+// Les demandes filtrées (filtre + texte de recherche).
 const demandesFiltrees = computed(() => {
   let resultat = [...demandes.value]
 
@@ -224,6 +245,7 @@ const demandesFiltrees = computed(() => {
    PAGINATION
 ========================================================= */
 
+// Nombre total de pages.
 const totalPages = computed(() => {
   return Math.max(
     1,
@@ -234,6 +256,7 @@ const totalPages = computed(() => {
   )
 })
 
+// Les demandes de la page actuelle.
 const demandesAffichees = computed(() => {
   const debut =
     (pageActuelle.value - 1) *
@@ -247,6 +270,7 @@ const demandesAffichees = computed(() => {
   )
 })
 
+// Numéros de la première et de la dernière demande affichées.
 const premiereDemande = computed(() => {
   if (!demandesFiltrees.value.length) {
     return 0
@@ -267,6 +291,7 @@ const derniereDemande = computed(() => {
   )
 })
 
+// Les numéros de page à afficher.
 const pages = computed(() => {
   const resultat = []
 
@@ -287,11 +312,13 @@ const pages = computed(() => {
   return resultat
 })
 
+// Change de filtre et revient à la page 1.
 function changerFiltre(filtre) {
   filtreActif.value = filtre
   pageActuelle.value = 1
 }
 
+// Va à une autre page.
 function changerPage(page) {
   if (
     page < 1 ||
@@ -307,6 +334,7 @@ function changerPage(page) {
    CLIENT
 ========================================================= */
 
+// Petites fonctions d'affichage : nom, initiales et photo du client, service, lieu.
 function nomClient(demande) {
   return (
     demande.client_nom ||
@@ -388,6 +416,7 @@ function localisationDemande(demande) {
    DATE
 ========================================================= */
 
+// Mise en forme des dates, heures et montants.
 function formatDate(value) {
   if (!value) {
     return ''
@@ -528,11 +557,13 @@ function formatMontant(demande) {
    NAVIGATION
 ========================================================= */
 
+// Sélectionne une demande et ouvre son détail.
 function selectDemande(id) {
   selectedId.value = id
   detailOuvert.value = true
 }
 
+// Ferme le panneau de détail.
 function fermerDetail() {
   detailOuvert.value = false
 }
@@ -541,6 +572,7 @@ function fermerDetail() {
    ACTIONS DEMANDE
 ========================================================= */
 
+// Fonction commune pour changer le statut d'une demande (accepter, refuser, terminer).
 async function changerStatut(action, id, messageSucces) {
   actionEnCours.value = true
 
@@ -558,6 +590,7 @@ async function changerStatut(action, id, messageSucces) {
   }
 }
 
+// Accepter, refuser ou terminer la demande sélectionnée.
 async function accepterDemande() {
   await changerStatut(
     demandeStore.accepterDemande,
@@ -586,11 +619,13 @@ async function terminerDemande() {
    LITIGE
 ========================================================= */
 
+// Ouvre la fenêtre de litige.
 function ouvrirLitige() {
   detailOuvert.value = false
   litigeModalOuvert.value = true
 }
 
+// Appelée quand le litige vient d'être créé.
 function litigeCree() {
   succes(
     'Votre litige a été envoyé à MIMOSY.'
@@ -601,8 +636,10 @@ function litigeCree() {
    CHARGEMENT
 ========================================================= */
 
+// On recharge quand une demande arrive ou change de statut (temps réel).
 useEvenementTempsReel(['demande.nouvelle', 'demande.statut'], () => demandeStore.chargerDemandes(true).catch(() => {}))
 
+// Au montage : on charge les demandes.
 onMounted(async () => {
   await demandeStore
     .chargerDemandes(true)

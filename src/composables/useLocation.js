@@ -1,3 +1,5 @@
+// Un "composable" est une fonction réutilisable qui regroupe des données
+// réactives et de la logique, utilisable dans plusieurs pages.
 import { ref } from 'vue'
 import { getMyLocation, updateLocationCoordinates } from '@/services/locationService'
 
@@ -17,12 +19,15 @@ import { getMyLocation, updateLocationCoordinates } from '@/services/locationSer
  * vaut ne pas mémoriser sa position que de fabriquer une adresse.
  */
 export function useLocation() {
+  // État : en cours de chargement ? erreur ? succès ?
   const loading = ref(false)
   const error = ref(null)
   const success = ref(false)
 
+  // Demande au navigateur la position GPS de l'utilisateur.
   function requestLocation() {
     return new Promise((resolve, reject) => {
+      // Le navigateur ne sait pas donner de position.
       if (!navigator.geolocation) {
         error.value =
           'La géolocalisation n’est pas supportée par votre navigateur.'
@@ -35,7 +40,9 @@ export function useLocation() {
       error.value = null
       success.value = false
 
+      // Le navigateur demande l'autorisation à l'utilisateur, puis donne la position.
       navigator.geolocation.getCurrentPosition(
+        // Cas 1 : position obtenue.
         (position) => {
           // On garde 6 décimales pour respecter le DecimalField de Django
           const latitude = Number(position.coords.latitude.toFixed(6))
@@ -51,6 +58,7 @@ export function useLocation() {
           })
         },
 
+        // Cas 2 : erreur. On choisit un message clair selon la cause.
         (err) => {
           loading.value = false
 
@@ -78,6 +86,7 @@ export function useLocation() {
           reject(err)
         },
 
+        // Options : précision maximale, 10 s d'attente max, position gardée 5 min.
         {
           enableHighAccuracy: true,
           timeout: 10000,
@@ -94,8 +103,10 @@ export function useLocation() {
    */
   async function memoriserPositionSiLocalisationExiste(latitude, longitude) {
     try {
+      // On cherche la localisation déjà enregistrée.
       const localisation = await getMyLocation()
 
+      // Si elle existe, on met à jour seulement ses coordonnées GPS.
       if (localisation) {
         await updateLocationCoordinates(localisation.id, latitude, longitude)
       }
@@ -117,9 +128,11 @@ export function useLocation() {
    * Renvoie { latitude, longitude, source: 'gps' | 'adresse', libelle }.
    */
   async function positionPourRecherche() {
+    // Étape 1 : on essaie le GPS.
     try {
       const position = await requestLocation()
       return { ...position, source: 'gps', libelle: '' }
+    // Étape 2 : le GPS a échoué, on essaie l'adresse enregistrée dans le profil.
     } catch (erreurGps) {
       const messageGps = error.value
       loading.value = true
@@ -132,6 +145,7 @@ export function useLocation() {
         loading.value = false
       }
 
+      // On vérifie que l'adresse enregistrée a de vraies coordonnées.
       const latitude = Number(enregistree?.latitude)
       const longitude = Number(enregistree?.longitude)
       if (enregistree && Number.isFinite(latitude) && Number.isFinite(longitude)) {
@@ -144,6 +158,7 @@ export function useLocation() {
         }
       }
 
+      // Étape 3 : aucune position possible, on explique quoi faire.
       error.value = `${messageGps} Vous pouvez aussi enregistrer votre adresse dans votre profil pour rechercher autour d’elle.`
       throw erreurGps
     }

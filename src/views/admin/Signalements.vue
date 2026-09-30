@@ -1,6 +1,13 @@
+<!--
+  Page admin "Signalements" : les signalements envoyés par les utilisateurs.
+  L'admin peut les prendre en charge, les marquer comme traités ou les rejeter
+  (avec une note obligatoire).
+-->
 <script setup>
+// Outils Vue.
 import { onMounted, ref } from 'vue'
 
+// Les composants de la page.
 import AppLayout from '@/components/layout/AppLayout.vue'
 import ClientHeader from '@/components/client/ClientHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -8,17 +15,22 @@ import ErrorState from '@/components/common/ErrorState.vue'
 import Loader from '@/components/common/Loader.vue'
 import Modal from '@/components/common/Modal.vue'
 import Pagination from '@/components/common/Pagination.vue'
+// Composable des listes admin, toasts, et appels à l'API admin.
 import { useAdminListe } from '@/composables/useAdminListe'
 import { useToast } from '@/composables/useToast'
 import * as adminService from '@/services/adminService'
 
+// Liste paginée des signalements, avec filtres statut et type.
 const { items: signalements, count, page, pageSize, loading, errorMessage, filtres, charger, rechercher, changerPage } =
   useAdminListe(adminService.listSignalements, { statut: '', type_cible: '' })
+// Fonctions pour afficher un toast.
 const { succes, erreur } = useToast()
 
+// Les options des filtres.
 const statuts = ['', 'EN_ATTENTE', 'EN_COURS', 'TRAITE', 'REJETE']
 const types = ['', 'AVIS', 'COMPORTEMENT', 'AUTRE']
 
+// Couleurs du badge selon le statut.
 const classeStatut = {
   TRAITE: 'bg-[#EAF8F2] text-[#16805B]',
   REJETE: 'bg-[#FFF0EE] text-[#A85148]',
@@ -26,10 +38,12 @@ const classeStatut = {
   EN_ATTENTE: 'bg-[#FFF7E6] text-[#9A723C]',
 }
 
+// Le signalement en cours de traitement, la décision en cours, et la note de l'admin.
 const actionEnCours = ref('')
 const decision = ref(null) // { signalement, type: 'traiter' | 'rejeter' }
 const note = ref('')
 
+// Prendre en charge un signalement, puis recharger la liste.
 async function prendreEnCharge(signalement) {
   actionEnCours.value = signalement.id
   try {
@@ -43,12 +57,15 @@ async function prendreEnCharge(signalement) {
   }
 }
 
+// Ouvre la fenêtre de décision (traiter ou rejeter).
 function ouvrirDecision(signalement, type) {
   decision.value = { signalement, type }
   note.value = ''
 }
 
+// Confirme la décision avec la note écrite par l'admin.
 async function confirmerDecision() {
+  // La note doit faire au moins 5 caractères.
   if (!decision.value || note.value.trim().length < 5) {
     erreur('Merci de préciser une note d\'au moins 5 caractères.')
     return
@@ -73,6 +90,7 @@ async function confirmerDecision() {
   }
 }
 
+// On charge la liste au montage.
 onMounted(charger)
 </script>
 
@@ -81,6 +99,7 @@ onMounted(charger)
     <div class="mx-auto flex w-full  flex-col gap-6">
       <ClientHeader title="Signalements" subtitle="Signalements envoyés par les utilisateurs, à traiter par l'administration." />
 
+      <!-- Filtres : statut et type. -->
       <div class="flex flex-wrap items-center gap-2 text-black">
         <select v-model="filtres.statut" class="rounded-xl border border-[#E2E8F0] px-3 py-2 text-sm" @change="rechercher">
           <option v-for="statut in statuts" :key="statut" :value="statut">{{ statut || 'Tous les statuts' }}</option>
@@ -90,10 +109,12 @@ onMounted(charger)
         </select>
       </div>
 
+      <!-- États : chargement, erreur, vide. -->
       <Loader v-if="loading" />
       <ErrorState v-else-if="errorMessage" :message="errorMessage" @retry="charger" />
       <EmptyState v-else-if="!signalements.length" title="Aucun signalement" message="Aucun signalement ne correspond à ces critères." />
 
+      <!-- Une carte par signalement. -->
       <div v-else class="grid gap-4">
         <article v-for="signalement in signalements" :key="signalement.id" class="rounded-2xl border border-[#E2E8F0] bg-white p-5">
           <div class="flex flex-wrap items-start justify-between gap-3">
@@ -114,6 +135,7 @@ onMounted(charger)
             <strong>Décision :</strong> {{ signalement.note_resolution }}
           </p>
 
+          <!-- Boutons d'action, tant que le signalement n'est pas terminé. -->
           <div v-if="signalement.statut === 'EN_ATTENTE' || signalement.statut === 'EN_COURS'" class="mt-4 flex flex-wrap gap-2">
             <button
               v-if="signalement.statut === 'EN_ATTENTE'"
@@ -147,6 +169,7 @@ onMounted(charger)
       </div>
     </div>
 
+    <!-- Fenêtre de décision : l'admin écrit une note puis confirme. -->
     <Modal
       :model-value="!!decision"
       :title="decision?.type === 'traiter' ? 'Traiter le signalement' : 'Rejeter le signalement'"

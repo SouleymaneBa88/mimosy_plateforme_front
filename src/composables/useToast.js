@@ -7,10 +7,13 @@
  */
 import { ref } from 'vue'
 
+// La liste des toasts affichés (partagée par toute l'application).
 const toasts = ref([])
+// Compteur pour donner un identifiant unique à chaque toast.
 let prochainId = 1
 
 export function useToast() {
+  // Ajoute un toast et le retire automatiquement après "duree" millisecondes.
   function pushToast(message, type = 'success', duree = 4000) {
     const id = prochainId++
     toasts.value.push({ id, message, type })
@@ -18,6 +21,7 @@ export function useToast() {
     return id
   }
 
+  // Retire un toast de la liste.
   function removeToast(id) {
     toasts.value = toasts.value.filter((toast) => toast.id !== id)
   }
@@ -26,6 +30,7 @@ export function useToast() {
     toasts,
     pushToast,
     removeToast,
+    // Raccourcis : succes('...') et erreur('...').
     succes: (message) => pushToast(message, 'success'),
     erreur: (message) => pushToast(message, 'error'),
   }

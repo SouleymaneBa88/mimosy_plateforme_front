@@ -1,4 +1,13 @@
+<!--
+  Page de détail d'un devis envoyé par le prestataire.
+
+  ATTENTION (état actuel du code) : cette page n'est déclarée dans aucune
+  route de router/index.js, elle n'est donc pas accessible pour l'instant.
+  Les actions "modifier" et "annuler" ne sont pas encore reliées à une
+  vraie route / un vrai endpoint (voir les commentaires plus bas).
+-->
 <script setup>
+// Outils Vue, icônes et routeur.
 import { computed, onMounted, ref } from 'vue'
 import {
   ArrowLeft,
@@ -9,22 +18,26 @@ import {
 } from 'lucide-vue-next'
 import { useRoute, useRouter } from 'vue-router'
 
+// Les composants, le store de connexion et les appels à l'API des devis.
 import AppLayout from '@/components/layout/AppLayout.vue'
 import ClientHeader from '@/components/client/ClientHeader.vue'
 
 import { useAuthStore } from '@/stores/auth'
 import * as devisService from '@/services/devisService'
 
+// La route (pour lire l'id), le routeur et le store de connexion.
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 
+// Le devis, la demande liée, et les états de chargement et d'erreur.
 const devis = ref(null)
 const demande = ref(null)
 
 const isLoading = ref(false)
 const errorMessage = ref('')
 
+// Le nom du prestataire connecté.
 const userName = computed(() =>
   [
     authStore.user?.first_name,
@@ -38,6 +51,7 @@ const userName = computed(() =>
 /* Chargement                                                                 */
 /* -------------------------------------------------------------------------- */
 
+// Charge le devis et sa demande depuis le serveur.
 async function chargerDevis() {
   isLoading.value = true
   errorMessage.value = ''
@@ -104,6 +118,7 @@ async function chargerDevis() {
   }
 }
 
+// On charge au montage.
 onMounted(() => {
   chargerDevis()
 })
@@ -112,6 +127,7 @@ onMounted(() => {
 /* Navigation                                                                 */
 /* -------------------------------------------------------------------------- */
 
+// Retour à la liste des devis.
 function retourAuxDevis() {
   router.push('/prestataire/devis')
 }
@@ -120,6 +136,7 @@ function retourAuxDevis() {
 /* Données calculées                                                          */
 /* -------------------------------------------------------------------------- */
 
+// Les informations affichées, en essayant plusieurs noms de champ possibles.
 const serviceNom = computed(() =>
   devis.value?.service_nom ||
   demande.value?.service_nom ||
@@ -162,6 +179,7 @@ const lieuPrestation = computed(() =>
   'Lieu non renseigné',
 )
 
+// Le statut du devis, son libellé et ses couleurs.
 const statut = computed(() =>
   devis.value?.statut ||
   'EN_ATTENTE',
@@ -210,6 +228,7 @@ const statutClasses = computed(() => {
 /* Montants                                                                   */
 /* -------------------------------------------------------------------------- */
 
+// Les montants : main-d'œuvre, matériel, déplacement, prix proposé.
 const mainOeuvre = computed(() =>
   Number(
     devis.value?.main_oeuvre ??
@@ -242,6 +261,7 @@ const prixPropose = computed(() =>
   ),
 )
 
+// Le total à afficher.
 const total = computed(() => {
   /*
    * Si le backend fournit un total, on l'utilise.
@@ -264,6 +284,7 @@ const total = computed(() => {
     : prixPropose.value
 })
 
+// Le délai estimé.
 const delaiEstime = computed(() =>
   devis.value?.delai_estime ||
   demande.value?.delai_estime ||
@@ -274,6 +295,7 @@ const delaiEstime = computed(() =>
 /* Client                                                                     */
 /* -------------------------------------------------------------------------- */
 
+// Les initiales du client.
 const initialesClient = computed(() => {
   const nom = clientNom.value
 
@@ -290,6 +312,7 @@ const initialesClient = computed(() => {
 /* Formatage                                                                  */
 /* -------------------------------------------------------------------------- */
 
+// Met un montant et une date au format français.
 function formatMontant(value) {
   return Number(value || 0).toLocaleString('fr-FR')
 }

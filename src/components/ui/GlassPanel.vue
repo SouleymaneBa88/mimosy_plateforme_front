@@ -5,6 +5,7 @@
  * les tableaux : le verre n'a de sens qu'au-dessus d'un fond qui bouge ou
  * d'une image.
  */
+// Props : balise HTML, verre plus opaque (dense), arrondi, marge intérieure.
 defineProps({
   as: { type: String, default: 'div' },
   dense: { type: Boolean, default: false },

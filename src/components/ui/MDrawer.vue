@@ -8,36 +8,44 @@
 import { computed, ref, toRef, useId } from 'vue'
 import { X } from 'lucide-vue-next'
 
+// Le comportement commun des fenêtres (Échap, focus, scroll bloqué).
 import { useDialog } from './useDialog'
 
+// v-model : true = ouvert, false = fermé.
 const ouvert = defineModel({ type: Boolean, default: false })
 
+// Options : titre, côté d'ouverture (gauche, droite, bas) et largeur.
 const props = defineProps({
   title: { type: String, default: '' },
   side: { type: String, default: 'right', validator: (v) => ['left', 'right', 'bottom'].includes(v) },
   width: { type: String, default: '420px' },
 })
 
+// Événement envoyé à la fermeture.
 const emit = defineEmits(['close'])
 
 const panneau = ref(null)
 const autoId = useId()
 const titreId = computed(() => `m-drawer-titre-${autoId}`)
 
+// Ferme le tiroir.
 function fermer() {
   ouvert.value = false
   emit('close')
 }
 
+// On branche le comportement commun : Échap, focus piégé, scroll bloqué.
 const { onKeydown } = useDialog(toRef(ouvert), panneau, fermer)
 </script>
 
 <template>
   <Teleport to="body">
+    <!-- Fond gris : un clic ferme le tiroir. -->
     <Transition name="m-fade">
       <div v-if="ouvert" class="m-drawer__overlay" aria-hidden="true" @click="fermer" />
     </Transition>
 
+    <!-- Le panneau qui glisse depuis le bord de l'écran. -->
     <Transition :name="`m-drawer-${side}`">
       <aside
         v-if="ouvert"
@@ -51,6 +59,7 @@ const { onKeydown } = useDialog(toRef(ouvert), panneau, fermer)
         tabindex="-1"
         @keydown="onKeydown"
       >
+        <!-- Petite barre de prise, pour la version "bas d'écran" sur mobile. -->
         <span v-if="side === 'bottom'" class="m-drawer__grip" aria-hidden="true" />
 
         <header class="m-drawer__header">

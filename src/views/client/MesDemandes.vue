@@ -15,17 +15,21 @@
  * ------------------------------------------------------------------
  */
 
+// Outils Vue et routeur.
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 
+// Les icônes des statistiques.
 import { Inbox, Clock, CheckCircle2, XCircle } from 'lucide-vue-next'
 
+// Les composants, les stores et l'abonnement au temps réel.
 import ClientLayout from '@/components/layout/ClientLayout.vue'
 import RequestCard from '@/components/client/RequestCard.vue'
 import { useDemandePrestationStore } from '@/stores/demandePrestation'
 import { usePrestataireStore } from '@/stores/prestataire'
 import { useEvenementTempsReel } from '@/composables/useEvenementTempsReel'
 
+// Le routeur et les stores des demandes et des prestataires.
 const router = useRouter()
 const demandeStore = useDemandePrestationStore()
 const prestataireStore = usePrestataireStore()
@@ -156,6 +160,7 @@ function chargerDonnees() {
   ]).catch(() => {})
 }
 
+// On charge au montage, et on recharge quand une demande est créée ou change de statut.
 onMounted(chargerDonnees)
 useEvenementTempsReel(['demande.nouvelle', 'demande.statut'], () => demandeStore.chargerDemandes(true))
 

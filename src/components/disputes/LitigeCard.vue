@@ -5,19 +5,25 @@
  * voir apps.disputes.services) n'est jamais demandé ni affiché ici :
  * seules les informations prévues pour les parties prenantes le sont.
  */
+// Outils Vue.
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 
+// Appels à l'API des litiges et messages temporaires (toasts).
 import * as disputeService from '@/services/disputeService'
 import { useToast } from '@/composables/useToast'
 
+// Props : le litige à afficher et le rôle de l'utilisateur.
 const props = defineProps({
   litige: { type: Object, required: true },
   role: { type: String, required: true }, // 'CLIENT' | 'PRESTATAIRE'
 })
+// Événement "maj" : demande au parent de recharger le litige.
 const emit = defineEmits(['maj'])
 
+// Fonctions pour afficher un toast de succès ou d'erreur.
 const { succes, erreur } = useToast()
 
+// Couleurs du badge selon le statut.
 const classeStatut = {
   RESOLU: 'bg-[#EAF8F2] text-[#16805B]',
   REJETE: 'bg-[#FFF0EE] text-[#A85148]',
@@ -28,6 +34,7 @@ const classeStatut = {
   DELAI_EXPIRE: 'bg-[#FFF0EE] text-[#A85148]',
   REATTRIBUE: 'bg-[#EDF4FF] text-[#3267B1]',
 }
+// Libellés lisibles de chaque statut.
 const libellesStatut = {
   EN_ATTENTE: 'En attente',
   EN_COURS: "En cours d'examen",
@@ -52,18 +59,22 @@ const montantEncoreBloque = computed(() => props.litige.fonds_geles && !statutsT
 
 /* ───────────────────────── Compte à rebours (reprise) ───────────────────────── */
 
+// L'heure actuelle, mise à jour chaque seconde pour le compte à rebours.
 const maintenant = ref(Date.now())
 let intervalId = null
 
+// Au montage : on démarre le minuteur (1 fois par seconde).
 onMounted(() => {
   intervalId = setInterval(() => {
     maintenant.value = Date.now()
   }, 1000)
 })
+// Au démontage : on l'arrête.
 onUnmounted(() => {
   if (intervalId) clearInterval(intervalId)
 })
 
+// Temps restant avant la date limite de reprise, ex. "5 h 07 min".
 const delaiRestant = computed(() => {
   if (props.litige.statut !== 'REPRISE_DEMANDEE' || !props.litige.date_limite_reprise) return null
   const diffMs = new Date(props.litige.date_limite_reprise).getTime() - maintenant.value
@@ -75,10 +86,12 @@ const delaiRestant = computed(() => {
 
 /* ───────────────────────── Confirmation de reprise (prestataire) ───────────────────────── */
 
+// Formulaire de confirmation de reprise : ouvert ? texte ? envoi en cours ?
 const repriseOuverte = ref(false)
 const descriptionReprise = ref('')
 const confirmationEnCours = ref(false)
 
+// Le prestataire confirme avoir refait le travail.
 async function confirmerReprise() {
   confirmationEnCours.value = true
   try {
@@ -94,10 +107,12 @@ async function confirmerReprise() {
   }
 }
 
+// Ma description, celle de l'autre partie, et le nom de l'autre partie (selon mon rôle).
 const monTexte = computed(() => props.role === 'CLIENT' ? props.litige.description_client : props.litige.description_prestataire)
 const texteAutrePartie = computed(() => props.role === 'CLIENT' ? props.litige.description_prestataire : props.litige.description_client)
 const nomAutrePartie = computed(() => props.role === 'CLIENT' ? props.litige.prestataire_nom : props.litige.client_nom)
 
+// Les types de preuves possibles.
 const typesPreuve = [
   { value: 'PHOTO_AVANT', label: 'Photo avant' },
   { value: 'PHOTO_APRES', label: 'Photo après' },
@@ -107,16 +122,19 @@ const typesPreuve = [
   { value: 'AUTRE', label: 'Autre' },
 ]
 
+// Formulaire d'ajout de preuve : ouvert ? type ? description ? fichier ? envoi en cours ?
 const ajoutOuvert = ref(false)
 const typePreuve = ref('PHOTO_APRES')
 const descriptionPreuve = ref('')
 const fichier = ref(null)
 const envoiEnCours = ref(false)
 
+// Garde le fichier choisi.
 function choisirFichier(event) {
   fichier.value = event.target.files?.[0] || null
 }
 
+// Envoie la preuve au serveur.
 async function envoyerPreuve() {
   if (!fichier.value) {
     erreur('Choisissez un fichier à joindre.')
@@ -150,6 +168,7 @@ async function envoyerPreuve() {
 const apercu = ref(null) // { url, contentType, preuve } | null
 const apercuEnCours = ref(false)
 
+// Ouvre l'aperçu d'une preuve (téléchargée de façon sécurisée).
 async function ouvrirApercu(preuve) {
   apercuEnCours.value = true
   try {
@@ -162,11 +181,13 @@ async function ouvrirApercu(preuve) {
   }
 }
 
+// Ferme l'aperçu et libère la mémoire utilisée par le fichier.
 function fermerApercu() {
   if (apercu.value) URL.revokeObjectURL(apercu.value.url)
   apercu.value = null
 }
 
+// Au démontage, on libère aussi la mémoire de l'aperçu s'il est ouvert.
 onUnmounted(() => {
   if (apercu.value) URL.revokeObjectURL(apercu.value.url)
 })
@@ -174,6 +195,7 @@ onUnmounted(() => {
 
 <template>
   <article class="rounded-[24px] border border-mimosy-border bg-mimosy-surface p-5 sm:p-6">
+    <!-- En-tête : motif, autre partie, date et statut. -->
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
         <h2 class="font-sans font-extrabold text-mimosy-text">{{ litige.motif }}</h2>
@@ -245,6 +267,7 @@ onUnmounted(() => {
       Cette prestation a été réattribuée{{ litige.nouveau_prestataire_nom ? ` à ${litige.nouveau_prestataire_nom}` : '' }}.
     </p>
 
+    <!-- Les deux versions des faits. -->
     <div class="mt-3 grid gap-3 sm:grid-cols-2">
       <div>
         <p class="font-sans text-xs font-bold uppercase text-mimosy-secondary">Ma version</p>
@@ -256,6 +279,7 @@ onUnmounted(() => {
       </div>
     </div>
 
+    <!-- Liste des preuves (cliquer pour voir l'aperçu). -->
     <div v-if="litige.preuves?.length" class="mt-3">
       <p class="font-sans text-xs font-bold uppercase text-mimosy-secondary">Pièces jointes ({{ litige.preuves.length }})</p>
       <ul class="mt-1 flex flex-wrap gap-2">
@@ -308,10 +332,12 @@ onUnmounted(() => {
       </div>
     </Teleport>
 
+    <!-- Décision de l'administration, si elle existe. -->
     <p v-if="litige.decision_admin" class="mt-3 rounded-xl bg-mimosy-page p-3 font-sans text-sm text-mimosy-text">
       <strong>Décision MIMOSY :</strong> {{ litige.decision_admin }}
     </p>
 
+    <!-- Ajout d'une preuve (tant que le litige n'est pas terminé). -->
     <div v-if="['EN_ATTENTE', 'EN_COURS', 'REPRISE_DEMANDEE'].includes(litige.statut)" class="mt-4">
       <button v-if="!ajoutOuvert" type="button" class="rounded-xl border border-mimosy-border px-4 py-2 font-sans text-sm font-bold text-mimosy-text transition hover:border-mimosy-primary hover:text-mimosy-primary" @click="ajoutOuvert = true">
         Ajouter une preuve

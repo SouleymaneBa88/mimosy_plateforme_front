@@ -1,14 +1,23 @@
+<!--
+  Page "Disponibilité" du prestataire : ses créneaux de disponibilité
+  pour chaque jour de la semaine (ajouter, modifier, supprimer).
+  Les clients prennent rendez-vous dans ces créneaux.
+-->
 <script setup>
+// Outils Vue et icônes.
 import { computed, onMounted, reactive, ref } from 'vue'
 import { Plus, X, Trash2 } from 'lucide-vue-next'
 
+// La mise en page et les stores utilisés.
 import AppLayout from '@/components/layout/AppLayout.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useRendezVousStore } from '@/stores/rendezVous'
 
+// Le store de connexion et le store des rendez-vous / disponibilités.
 const authStore = useAuthStore()
 const rdvStore = useRendezVousStore()
 
+// Le nom du prestataire connecté.
 const userName = computed(
   () =>
     [authStore.user?.first_name, authStore.user?.last_name]
@@ -22,6 +31,7 @@ const userName = computed(
 |--------------------------------------------------------------------------
 */
 
+// Les jours de la semaine (0 = lundi, comme côté serveur).
 const joursSemaine = [
   { valeur: 0, label: 'Lundi' },
   { valeur: 1, label: 'Mardi' },
@@ -38,6 +48,7 @@ const joursSemaine = [
 |--------------------------------------------------------------------------
 */
 
+// Range les disponibilités par jour de la semaine.
 const disponibilitesParJour = computed(() => {
   const groupes = new Map(
     joursSemaine.map((jour) => [jour.valeur, []]),
@@ -61,17 +72,20 @@ const disponibilitesParJour = computed(() => {
 |--------------------------------------------------------------------------
 */
 
+// État du formulaire : ouvert ? disponibilité modifiée ? envoi en cours ? erreur ?
 const formulaireOuvert = ref(false)
 const disponibiliteEnEdition = ref(null)
 const formulaireEnvoi = ref(false)
 const formulaireErreur = ref('')
 
+// Les valeurs du formulaire.
 const formulaireDispo = reactive({
   jour_semaine: 0,
   heure_debut: '',
   heure_fin: '',
 })
 
+// Ouvre le formulaire vide pour ajouter une disponibilité (sur un jour donné).
 function ouvrirAjout(jour = 0) {
   disponibiliteEnEdition.value = null
 
@@ -83,6 +97,7 @@ function ouvrirAjout(jour = 0) {
   formulaireOuvert.value = true
 }
 
+// Ouvre le formulaire rempli pour modifier une disponibilité.
 function ouvrirEdition(disponibilite) {
   disponibiliteEnEdition.value = disponibilite
 
@@ -98,6 +113,7 @@ function ouvrirEdition(disponibilite) {
   formulaireOuvert.value = true
 }
 
+// Ferme le formulaire.
 function fermerFormulaire() {
   if (formulaireEnvoi.value) return
 
@@ -106,6 +122,7 @@ function fermerFormulaire() {
   formulaireErreur.value = ''
 }
 
+// Enregistre la disponibilité (ajout ou modification).
 async function soumettreFormulaire() {
   formulaireErreur.value = ''
 
@@ -154,6 +171,7 @@ async function soumettreFormulaire() {
 |--------------------------------------------------------------------------
 */
 
+// Supprime une disponibilité.
 async function supprimerDisponibilite(disponibilite) {
   const confirmation = window.confirm(
     'Voulez-vous vraiment supprimer cette disponibilité ?',
@@ -174,11 +192,13 @@ async function supprimerDisponibilite(disponibilite) {
 |--------------------------------------------------------------------------
 */
 
+// Affiche une heure "14:30:00" sous la forme "14:30".
 function formatHeure(value) {
   if (!value) return ''
   return value.slice(0, 5)
 }
 
+// Le jour a-t-il au moins une disponibilité active ?
 function jourActif(jour) {
   return jour.disponibilites.some(
     (disponibilite) => disponibilite.actif !== false,

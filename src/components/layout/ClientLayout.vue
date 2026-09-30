@@ -4,19 +4,24 @@
  * sidebar verticale (AppSidebar) utilisée par PRESTATAIRE/ADMIN. AppLayout
  * reste inchangé et continue de servir ces deux autres rôles.
  */
+// onMounted : exécute du code quand le composant apparaît à l'écran.
 import { onMounted } from 'vue'
 
+// La barre de navigation, le pied de page et les messages temporaires.
 import ClientNavbar from '@/components/layout/ClientNavbar.vue'
 import ClientFooter from '@/components/layout/ClientFooter.vue'
 import ToastContainer from '@/components/common/ToastContainer.vue'
+// Les stores du profil client et du temps réel.
 import { useClientProfilStore } from '@/stores/clientProfil'
 import { useRealtimeStore } from '@/stores/realtime'
 
+// Le store du profil du client connecté.
 const clientProfilStore = useClientProfilStore()
 
 onMounted(() => {
   // Connexion temps réel : une seule par onglet (sans effet si déjà ouverte).
   useRealtimeStore().demarrer()
+  // Si le profil n'est pas encore chargé et qu'on est connecté, on le charge.
   if (!clientProfilStore.isLoaded && localStorage.getItem('mimosy_access_token')) {
     clientProfilStore.chargerProfil().catch(() => {})
   }
@@ -25,6 +30,7 @@ onMounted(() => {
 
 <template>
   <div class="min-h-screen bg-mimosy-page">
+    <!-- Barre de navigation en haut. -->
     <ClientNavbar />
 
     <!--
@@ -42,8 +48,10 @@ onMounted(() => {
       <slot />
     </main>
 
+    <!-- Pied de page. -->
     <ClientFooter />
 
+    <!-- Zone des messages temporaires (toasts). -->
     <ToastContainer />
   </div>
 </template>

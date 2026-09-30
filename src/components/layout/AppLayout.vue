@@ -1,12 +1,21 @@
+<!--
+  AppLayout : la mise en page des espaces PRESTATAIRE et ADMIN.
+  Elle contient la barre latérale (AppSidebar), l'en-tête prestataire,
+  la zone de contenu (slot) et les messages temporaires.
+-->
 <script setup>
+// onMounted : exécute du code quand le composant apparaît.
 import { onMounted } from 'vue'
 
+// Les composants utilisés dans la mise en page.
 import AppSidebar from '@/components/layout/AppSidebar.vue'
 import ToastContainer from '@/components/common/ToastContainer.vue'
 import HeaderPrestataire from '@/components/prestataire/HeaderPrestataire.vue'
+// Les stores du profil et du temps réel.
 import { useClientProfilStore } from '@/stores/clientProfil'
 import { useRealtimeStore } from '@/stores/realtime'
 
+// Props : le rôle (pour le menu) et une couleur de fond facultative.
 const props = defineProps({
   role: {
     type: String,
@@ -22,11 +31,13 @@ const props = defineProps({
   },
 })
 
+// Le store du profil de l'utilisateur connecté.
 const clientProfilStore = useClientProfilStore()
 
 onMounted(() => {
   // Connexion temps réel : une seule par onglet (sans effet si déjà ouverte).
   useRealtimeStore().demarrer()
+  // Si le profil n'est pas chargé et qu'on est connecté, on le charge.
   if (!clientProfilStore.isLoaded && localStorage.getItem('mimosy_access_token')) {
     clientProfilStore.chargerProfil().catch(() => {})
   }
@@ -35,6 +46,7 @@ onMounted(() => {
 
 <template>
   <div class="min-h-screen" :style="{ backgroundColor: props.background || 'var(--pp-bg, #FFFDF9)' }" >
+    <!-- Barre latérale (menu). -->
     <AppSidebar :role="props.role" />
 
     <!--
@@ -55,11 +67,13 @@ onMounted(() => {
       -->
       <HeaderPrestataire v-if="props.role === 'prestataire'" />
 
+      <!-- Le contenu de la page. -->
       <div class="mx-auto px-4 py-5 sm:px-6 sm:py-6 md:px-8 md:py-7 lg:px-10 lg:py-10 xl:px-12">
         <slot />
       </div>
     </main>
 
+    <!-- Zone des messages temporaires (toasts). -->
     <ToastContainer />
   </div>
 </template>

@@ -1,6 +1,8 @@
+// Store Pinia des notifications (la cloche en haut de l'écran).
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
+// Les fonctions qui appellent l'API des notifications.
 import * as notificationService from '@/services/notificationService'
 
 /**
@@ -33,6 +35,7 @@ const DESTINATION_PAR_TYPE = {
   SIGNALEMENT: null,
 }
 
+// Renvoie la page où envoyer un CLIENT qui clique sur une notification (ou null).
 export function destinationNotification(notification) {
   return DESTINATION_PAR_TYPE[notification?.type] || null
 }
@@ -58,11 +61,14 @@ const DESTINATION_PAR_TYPE_PRESTATAIRE = {
   SIGNALEMENT: null,
 }
 
+// Même chose pour un PRESTATAIRE.
 export function destinationNotificationPrestataire(notification) {
   return DESTINATION_PAR_TYPE_PRESTATAIRE[notification?.type] || null
 }
 
+// Le store lui-même.
 export const useNotificationsStore = defineStore('notifications', () => {
+  // La liste de toutes les notifications, l'état de chargement et l'erreur.
   const notifications = ref([])
   const isLoading = ref(false)
   const errorMessage = ref('')
@@ -72,6 +78,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
   const nonLues = computed(() => notifications.value.filter((notification) => !notification.lu))
   const nombreNonLues = computed(() => nonLues.value.length)
 
+  // Charge les notifications depuis le serveur.
   async function chargerNotifications() {
     isLoading.value = true
     errorMessage.value = ''
@@ -94,10 +101,12 @@ export const useNotificationsStore = defineStore('notifications', () => {
    * gérée, pour ne jamais casser une navigation en cours.
    */
   async function marquerCommeLue(id) {
+    // On cherche la notification ; si elle n'existe pas ou est déjà lue, rien à faire.
     const notification = notifications.value.find((item) => item.id === id)
     if (!notification || notification.lu) return true
 
     try {
+      // On prévient le serveur, puis on la marque comme lue dans l'affichage.
       await notificationService.markNotificationRead(id)
       notification.lu = true
       return true
@@ -107,6 +116,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
     }
   }
 
+  // Marque toutes les notifications comme lues (serveur puis affichage).
   async function marquerToutesLues() {
     try {
       await notificationService.markAllNotificationsRead()

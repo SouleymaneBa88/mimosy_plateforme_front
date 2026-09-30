@@ -10,13 +10,16 @@
  * ─────────────────────────────────────────────────────────────
  */
 
+// Outils Vue, routeur et icônes.
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, CheckCircle2, MessageCircle, Receipt, TriangleAlert } from 'lucide-vue-next'
 
+// Les composants de la page.
 import ClientLayout from '@/components/layout/ClientLayout.vue'
 import NouveauLitigeModal from '@/components/disputes/NouveauLitigeModal.vue'
 import PaiementModal from '@/components/client/PaiementModal.vue'
+// Les stores, les toasts, les appels à l'API et le temps réel.
 import { useDemandePrestationStore } from '@/stores/demandePrestation'
 import { usePrestataireStore } from '@/stores/prestataire'
 import { useToast } from '@/composables/useToast'
@@ -26,14 +29,17 @@ import * as disputeService from '@/services/disputeService'
 import * as demandeService from '@/services/demandePrestationService'
 import { useEvenementTempsReel } from '@/composables/useEvenementTempsReel'
 
+// La route (pour lire l'id de la demande) et le routeur.
 const route = useRoute()
 const router = useRouter()
 
+// Les stores des demandes et des prestataires.
 const demandeStore = useDemandePrestationStore()
 const prestataireStore = usePrestataireStore()
 
 /* ───────────────────────── Paiement ───────────────────────── */
 
+// Le paiement de la demande, l'état de chargement et l'erreur.
 const paiement = ref(null)
 const paiementLoading = ref(false)
 const paiementError = ref('')
@@ -99,6 +105,7 @@ async function verifierPaiement() {
   }
 }
 
+// Charge les paiements du client et garde celui de cette demande.
 async function chargerPaiement() {
   try {
     const paiements = (await walletService.listMesPaiements()).filter(
@@ -121,6 +128,7 @@ async function chargerPaiement() {
 // litigeBloquant ci-dessous, qui remplace le bandeau de paiement usuel.
 const litigeBloquant = ref(null)
 
+// Cherche un litige ouvert (avec fonds gelés) sur cette demande.
 async function chargerLitigeLie() {
   try {
     const data = await disputeService.listMesLitiges()
@@ -140,6 +148,7 @@ const demande = computed(() => demandeStore.demandeSelectionnee)
 /** Le prestataire lié à la demande (issu du store). */
 const prestataire = computed(() => prestataireStore.prestataireSelectionne)
 
+// Le nom du prestataire (ou "Chargement…").
 const nomPrestataire = computed(() =>
   prestataire.value
     ? `${prestataire.value.user_first_name || ''} ${prestataire.value.user_last_name || ''}`.trim() || prestataire.value.user_email || 'Prestataire'
@@ -148,8 +157,10 @@ const nomPrestataire = computed(() =>
 
 /* ───────────────────────── États des modales ───────────────────────── */
 
+// Fenêtre d'annulation ouverte ?
 const cancelOpen = ref(false)
 
+// État de la fenêtre d'avis : ouverte, note, commentaire, envoi, erreur, succès.
 const avisOpen = ref(false)
 const avisNote = ref(0)
 const avisCommentaire = ref('')
@@ -246,8 +257,10 @@ const confirmationOuverte = ref(false)
 const confirmationEnCours = ref(false)
 const confirmationErreur = ref('')
 
+// Date limite pour valider la prestation.
 const dateLimiteValidation = computed(() => formatDate(demande.value?.date_limite_validation))
 
+// Le client confirme que le travail est bien fait.
 async function confirmerPrestation() {
   if (!demande.value?.id) return
   confirmationEnCours.value = true
@@ -264,9 +277,11 @@ async function confirmerPrestation() {
   }
 }
 
+// Fenêtre de litige ouverte ? + fonction pour afficher un toast.
 const litigeModalOuvert = ref(false)
 const { succes } = useToast()
 
+// Appelée quand le litige vient d'être créé.
 async function litigeCree() {
   succes('Votre litige a été envoyé à MIMOSY. L’argent reste sécurisé pendant son examen.')
   // Litige en cours : la validation est suspendue, on relit l'état réel.
@@ -389,6 +404,7 @@ onMounted(() => {
 
 /* ───────────────────────── Annulation de la demande ───────────────────────── */
 
+// Annule la demande.
 async function annulerDemande() {
   if (!demande.value?.id) return
 

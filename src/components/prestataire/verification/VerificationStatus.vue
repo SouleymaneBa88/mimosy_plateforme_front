@@ -12,13 +12,16 @@
  * (`statutVerification`, EN_ATTENTE/VERIFIE/REJETE) sert de valeur de
  * repli tant que ce document n'a pas encore été chargé.
  */
+// Outils Vue, lien de navigation et icônes.
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { ShieldCheck, ShieldAlert, ShieldQuestion, Clock, AlertTriangle } from 'lucide-vue-next'
 
+// Les appels à l'API de vérification et le seuil de ressemblance.
 import * as verificationService from '@/services/verificationService'
 import { SEUIL_CORRESPONDANCE } from '@/utils/verification'
 
+// Prop : le statut global de vérification du profil.
 const props = defineProps({
   statutVerification: {
     type: String,
@@ -26,9 +29,11 @@ const props = defineProps({
   },
 })
 
+// Le document "pièce d'identité" et l'état de son chargement.
 const document = ref(null)
 const chargementDocument = ref(true)
 
+// Au montage, on charge le document "pièce d'identité".
 onMounted(async () => {
   try {
     document.value = await verificationService.getMonDocument('PIECE_IDENTITE')
@@ -48,11 +53,13 @@ onMounted(async () => {
  * - VALIDE ou REJETE : décision administrative déjà prise.
  */
 const etat = computed(() => {
+  // Le statut du document, s'il existe.
   const statutDocument = document.value?.statut
 
   if (statutDocument === 'VALIDE') return 'verifiee'
   if (statutDocument === 'REJETE') return 'refusee'
 
+  // À vérifier : on regarde le score de ressemblance avec le profil.
   if (statutDocument === 'A_VERIFIER') {
     const score = document.value?.score_correspondance
     return score != null && score < SEUIL_CORRESPONDANCE ? 'a_revoir' : 'en_cours'
@@ -67,6 +74,7 @@ const etat = computed(() => {
   return 'requise'
 })
 
+// Pour chaque état : icône, couleurs, titre, texte et bouton.
 const contenu = computed(() => ({
   requise: {
     icone: ShieldQuestion,
@@ -115,6 +123,7 @@ const contenu = computed(() => ({
   <section class="border border-[#E5E7E2] bg-white p-6 sm:p-8">
     <div class="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
       <div class="flex gap-4">
+        <!-- Pastille avec l'icône de l'état. -->
         <span
           class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full"
           :class="contenu.fond"
@@ -122,6 +131,7 @@ const contenu = computed(() => ({
           <component :is="contenu.icone" class="h-5 w-5" :class="contenu.couleur" :stroke-width="2" />
         </span>
 
+        <!-- Titre et description de l'état. -->
         <div>
           <h2 class="text-lg font-semibold text-[#1A1C1A]">
             {{ contenu.titre }}
@@ -133,6 +143,7 @@ const contenu = computed(() => ({
         </div>
       </div>
 
+      <!-- Bouton vers la page de vérification (après chargement). -->
       <RouterLink
         v-if="!chargementDocument"
         to="/prestataire/verification"

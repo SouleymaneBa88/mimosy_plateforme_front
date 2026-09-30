@@ -7,10 +7,13 @@
  */
 import { computed, useId, useSlots } from 'vue'
 
+// Les attributs non déclarés ne vont pas sur la <div> mais sur le champ (voir v-bind="$attrs").
 defineOptions({ inheritAttrs: false })
 
+// defineModel : permet d'utiliser v-model sur ce composant.
 const model = defineModel({ type: [String, Number], default: '' })
 
+// Les options du champ : libellé, type, texte d'aide, message d'erreur, icône...
 const props = defineProps({
   label: { type: String, default: '' },
   type: { type: String, default: 'text' },
@@ -27,12 +30,14 @@ const props = defineProps({
   id: { type: String, default: '' },
 })
 
+// On génère un identifiant unique pour relier le libellé et le champ.
 const slots = useSlots()
 const autoId = useId()
 const champId = computed(() => props.id || `m-input-${autoId}`)
 const aideId = computed(() => `${champId.value}-aide`)
 const erreurId = computed(() => `${champId.value}-erreur`)
 
+// Liste des identifiants des textes d'aide et d'erreur (pour les lecteurs d'écran).
 const decritPar = computed(() => {
   const ids = []
   if (props.error) ids.push(erreurId.value)
@@ -43,11 +48,13 @@ const decritPar = computed(() => {
 
 <template>
   <div class="m-field" :class="{ 'is-invalid': error, 'is-disabled': disabled }">
+    <!-- Le libellé du champ (avec une étoile s'il est obligatoire). -->
     <label v-if="label" :for="champId" class="m-field__label" :class="{ 'sr-only': hideLabel }">
       {{ label }}
       <span v-if="required" class="m-field__required" aria-hidden="true">*</span>
     </label>
 
+    <!-- Le champ lui-même : zone de texte (multiline) ou champ simple. -->
     <div class="m-field__control" :class="{ 'has-icon': icon, 'is-multiline': multiline }">
       <component :is="icon" v-if="icon" class="m-field__icon" :size="17" :stroke-width="1.8" aria-hidden="true" />
 
@@ -81,6 +88,7 @@ const decritPar = computed(() => {
       <span v-if="slots.suffix" class="m-field__suffix"><slot name="suffix" /></span>
     </div>
 
+    <!-- Sous le champ : le message d'erreur, ou à défaut le texte d'aide. -->
     <p v-if="error" :id="erreurId" class="m-field__error" role="alert">{{ error }}</p>
     <p v-else-if="help" :id="aideId" class="m-field__help">{{ help }}</p>
   </div>

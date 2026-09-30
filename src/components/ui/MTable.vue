@@ -17,6 +17,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import MLoader from './MLoader.vue'
 
+// Props : colonnes, lignes, clé unique de ligne, chargement, lignes cliquables...
 const props = defineProps({
   columns: { type: Array, required: true },
   rows: { type: Array, default: () => [] },
@@ -29,23 +30,30 @@ const props = defineProps({
   skeletonRows: { type: Number, default: 5 },
 })
 
+// Événement envoyé quand on clique sur une ligne.
 const emit = defineEmits(['row-click'])
 
+// true sur petit écran (affichage en cartes).
 const estMobile = ref(false)
+// La "media query" qui surveille la largeur de l'écran.
 let requete = null
 
+// Met à jour estMobile selon la largeur actuelle.
 function majBreakpoint() {
   estMobile.value = !requete.matches
 }
 
+// Au montage : on commence à surveiller la largeur de l'écran.
 onMounted(() => {
   requete = window.matchMedia(`(min-width: ${props.breakpoint}px)`)
   majBreakpoint()
   requete.addEventListener('change', majBreakpoint)
 })
 
+// Au démontage : on arrête de surveiller.
 onBeforeUnmount(() => requete?.removeEventListener('change', majBreakpoint))
 
+// Renvoie la clé unique d'une ligne (utilisée par v-for).
 function cle(row, index) {
   if (typeof props.rowKey === 'function') return props.rowKey(row)
   return row?.[props.rowKey] ?? index
@@ -58,19 +66,23 @@ function valeur(row, key) {
     .reduce((acc, part) => (acc == null ? acc : acc[part]), row)
 }
 
+// Colonnes affichées en titre des cartes mobiles (sinon la première colonne).
 const colonnesPrincipales = computed(() => {
   const principales = props.columns.filter((c) => c.primary)
   return principales.length ? principales : props.columns.slice(0, 1)
 })
 
+// Les autres colonnes, affichées en "libellé : valeur" dans les cartes.
 const colonnesSecondaires = computed(() =>
   props.columns.filter((c) => !colonnesPrincipales.value.includes(c) && !c.hideOnMobile),
 )
 
+// Clic sur une ligne.
 function onRowClick(row) {
   if (props.clickable) emit('row-click', row)
 }
 
+// Touche Entrée ou Espace sur une ligne = même effet qu'un clic.
 function onRowKeydown(evenement, row) {
   if (!props.clickable) return
   if (evenement.key === 'Enter' || evenement.key === ' ') {

@@ -1,4 +1,10 @@
+<!--
+  Page "Demandes de devis" du prestataire : les demandes de devis reçues
+  des clients, avec onglets par statut, pagination, et une fenêtre pour
+  répondre par un devis détaillé (matériaux, main-d'œuvre, frais).
+-->
 <script setup>
+// Outils Vue et icônes.
 import { computed, onMounted, reactive, ref } from 'vue'
 import {
   ChevronLeft,
@@ -9,22 +15,28 @@ import {
   X,
 } from 'lucide-vue-next'
 
+// Les composants de la page.
 import AppLayout from '@/components/layout/AppLayout.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import DevisDetail from '@/components/devis/DevisDetail.vue'
 
+// Les appels à l'API des devis.
 import * as devisService from '@/services/devisService'
 
+// Les demandes de devis reçues et les réponses (devis) déjà envoyées.
 const demandes = ref([])
 const reponses = ref([])
 
+// États : chargement, envoi en cours, erreur.
 const isLoading = ref(false)
 const isSubmitting = ref(false)
 const errorMessage = ref('')
 
+// Fenêtre de réponse ouverte ? + la demande à laquelle on répond.
 const showResponseModal = ref(false)
 const selectedDemande = ref(null)
 
+// Onglet actif, page actuelle, et nombre de demandes par page.
 const activeTab = ref('TOUS')
 const currentPage = ref(1)
 const itemsPerPage = 4
@@ -44,16 +56,20 @@ function formulaireVide() {
   }
 }
 
+// Les valeurs du formulaire de devis.
 const form = reactive(formulaireVide())
 
+// Remet le formulaire à zéro.
 function reinitialiserFormulaire() {
   Object.assign(form, formulaireVide())
 }
 
+// Ajoute une ligne de matériau vide.
 function ajouterLigne() {
   form.lignes.push({ designation: '', quantite: '1', unite: '', prix_unitaire: '' })
 }
 
+// Supprime une ligne de matériau.
 function retirerLigne(index) {
   form.lignes.splice(index, 1)
 }
@@ -68,12 +84,14 @@ const apercuTotal = computed(() => {
   return materiaux + (Number(form.montant_main_oeuvre) || 0) + (Number(form.montant_frais) || 0)
 })
 
+// Date minimale de validité du devis : aujourd'hui (format AAAA-MM-JJ).
 const dateMinValidite = new Date().toISOString().slice(0, 10)
 
 /* -------------------------------------------------------------------------- */
 /* Données                                                                    */
 /* -------------------------------------------------------------------------- */
 
+// Chaque demande avec la réponse (devis) déjà envoyée, s'il y en a une.
 const demandesAvecReponses = computed(() =>
   demandes.value.map((demande) => ({
     ...demande,
@@ -83,6 +101,7 @@ const demandesAvecReponses = computed(() =>
   })),
 )
 
+// Les demandes filtrées selon l'onglet actif.
 const demandesFiltrees = computed(() => {
   if (activeTab.value === 'TOUS') {
     return demandesAvecReponses.value
@@ -115,6 +134,7 @@ const demandesFiltrees = computed(() => {
   return demandesAvecReponses.value
 })
 
+// Nombre total de pages.
 const totalPages = computed(() =>
   Math.max(
     1,
@@ -122,6 +142,7 @@ const totalPages = computed(() =>
   ),
 )
 
+// Les demandes de la page actuelle.
 const demandesPage = computed(() => {
   const debut = (currentPage.value - 1) * itemsPerPage
   const fin = debut + itemsPerPage
@@ -129,6 +150,7 @@ const demandesPage = computed(() => {
   return demandesFiltrees.value.slice(debut, fin)
 })
 
+// Les numéros de page à afficher.
 const pages = computed(() => {
   const total = totalPages.value
 
@@ -163,6 +185,7 @@ const pages = computed(() => {
 /* Compteurs                                                                  */
 /* -------------------------------------------------------------------------- */
 
+// Les compteurs de chaque onglet.
 const nombreTous = computed(
   () => demandesAvecReponses.value.length,
 )
@@ -199,6 +222,7 @@ const nombreExpires = computed(
 /* Chargement                                                                 */
 /* -------------------------------------------------------------------------- */
 
+// Charge les demandes de devis et les réponses.
 async function chargerDevis() {
   isLoading.value = true
   errorMessage.value = ''
@@ -226,6 +250,7 @@ async function chargerDevis() {
   }
 }
 
+// On charge au montage.
 onMounted(() => {
   chargerDevis()
 })
@@ -234,6 +259,7 @@ onMounted(() => {
 /* Onglets                                                                    */
 /* -------------------------------------------------------------------------- */
 
+// Change d'onglet et revient à la page 1.
 function changerOnglet(tab) {
   activeTab.value = tab
   currentPage.value = 1
@@ -243,6 +269,7 @@ function changerOnglet(tab) {
 /* Pagination                                                                 */
 /* -------------------------------------------------------------------------- */
 
+// Navigation entre les pages.
 function allerPage(page) {
   if (page < 1 || page > totalPages.value) {
     return
@@ -268,6 +295,7 @@ function pageSuivante() {
 /* Modal de réponse                                                           */
 /* -------------------------------------------------------------------------- */
 
+// Ouvre la fenêtre pour répondre à une demande.
 function ouvrirReponse(demande) {
   selectedDemande.value = demande
 
@@ -277,6 +305,7 @@ function ouvrirReponse(demande) {
   showResponseModal.value = true
 }
 
+// Ferme la fenêtre de réponse.
 function fermerReponse() {
   if (isSubmitting.value) {
     return
@@ -288,6 +317,7 @@ function fermerReponse() {
   reinitialiserFormulaire()
 }
 
+// Envoie le devis au serveur (le total est calculé par le serveur, jamais envoyé).
 async function envoyerReponse() {
   if (
     !selectedDemande.value ||
@@ -341,6 +371,7 @@ async function envoyerReponse() {
 /* Formatage                                                                  */
 /* -------------------------------------------------------------------------- */
 
+// Met un montant et une date au format français.
 function formatMontant(value) {
   if (value === null || value === undefined || value === '') {
     return '0'
@@ -367,6 +398,7 @@ function formatDate(value) {
   })
 }
 
+// Libellé et couleurs du statut d'une demande.
 function statutLabel(demande) {
   if (!demande.reponse) {
     return 'En attente'

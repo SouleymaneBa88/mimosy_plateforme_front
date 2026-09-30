@@ -14,20 +14,25 @@
  * différence est la disposition visuelle, alignée sur front_mimosy.
  * ------------------------------------------------------------------
  */
+// Outils Vue, routeur et icônes.
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { CheckCircle2, Circle, LocateFixed, MapPin, RotateCcw, Search, SlidersHorizontal } from 'lucide-vue-next'
 
+// Les composants de la page.
 import ClientLayout from '@/components/layout/ClientLayout.vue'
 import ServiceSearch from '@/components/client/ServiceSearch.vue'
 import PrestataireCard from '@/components/client/PrestataireCard.vue'
 import SearchFilters from '@/components/client/SearchFilters.vue'
+import SuggestionsRecherche from '@/components/client/SuggestionsRecherche.vue'
 import ProvidersMap from '@/components/client/ProvidersMap.vue'
 import Modal from '@/components/common/Modal.vue'
+// La géolocalisation et les stores.
 import { useLocation } from '@/composables/useLocation'
 import { usePrestataireStore } from '@/stores/prestataire'
 import { useCatalogueStore } from '@/stores/catalogue'
 
+// La route, le routeur, les stores, et les outils de position.
 const route = useRoute()
 const router = useRouter()
 const prestataireStore = usePrestataireStore()
@@ -41,6 +46,7 @@ const { positionPourRecherche, loading: positionLoading, error: positionError } 
  * recherche classique si l'interprétation échoue ou si le champ est vide.
  * ---------------------------------------------------------------- */
 const searchService = ref('')
+// Prestataire sélectionné (surligné sur la carte) ; dernière recherche en langage naturel ?
 const selectedPrestataireId = ref(null)
 const rechercheNaturelleActive = ref(false)
 
@@ -50,11 +56,13 @@ const rechercheNaturelleActive = ref(false)
  * ---------------------------------------------------------------- */
 const categorieActive = ref('')
 
+// Les boutons de catégories : "Toutes" + chaque catégorie du catalogue.
 const chipsCategories = computed(() => [
   { id: '', nom: 'Toutes' },
   ...catalogueStore.categories.map((categorie) => ({ id: categorie.nom, nom: categorie.nom })),
 ])
 
+// Clic sur une catégorie : on filtre et on relance la recherche.
 function choisirCategorie(id) {
   categorieActive.value = id
   filtres.value = { ...filtres.value, categorie: id }
@@ -71,6 +79,7 @@ const filtres = ref({
   disponible: false,
   rayon_km: 10,
 })
+// Panneau des filtres ouvert ?
 const filtresOuverts = ref(false)
 
 /* ---------------------------------------------------------------- *
@@ -78,19 +87,23 @@ const filtresOuverts = ref(false)
  * explicitement par l'utilisateur.
  * ---------------------------------------------------------------- */
 const positionActive = ref(false)
+// Coordonnées GPS utilisées pour la recherche.
 const latitude = ref(null)
 const longitude = ref(null)
 // 'gps' (position du navigateur) ou 'adresse' (localisation enregistrée du profil).
 const sourcePosition = ref('gps')
+// Libellé de la position (ex. quartier, ville), et référence vers la carte.
 const libellePosition = ref('')
 const providersMapRef = ref(null)
 
+// La position du client pour la carte (null si "Autour de moi" est désactivé).
 const clientLocation = computed(() =>
   positionActive.value && latitude.value != null && longitude.value != null
     ? { lat: latitude.value, lng: longitude.value }
     : null,
 )
 
+// Active "Autour de moi" : on récupère la position, puis on relance la recherche.
 async function activerRechercheAutourDeMoi() {
   try {
     const position = await positionPourRecherche()
@@ -105,6 +118,7 @@ async function activerRechercheAutourDeMoi() {
   }
 }
 
+// Désactive "Autour de moi" et relance la recherche.
 function desactiverRechercheAutourDeMoi() {
   positionActive.value = false
   latitude.value = null
@@ -112,20 +126,24 @@ function desactiverRechercheAutourDeMoi() {
   lancerRecherche()
 }
 
+// Bouton on/off "Autour de moi".
 function basculerAutourDeMoi() {
   if (positionActive.value) desactiverRechercheAutourDeMoi()
   else activerRechercheAutourDeMoi()
 }
 
+// Nombre de filtres actifs (affiché sur le bouton "Filtres").
 const nombreFiltresActifs = computed(
   () => Object.values(filtres.value).filter((valeur) => valeur === true || (typeof valeur === 'string' && valeur.trim())).length,
 )
 
+// Filtre "vérifiés seulement" (appliqué dans le navigateur).
 const filtreVerifies = ref(false)
 function basculerVerifies() {
   filtreVerifies.value = !filtreVerifies.value
 }
 
+// Filtre "disponibles seulement" (envoyé au serveur).
 function basculerDisponibles() {
   filtres.value = { ...filtres.value, disponible: !filtres.value.disponible }
   lancerRecherche()
@@ -155,10 +173,12 @@ const resultats = computed(() =>
   })),
 )
 
+// Résultats affichés (sans les non vérifiés si le filtre est actif), total, et page suivante.
 const resultatsAffiches = computed(() => resultats.value.filter((item) => !filtreVerifies.value || item.verifie))
 const totalResultats = computed(() => prestataireStore.paginationRecherche.count)
 const peutVoirPlus = computed(() => Boolean(prestataireStore.paginationRecherche.next))
 
+// Renvoie "s" si le nombre est supérieur à 1.
 function pluriel(n) {
   return n > 1 ? 's' : ''
 }
@@ -184,6 +204,7 @@ function parametresRecherche() {
   return params
 }
 
+// Lance la recherche classique (les erreurs sont gérées par le store).
 function lancerRecherche() {
   rechercheNaturelleActive.value = false
   return prestataireStore.rechercher(parametresRecherche()).catch(() => {})
@@ -194,9 +215,10 @@ function lancerRecherche() {
  * /api/recherche/intelligente/ (interprétation service/catégorie/
  * localisation/urgence, voir prestataireStore.rechercherIntelligente) ;
  * un champ vide relance simplement la recherche classique avec les
- * filtres/catégorie déjà actifs. Aucun faux système IA : c'est le vrai
- * endpoint MIMOSY, avec repli automatique sur la recherche classique en
- * cas d'échec.
+ * filtres/catégorie déjà actifs. Si l'API ne trouve aucun résultat réel,
+ * elle renvoie des suggestions IA (prestataireStore.suggestionsIA),
+ * affichées par SuggestionsRecherche.vue, jamais comme des prestataires.
+ * Repli automatique sur la recherche classique en cas d'échec.
  */
 function handleSearch({ service }) {
   searchService.value = service || ''
@@ -217,11 +239,18 @@ function handleSearch({ service }) {
   })
 }
 
+/** Clic sur une suggestion IA : relance la recherche avec ce libellé réel du catalogue. */
+function rechercherSuggestion(libelle) {
+  handleSearch({ service: libelle })
+}
+
+// Ferme le panneau des filtres et lance la recherche.
 function appliquerFiltres() {
   filtresOuverts.value = false
   lancerRecherche()
 }
 
+// Remet tous les filtres à zéro et relance la recherche.
 function reinitialiser() {
   searchService.value = ''
   rechercheNaturelleActive.value = false
@@ -235,19 +264,23 @@ function reinitialiser() {
   lancerRecherche()
 }
 
+// Charge la page suivante de résultats.
 function voirPlus() {
   prestataireStore.chargerPageSuivante().catch(() => {})
 }
 
+// Sélectionne un prestataire et centre la carte sur lui.
 function selectPrestataire(id) {
   selectedPrestataireId.value = id
   providersMapRef.value?.centrerSur(id)
 }
 
+// Ouvre la page de profil d'un prestataire.
 function voirProfil(prestataire) {
   router.push({ name: 'client.prestataire', params: { id: prestataire.id } })
 }
 
+// Clic sur un marqueur de la carte : on sélectionne et on ouvre le profil.
 function surClicMarqueur(provider) {
   selectedPrestataireId.value = provider.id
   voirProfil(provider)
@@ -275,6 +308,7 @@ function chargerDonnees() {
   ])
 }
 
+// On charge les données au montage.
 onMounted(chargerDonnees)
 </script>
 
@@ -385,6 +419,15 @@ onMounted(chargerDonnees)
               Réessayer
             </button>
           </div>
+
+          <!-- Recherche intelligente sans correspondance : suggestions IA (jamais des prestataires) -->
+          <SuggestionsRecherche
+            v-else-if="resultatsAffiches.length === 0 && rechercheNaturelleActive && prestataireStore.suggestionsIA"
+            :suggestions-ia="prestataireStore.suggestionsIA"
+            :peut-reinitialiser="true"
+            @rechercher="rechercherSuggestion"
+            @reinitialiser="reinitialiser"
+          />
 
           <!-- Vide -->
           <div v-else-if="resultatsAffiches.length === 0" class="hc-state hc-state--empty">

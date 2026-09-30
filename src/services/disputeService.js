@@ -5,8 +5,10 @@ import { apiFetch } from './api'
 // Mes litiges (le backend filtre déjà selon le rôle connecté : client ou prestataire).
 export const listMesLitiges = () => apiFetch(API_ENDPOINTS.litiges)
 
+// Détail d'un litige.
 export const getLitige = (id) => apiFetch(API_ENDPOINTS.litige(id))
 
+// Ouvre un nouveau litige. On transforme les noms en format attendu par Django (snake_case).
 export const ouvrirLitige = ({ demandePrestation, motif, descriptionClient, descriptionPrestataire }) =>
   apiFetch(API_ENDPOINTS.litiges, {
     method: 'POST',
@@ -18,6 +20,7 @@ export const ouvrirLitige = ({ demandePrestation, motif, descriptionClient, desc
     },
   })
 
+// Ajoute une preuve (fichier) à un litige.
 export const ajouterPreuve = (litigeId, { fichier, typePreuve, description }) => {
   const formData = new FormData()
   formData.append('fichier', fichier)
@@ -42,6 +45,7 @@ export const confirmerReprise = (litigeId, description = '') =>
 // récupère donc le blob nous-mêmes puis on le transforme en URL locale,
 // que l'appelant doit révoquer (URL.revokeObjectURL) une fois affichée.
 export async function recupererApercuPreuve(preuveId) {
+  // On récupère le jeton pour prouver qui on est.
   const token = localStorage.getItem('mimosy_access_token')
   const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.litigePreuveFichier(preuveId)}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -51,6 +55,7 @@ export async function recupererApercuPreuve(preuveId) {
     throw new Error("Impossible de charger l'aperçu de cette preuve.")
   }
 
+  // On transforme le fichier reçu en adresse locale utilisable dans <img> ou <iframe>.
   const blob = await response.blob()
   return { url: URL.createObjectURL(blob), contentType: blob.type }
 }

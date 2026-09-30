@@ -5,6 +5,7 @@
  * - skeleton : contenu en cours d'arrivée (lignes grisées, pulsation lente)
  * - page     : chargement initial d'un écran entier
  */
+// Props : type d'indicateur, texte pour les lecteurs d'écran, nombre de lignes, taille.
 defineProps({
   variant: { type: String, default: 'spinner', validator: (v) => ['spinner', 'skeleton', 'page'].includes(v) },
   label: { type: String, default: 'Chargement…' },
@@ -14,6 +15,7 @@ defineProps({
 </script>
 
 <template>
+  <!-- Variante "skeleton" : des lignes grises de longueurs variées. -->
   <div v-if="variant === 'skeleton'" class="m-skeleton" role="status" aria-live="polite">
     <span class="sr-only">{{ label }}</span>
     <slot>
@@ -27,11 +29,13 @@ defineProps({
     </slot>
   </div>
 
+  <!-- Variante "page" : grand cercle + texte, pour tout un écran. -->
   <div v-else-if="variant === 'page'" class="m-loader-page" role="status" aria-live="polite">
     <span class="m-loader__spinner m-loader__spinner--lg m-spin" aria-hidden="true" />
     <p class="m-loader-page__label">{{ label }}</p>
   </div>
 
+  <!-- Variante "spinner" (par défaut) : petit cercle qui tourne. -->
   <div v-else class="m-loader" role="status" aria-live="polite">
     <span class="m-loader__spinner m-spin" :class="`m-loader__spinner--${size}`" aria-hidden="true" />
     <span class="sr-only">{{ label }}</span>

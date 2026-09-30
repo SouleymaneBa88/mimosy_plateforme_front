@@ -1,8 +1,15 @@
+<!--
+  Page d'inscription (/register).
+  L'utilisateur choisit son rôle (client ou prestataire), remplit ses
+  informations, et chaque champ est vérifié en direct avant l'envoi au serveur.
+-->
 <script setup>
+// Outils Vue, routeur et store de connexion.
 import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
 
+// Le routeur et le store de connexion.
 const router = useRouter();
 const authStore = useAuthStore();
 
@@ -12,8 +19,10 @@ const authStore = useAuthStore();
 |--------------------------------------------------------------------------
 */
 
+// Le rôle choisi : "client" ou "prestataire".
 const selectedRole = ref("client");
 
+// Change le rôle choisi.
 const selectRole = (role) => {
   selectedRole.value = role;
 };
@@ -24,6 +33,7 @@ const selectRole = (role) => {
 |--------------------------------------------------------------------------
 */
 
+// Les champs du formulaire.
 const firstName = ref("");
 const lastName = ref("");
 const email = ref("");
@@ -32,6 +42,7 @@ const password = ref("");
 const passwordConfirmation = ref("");
 const acceptTerms = ref(false);
 
+// Afficher / masquer les mots de passe, chargement, message d'erreur.
 const showPassword = ref(false);
 const showPasswordConfirmation = ref(false);
 
@@ -89,6 +100,7 @@ const phoneRegex = /^(70|75|76|77|78)\d{7}$/;
  */
 const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8}$/;
 
+// Interdit trois lettres identiques à la suite (ex. "aaa").
 const tripleLetterRegex = /([A-Za-zÀ-ÖØ-öø-ÿ])\1\1/i;
 
 /*
@@ -97,10 +109,12 @@ const tripleLetterRegex = /([A-Za-zÀ-ÖØ-öø-ÿ])\1\1/i;
 |--------------------------------------------------------------------------
 */
 
+// Nettoie un nom : remplace les espaces multiples par un seul et enlève les espaces au début.
 const cleanName = (value) => {
   return value.replace(/\s+/g, " ").trimStart();
 };
 
+// Met le téléphone en forme "77 123 45 67" pendant la saisie (9 chiffres maximum).
 const formatPhone = () => {
   let digits = phone.value.replace(/\D/g, "");
 
@@ -127,6 +141,7 @@ const formatPhone = () => {
   phone.value = parts.join(" ");
 };
 
+// Le téléphone sans espaces (seulement les chiffres).
 const phoneDigits = computed(() => {
   return phone.value.replace(/\D/g, "");
 });
@@ -137,6 +152,7 @@ const phoneDigits = computed(() => {
 |--------------------------------------------------------------------------
 */
 
+// Message d'erreur du prénom (vide si tout va bien).
 const firstNameError = computed(() => {
   const value = firstName.value.trim();
 
@@ -163,6 +179,7 @@ const firstNameError = computed(() => {
   return "";
 });
 
+// Le prénom est-il valide ?
 const firstNameIsValid = computed(() => {
   const value = firstName.value.trim();
 
@@ -180,6 +197,7 @@ const firstNameIsValid = computed(() => {
 |--------------------------------------------------------------------------
 */
 
+// Message d'erreur du nom.
 const lastNameError = computed(() => {
   const value = lastName.value.trim();
 
@@ -206,6 +224,7 @@ const lastNameError = computed(() => {
   return "";
 });
 
+// Le nom est-il valide ?
 const lastNameIsValid = computed(() => {
   const value = lastName.value.trim();
 
@@ -217,6 +236,7 @@ const lastNameIsValid = computed(() => {
   );
 });
 
+// Message d'erreur de l'email.
 const emailError = computed(() => {
   const value = email.value.trim();
 
@@ -231,6 +251,7 @@ const emailError = computed(() => {
   return "";
 });
 
+// L'email est-il valide ?
 const emailIsValid = computed(() => {
   return emailRegex.test(email.value.trim());
 });
@@ -241,6 +262,7 @@ const emailIsValid = computed(() => {
 |--------------------------------------------------------------------------
 */
 
+// Message d'erreur du téléphone.
 const phoneError = computed(() => {
   if (!phoneDigits.value) {
     return "";
@@ -257,6 +279,7 @@ const phoneError = computed(() => {
   return "";
 });
 
+// Le téléphone est-il valide ?
 const phoneIsValid = computed(() => {
   return phoneRegex.test(phoneDigits.value);
 });
@@ -267,6 +290,7 @@ const phoneIsValid = computed(() => {
 |--------------------------------------------------------------------------
 */
 
+// Message d'erreur du mot de passe.
 const passwordError = computed(() => {
   if (!password.value) {
     return "";
@@ -295,6 +319,7 @@ const passwordError = computed(() => {
   return "";
 });
 
+// Le mot de passe est-il valide ?
 const passwordIsValid = computed(() => {
   return passwordRegex.test(password.value);
 });
@@ -305,6 +330,7 @@ const passwordIsValid = computed(() => {
 |--------------------------------------------------------------------------
 */
 
+// Message d'erreur de la confirmation du mot de passe.
 const passwordConfirmationError = computed(() => {
   if (!passwordConfirmation.value) {
     return "";
@@ -317,6 +343,7 @@ const passwordConfirmationError = computed(() => {
   return "";
 });
 
+// La confirmation est-elle identique au mot de passe ?
 const passwordConfirmationIsValid = computed(() => {
   return (
     passwordConfirmation.value !== "" &&
@@ -331,6 +358,7 @@ const passwordConfirmationIsValid = computed(() => {
 |--------------------------------------------------------------------------
 */
 
+// Le formulaire est valide si tous les champs sont corrects et les conditions acceptées.
 const formIsValid = computed(() => {
   return (
     selectedRole.value !== "" &&
@@ -350,6 +378,7 @@ const formIsValid = computed(() => {
 |--------------------------------------------------------------------------
 */
 
+// Afficher / masquer les mots de passe.
 const togglePassword = () => {
   showPassword.value = !showPassword.value;
 };
@@ -358,6 +387,7 @@ const togglePasswordConfirmation = () => {
   showPasswordConfirmation.value = !showPasswordConfirmation.value;
 };
 
+// Navigation vers la connexion ou l'accueil.
 const goToLogin = () => {
   router.push("/login");
 };
@@ -366,10 +396,12 @@ const goToHome = () => {
   router.push("/");
 };
 
+// Le rôle au format attendu par le serveur ("CLIENT" ou "PRESTATAIRE").
 const selectedRoleForApi = computed(() => {
   return selectedRole.value === "prestataire" ? "PRESTATAIRE" : "CLIENT";
 });
 
+// Trouve un message d'erreur lisible dans la réponse du serveur.
 const getApiErrorMessage = (data) => {
   if (data?.detail) {
     return data.detail;
@@ -392,6 +424,7 @@ const getApiErrorMessage = (data) => {
 |--------------------------------------------------------------------------
 */
 
+// Inscription : dernières vérifications, envoi au serveur, puis redirection vers la connexion.
 const handleRegister = async () => {
   errorMessage.value = "";
 
@@ -469,8 +502,10 @@ const handleRegister = async () => {
 |--------------------------------------------------------------------------
 */
 
+// Adresse de l'inscription Google côté serveur.
 const GOOGLE_LOGIN_URL = "http://localhost:8000/accounts/google/login/";
 
+// Inscription avec Google (on retient le rôle choisi pour le retour).
 const handleGoogleSignup = () => {
   /*
    * On conserve le rôle choisi pour pouvoir le récupérer

@@ -1,6 +1,12 @@
+<!--
+  AvisCard : carte d'un avis client (photo, nom, note en étoiles,
+  service concerné, commentaire et dates).
+-->
 <script setup>
+// computed : valeur calculée automatiquement.
 import { computed } from 'vue'
 
+// Prop : l'avis à afficher.
 const props = defineProps({
   avis: {
     type: Object,
@@ -8,10 +14,12 @@ const props = defineProps({
   },
 })
 
+// Les dates formatées et le nom du client (valeur par défaut si absent).
 const datePrestation = computed(() => props.avis.prestation?.date ? formatDate(props.avis.prestation.date) : '')
 const dateAvis = computed(() => formatDate(props.avis.dateAvis || props.avis.date_creation))
 const clientName = computed(() => props.avis.client?.nom || 'Client MIMOSY')
 
+// Transforme une date en texte français, ex. "12 mars 2026".
 function formatDate(value) {
   if (!value) return ''
 
@@ -30,6 +38,7 @@ function formatDate(value) {
   <article class="rounded-2xl border border-[#D9DDD8] bg-white p-5 sm:p-6">
     <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <div class="flex items-center gap-3">
+        <!-- Photo du client, ou première lettre de son nom. -->
         <img
           v-if="avis.client?.photo"
           :src="avis.client.photo"
@@ -45,12 +54,14 @@ function formatDate(value) {
         </div>
       </div>
 
+      <!-- La note : étoiles pleines puis étoiles vides. -->
       <div class="flex items-center gap-2" :aria-label="`${avis.note} sur 5`">
         <span class="tracking-wide text-[#C08B3E]" aria-hidden="true">{{ '★'.repeat(avis.note) }}{{ '☆'.repeat(5 - avis.note) }}</span>
         <strong class="text-sm text-[#1D2521]">{{ avis.note }}/5</strong>
       </div>
     </div>
 
+    <!-- Service concerné, date et commentaire. -->
     <div class="mt-5 border-t border-[#F1F5F9] pt-4">
       <p class="font-bold text-[#2F6250]">{{ avis.prestation?.service || 'Prestation MIMOSY' }}</p>
       <p v-if="datePrestation" class="mt-1 text-sm text-[#69716C]">Prestation du {{ datePrestation }}</p>

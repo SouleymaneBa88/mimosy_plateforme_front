@@ -1,4 +1,18 @@
+<!--
+  Page admin "Détail d'une demande" : toutes les informations d'une demande
+  de prestation (client, prestataire, service, lieu, budget, historique).
+
+  ATTENTION (état actuel du code) :
+  - cette page n'est déclarée dans aucune route de router/index.js, donc
+    elle n'est pas accessible pour l'instant ;
+  - adminService.js ne contient aucune des fonctions cherchées dans
+    chargerDemande() (getDemandeAdmin, getDemandeDetail, getDemande) :
+    la page afficherait donc toujours le message d'erreur ;
+  - les routes 'admin-demande-edit' et 'admin-prestataire-detail' utilisées
+    plus bas n'existent pas non plus.
+-->
 <script setup>
+// Outils Vue, routeur et icônes.
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
@@ -15,20 +29,25 @@ import {
   X
 } from 'lucide-vue-next'
 
+// Les composants de la page et les appels à l'API admin.
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Loader from '@/components/common/Loader.vue'
 import ErrorState from '@/components/common/ErrorState.vue'
 import * as adminService from '@/services/adminService'
 
+// La route (pour lire l'id de la demande) et le routeur.
 const route = useRoute()
 const router = useRouter()
 
+// La demande, l'état de chargement et le message d'erreur.
 const demande = ref(null)
 const loading = ref(true)
 const errorMessage = ref('')
 
+// L'identifiant de la demande, lu dans l'URL.
 const demandeId = computed(() => route.params.id)
 
+// Libellés lisibles et couleurs de chaque statut.
 const statutLabels = {
   EN_ATTENTE: 'En attente',
   ACCEPTEE: 'Acceptée',
@@ -47,6 +66,7 @@ const statutClasses = {
   ANNULEE: 'border-[#F4C7C2] bg-[#FFF0EE] text-[#A85148]'
 }
 
+// Le libellé et les couleurs du statut actuel.
 const statutLabel = computed(() => {
   return statutLabels[demande.value?.statut] || demande.value?.statut || '—'
 })
@@ -55,12 +75,14 @@ const statutClasse = computed(() => {
   return statutClasses[demande.value?.statut] || statutClasses.EN_ATTENTE
 })
 
+// Renvoie la première valeur non vide parmi celles données (sinon "—").
 function valeur(...valeurs) {
   return valeurs.find(
     (item) => item !== undefined && item !== null && item !== ''
   ) || '—'
 }
 
+// Renvoie le nom lisible d'un utilisateur (objet ou texte).
 function nomUtilisateur(utilisateur) {
   if (!utilisateur) return '—'
 
@@ -84,6 +106,7 @@ function nomUtilisateur(utilisateur) {
   )
 }
 
+// Les deux premières initiales d'un nom (ex. "Awa Diop" -> "AD").
 function initiales(nom) {
   if (!nom || nom === '—') return '—'
 
@@ -95,6 +118,7 @@ function initiales(nom) {
     .join('')
 }
 
+// Mise en forme des dates et des montants.
 function formaterDate(date) {
   if (!date) return '—'
 
@@ -147,6 +171,7 @@ function formaterMontant(montant) {
   return `${nombre.toLocaleString('fr-FR')} FCFA`
 }
 
+// Toutes les informations affichées, en essayant plusieurs noms de champs possibles.
 const client = computed(() => {
   return demande.value?.client || null
 })
@@ -305,6 +330,7 @@ const prestataireAvis = computed(() => {
   )
 })
 
+// L'historique de la demande : création, prestataire assigné, statut actuel.
 const timeline = computed(() => {
   const elements = []
 
@@ -345,6 +371,7 @@ const timeline = computed(() => {
   return elements
 })
 
+// Charge la demande depuis le serveur.
 async function chargerDemande() {
   loading.value = true
   errorMessage.value = ''
@@ -376,6 +403,7 @@ async function chargerDemande() {
   }
 }
 
+// Boutons de navigation et de contact (email).
 function retournerAuxDemandes() {
   router.push({ name: 'admin-demandes' })
 }
@@ -421,6 +449,7 @@ function contacterPrestataire() {
   window.location.href = `mailto:${email}`
 }
 
+// On charge la demande au montage.
 onMounted(chargerDemande)
 </script>
 

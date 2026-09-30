@@ -9,6 +9,7 @@ import { CircleAlert, RotateCcw } from 'lucide-vue-next'
 
 import MButton from './MButton.vue'
 
+// Props : titre, message, texte du bouton, affichage du bouton, chargement...
 defineProps({
   title: { type: String, default: 'Impossible de charger ces informations' },
   message: { type: String, default: 'Vérifiez votre connexion puis réessayez.' },
@@ -19,6 +20,7 @@ defineProps({
   compact: { type: Boolean, default: false },
 })
 
+// Événement envoyé au clic sur "Réessayer".
 defineEmits(['retry'])
 </script>
 

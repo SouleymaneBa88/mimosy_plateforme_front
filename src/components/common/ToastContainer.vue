@@ -1,12 +1,19 @@
+<!--
+  ToastContainer : affiche les petits messages temporaires ("toasts")
+  en bas à droite de l'écran (succès en vert, erreur en rouge).
+  Les messages viennent du composable useToast().
+-->
 <script setup>
 import { useToast } from '@/composables/useToast'
 
+// On récupère la liste partagée des toasts et la fonction pour en retirer un.
 const { toasts, removeToast } = useToast()
 </script>
 
 <template>
   <Teleport to="body">
     <div class="fixed bottom-5 right-5 z-[200] flex w-full max-w-sm flex-col gap-2">
+      <!-- Un bloc par toast ; la couleur dépend du type (erreur ou succès). -->
       <div
         v-for="toast in toasts"
         :key="toast.id"

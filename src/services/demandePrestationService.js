@@ -2,10 +2,13 @@
 import { API_ENDPOINTS } from '@/config/api'
 import { apiFetch } from './api'
 
+// Lister, créer, lire et modifier une demande de prestation.
 export const listRequests = () => apiFetch(API_ENDPOINTS.requests)
 export const createRequest = (payload) => apiFetch(API_ENDPOINTS.requests, { method: 'POST', body: payload })
 export const getRequest = (id) => apiFetch(API_ENDPOINTS.request(id))
 export const updateRequest = (id, payload) => apiFetch(API_ENDPOINTS.request(id), { method: 'PATCH', body: payload })
+// Les actions possibles : annuler (client), accepter / refuser / terminer (prestataire),
+// confirmer (client, quand le travail est fait).
 export const cancelRequest = (id) => apiFetch(API_ENDPOINTS.cancelRequest(id), { method: 'POST' })
 export const acceptRequest = (id) => apiFetch(API_ENDPOINTS.acceptRequest(id), { method: 'POST' })
 export const rejectRequest = (id) => apiFetch(API_ENDPOINTS.rejectRequest(id), { method: 'POST' })

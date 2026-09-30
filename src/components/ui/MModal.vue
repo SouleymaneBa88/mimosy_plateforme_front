@@ -11,10 +11,13 @@
 import { computed, ref, toRef, useId } from 'vue'
 import { X } from 'lucide-vue-next'
 
+// Le comportement commun des fenêtres (Échap, focus, scroll bloqué).
 import { useDialog } from './useDialog'
 
+// v-model : true = ouverte, false = fermée.
 const ouvert = defineModel({ type: Boolean, default: false })
 
+// Options : titre, description, taille, et "persistent" (impossible à fermer).
 const props = defineProps({
   title: { type: String, default: '' },
   description: { type: String, default: '' },
@@ -22,19 +25,24 @@ const props = defineProps({
   persistent: { type: Boolean, default: false },
 })
 
+// Événement envoyé à la fermeture.
 const emit = defineEmits(['close'])
 
+// Référence vers l'élément HTML de la fenêtre.
 const panneau = ref(null)
+// Identifiants uniques pour relier le titre et la description (accessibilité).
 const autoId = useId()
 const titreId = computed(() => `m-modal-titre-${autoId}`)
 const descriptionId = computed(() => `m-modal-desc-${autoId}`)
 
+// Ferme la fenêtre (sauf si elle est "persistent").
 function fermer() {
   if (props.persistent) return
   ouvert.value = false
   emit('close')
 }
 
+// On branche le comportement commun : Échap, focus piégé, scroll bloqué.
 const { onKeydown } = useDialog(toRef(ouvert), panneau, fermer, {
   fermerAvecEchap: () => !props.persistent,
 })
@@ -42,6 +50,7 @@ const { onKeydown } = useDialog(toRef(ouvert), panneau, fermer, {
 
 <template>
   <Teleport to="body">
+    <!-- Fond gris : un clic dessus (et pas sur la fenêtre) ferme la fenêtre. -->
     <Transition name="m-fade">
       <div v-if="ouvert" class="m-modal__overlay" @click.self="fermer">
         <Transition name="m-pop" appear>
@@ -56,6 +65,7 @@ const { onKeydown } = useDialog(toRef(ouvert), panneau, fermer, {
             tabindex="-1"
             @keydown="onKeydown"
           >
+            <!-- En-tête : titre + description + bouton fermer. -->
             <header v-if="title || $slots.header" class="m-modal__header">
               <slot name="header">
                 <div class="min-w-0">
@@ -74,10 +84,12 @@ const { onKeydown } = useDialog(toRef(ouvert), panneau, fermer, {
               </button>
             </header>
 
+            <!-- Contenu principal (slot par défaut). -->
             <div class="m-modal__body">
               <slot />
             </div>
 
+            <!-- Pied de fenêtre (boutons d'action), seulement si fourni. -->
             <footer v-if="$slots.footer" class="m-modal__footer">
               <slot name="footer" />
             </footer>

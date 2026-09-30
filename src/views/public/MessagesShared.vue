@@ -1,3 +1,8 @@
+<!--
+  Page "Messages" du client.
+  Elle place l'espace de messagerie commun (MessagingWorkspace)
+  dans la mise en page du client (ClientLayout).
+-->
 <script setup>
 import ClientLayout from '@/components/layout/ClientLayout.vue'
 import MessagingWorkspace from '@/components/messages/MessagingWorkspace.vue'

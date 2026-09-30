@@ -11,20 +11,25 @@
  * directe de l'accueil.
  * ------------------------------------------------------------------
  */
+// Outils Vue, routeur et icônes.
 import { onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { CheckCircle2, Circle, LocateFixed, MapPin, RotateCcw, Search, SlidersHorizontal } from 'lucide-vue-next'
 
+// Les composants de la page et le moteur de recherche commun.
 import ClientLayout from '@/components/layout/ClientLayout.vue'
 import ServiceSearch from '@/components/client/ServiceSearch.vue'
 import PrestataireCard from '@/components/client/PrestataireCard.vue'
 import SearchFilters from '@/components/client/SearchFilters.vue'
+import SuggestionsRecherche from '@/components/client/SuggestionsRecherche.vue'
 import ProvidersMap from '@/components/client/ProvidersMap.vue'
 import Modal from '@/components/common/Modal.vue'
 import { useRecherchePrestataires } from '@/composables/useRecherchePrestataires'
 
+// La route (pour lire les paramètres ?q=... et ?categorie=...).
 const route = useRoute()
 
+// On récupère tout l'état et toutes les actions du moteur de recherche commun.
 const {
   searchService,
   rechercheNaturelleActive,
@@ -52,6 +57,7 @@ const {
   basculerDisponibles,
   lancerRecherche,
   handleSearch,
+  rechercherSuggestion,
   appliquerFiltres,
   reinitialiser,
   voirPlusResultats,
@@ -61,6 +67,7 @@ const {
   pluriel,
 } = useRecherchePrestataires()
 
+// Au montage : on charge le catalogue et on lance la recherche (avec les paramètres de l'URL).
 onMounted(() => chargerDonnees(route.query))
 </script>
 
@@ -168,6 +175,15 @@ onMounted(() => chargerDonnees(route.query))
               Réessayer
             </button>
           </div>
+
+          <!-- Recherche intelligente sans correspondance : suggestions IA (jamais des prestataires) -->
+          <SuggestionsRecherche
+            v-else-if="resultatsAffiches.length === 0 && rechercheNaturelleActive && prestataireStore.suggestionsIA"
+            :suggestions-ia="prestataireStore.suggestionsIA"
+            :peut-reinitialiser="true"
+            @rechercher="rechercherSuggestion"
+            @reinitialiser="reinitialiser"
+          />
 
           <div v-else-if="resultatsAffiches.length === 0" class="pr-state pr-state--empty">
             <div class="pr-state__icon"><Search class="pr-icon-md" :stroke-width="1.75" /></div>
