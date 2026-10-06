@@ -5,9 +5,25 @@
 -->
 <script setup>
 // Outils Vue, routeur et store de connexion.
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
+import {
+  MOT_DE_PASSE_LONGUEUR_MAX,
+  NOM_LONGUEUR_MAX,
+  EMAIL_LONGUEUR_MAX,
+  erreurConfirmationMotDePasse,
+  erreurEmail,
+  erreurMotDePasse,
+  erreurNom,
+  erreurRole,
+  erreurTelephone,
+  extraireErreursApi,
+  formaterTelephone,
+  normaliserEmail,
+  normaliserNom,
+  normaliserTelephone,
+} from "@/utils/validation";
 
 // Le routeur et le store de connexion.
 const router = useRouter();
@@ -51,306 +67,97 @@ const errorMessage = ref("");
 
 /*
 |--------------------------------------------------------------------------
-| Regex
+| Règles de saisie (src/utils/validation.js)
+|--------------------------------------------------------------------------
+| Les mêmes règles sont appliquées par le backend, qui a toujours le dernier
+| mot : une erreur renvoyée par l'API (serverErrors) s'affiche sous le champ
+| concerné et remplace le message local jusqu'à la prochaine modification.
+*/
+
+// Erreurs renvoyées par l'API, par champ (ex. { email: "Cette adresse e-mail est déjà utilisée." }).
+const serverErrors = ref({});
+
+// Dès que l'utilisateur corrige un champ, l'erreur serveur de ce champ disparaît.
+const effacerErreurServeur = (champ) => () => {
+  if (serverErrors.value[champ]) {
+    serverErrors.value = { ...serverErrors.value, [champ]: "" };
+  }
+};
+watch(firstName, effacerErreurServeur("first_name"));
+watch(lastName, effacerErreurServeur("last_name"));
+watch(email, effacerErreurServeur("email"));
+watch(phone, effacerErreurServeur("phone"));
+watch(password, effacerErreurServeur("password"));
+watch(passwordConfirmation, effacerErreurServeur("password_confirm"));
+
+/*
+|--------------------------------------------------------------------------
+| Nettoyage pendant la saisie
 |--------------------------------------------------------------------------
 */
 
-/*
- * Prénom / Nom
- *
- * Autorise :
- * A-Z
- * lettres accentuées
- * espace
- * apostrophe
- * tiret
- *
- * N'autorise pas :
- * chiffres
- * symboles
- * trois mêmes lettres consécutives
- */
-const nameRegex = /^[A-Za-zÀ-ÖØ-öø-ÿ]+(?:[ '-][A-Za-zÀ-ÖØ-öø-ÿ]+)*$/;
-
-/*
- * E-mail
- */
-const emailRegex = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
-
-/*
- * Téléphone mobile Sénégal
- *
- * Formats acceptés :
- * 77 123 45 67
- * 76 123 45 67
- * 78 123 45 67
- * 75 123 45 67
- * 70 123 45 67
- */
-const phoneRegex = /^(70|75|76|77|78)\d{7}$/;
-
-/*
- * Mot de passe
- *
- * Exactement 8 caractères
- * Au moins une lettre
- * Au moins un chiffre
- * Aucun espace
- * Majuscule facultative
- */
-const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8}$/;
-
-// Interdit trois lettres identiques à la suite (ex. "aaa").
-const tripleLetterRegex = /([A-Za-zÀ-ÖØ-öø-ÿ])\1\1/i;
-
-/*
-|--------------------------------------------------------------------------
-| Nettoyage
-|--------------------------------------------------------------------------
-*/
-
-// Nettoie un nom : remplace les espaces multiples par un seul et enlève les espaces au début.
+// Nom : espaces multiples réduits, apostrophe typographique ’ (claviers
+// mobiles) convertie en ', pas d'espace au début. Les espaces de fin sont
+// retirés à l'envoi (normaliserNom), pas pendant la frappe.
 const cleanName = (value) => {
-  return value.replace(/\s+/g, " ").trimStart();
+  return value.replace(/\u2019/g, "'").replace(/\s+/g, " ").trimStart();
 };
 
-// Met le téléphone en forme "77 123 45 67" pendant la saisie (9 chiffres maximum).
+// Met le téléphone en forme "77 123 45 67" pendant la saisie (un numéro
+// collé avec l'indicatif +221 est aussi accepté).
 const formatPhone = () => {
-  let digits = phone.value.replace(/\D/g, "");
-
-  digits = digits.slice(0, 9);
-
-  const parts = [];
-
-  if (digits.length > 0) {
-    parts.push(digits.slice(0, 2));
-  }
-
-  if (digits.length > 2) {
-    parts.push(digits.slice(2, 5));
-  }
-
-  if (digits.length > 5) {
-    parts.push(digits.slice(5, 7));
-  }
-
-  if (digits.length > 7) {
-    parts.push(digits.slice(7, 9));
-  }
-
-  phone.value = parts.join(" ");
+  phone.value = formaterTelephone(phone.value);
 };
 
-// Le téléphone sans espaces (seulement les chiffres).
-const phoneDigits = computed(() => {
-  return phone.value.replace(/\D/g, "");
-});
+// Le téléphone sans espaces (seulement les 9 chiffres).
+const phoneDigits = computed(() => normaliserTelephone(phone.value));
 
 /*
 |--------------------------------------------------------------------------
-| Validation Prénom
+| Messages d'erreur par champ
 |--------------------------------------------------------------------------
+| Un champ encore vide n'affiche pas d'erreur (l'utilisateur n'a pas fini) ;
+| le bouton d'envoi reste néanmoins désactivé tant qu'il n'est pas valide.
 */
 
-// Message d'erreur du prénom (vide si tout va bien).
-const firstNameError = computed(() => {
-  const value = firstName.value.trim();
+const firstNameError = computed(() =>
+  serverErrors.value.first_name ||
+  (firstName.value.trim() ? erreurNom(firstName.value, "Le prénom") : "")
+);
+const firstNameIsValid = computed(() => !serverErrors.value.first_name && !erreurNom(firstName.value, "Le prénom"));
 
-  if (!value) {
-    return "";
-  }
+const lastNameError = computed(() =>
+  serverErrors.value.last_name ||
+  (lastName.value.trim() ? erreurNom(lastName.value, "Le nom") : "")
+);
+const lastNameIsValid = computed(() => !serverErrors.value.last_name && !erreurNom(lastName.value, "Le nom"));
 
-  if (value.length < 2) {
-    return "Le prénom doit contenir au moins 2 caractères.";
-  }
+const emailError = computed(() =>
+  serverErrors.value.email || (email.value.trim() ? erreurEmail(email.value) : "")
+);
+const emailIsValid = computed(() => !serverErrors.value.email && !erreurEmail(email.value));
 
-  if (value.length > 30) {
-    return "Le prénom ne doit pas dépasser 30 caractères.";
-  }
+const phoneError = computed(() =>
+  serverErrors.value.phone || (phone.value.trim() ? erreurTelephone(phone.value) : "")
+);
+const phoneIsValid = computed(() => !serverErrors.value.phone && !erreurTelephone(phone.value));
 
-  if (!nameRegex.test(value)) {
-    return "Le prénom contient des caractères non autorisés.";
-  }
+const passwordError = computed(() =>
+  serverErrors.value.password || (password.value ? erreurMotDePasse(password.value) : "")
+);
+const passwordIsValid = computed(() => !serverErrors.value.password && !erreurMotDePasse(password.value));
 
-  if (tripleLetterRegex.test(value)) {
-    return "Le prénom ne peut pas contenir trois lettres identiques à la suite.";
-  }
-
-  return "";
-});
-
-// Le prénom est-il valide ?
-const firstNameIsValid = computed(() => {
-  const value = firstName.value.trim();
-
-  return (
-    value.length >= 2 &&
-    value.length <= 30 &&
-    nameRegex.test(value) &&
-    !tripleLetterRegex.test(value)
-  );
-});
-
-/*
-|--------------------------------------------------------------------------
-| Validation Nom
-|--------------------------------------------------------------------------
-*/
-
-// Message d'erreur du nom.
-const lastNameError = computed(() => {
-  const value = lastName.value.trim();
-
-  if (!value) {
-    return "";
-  }
-
-  if (value.length < 2) {
-    return "Le nom doit contenir au moins 2 caractères.";
-  }
-
-  if (value.length > 30) {
-    return "Le nom ne doit pas dépasser 30 caractères.";
-  }
-
-  if (!nameRegex.test(value)) {
-    return "Le nom contient des caractères non autorisés.";
-  }
-
-  if (tripleLetterRegex.test(value)) {
-    return "Le nom ne peut pas contenir trois lettres identiques à la suite.";
-  }
-
-  return "";
-});
-
-// Le nom est-il valide ?
-const lastNameIsValid = computed(() => {
-  const value = lastName.value.trim();
-
-  return (
-    value.length >= 2 &&
-    value.length <= 30 &&
-    nameRegex.test(value) &&
-    !tripleLetterRegex.test(value)
-  );
-});
-
-// Message d'erreur de l'email.
-const emailError = computed(() => {
-  const value = email.value.trim();
-
-  if (!value) {
-    return "";
-  }
-
-  if (!emailRegex.test(value)) {
-    return "Veuillez saisir une adresse e-mail valide.";
-  }
-
-  return "";
-});
-
-// L'email est-il valide ?
-const emailIsValid = computed(() => {
-  return emailRegex.test(email.value.trim());
-});
-
-/*
-|--------------------------------------------------------------------------
-| Validation téléphone
-|--------------------------------------------------------------------------
-*/
-
-// Message d'erreur du téléphone.
-const phoneError = computed(() => {
-  if (!phoneDigits.value) {
-    return "";
-  }
-
-  if (phoneDigits.value.length !== 9) {
-    return "Le numéro doit contenir exactement 9 chiffres.";
-  }
-
-  if (!phoneRegex.test(phoneDigits.value)) {
-    return "Veuillez saisir un numéro mobile sénégalais valide.";
-  }
-
-  return "";
-});
-
-// Le téléphone est-il valide ?
-const phoneIsValid = computed(() => {
-  return phoneRegex.test(phoneDigits.value);
-});
-
-/*
-|--------------------------------------------------------------------------
-| Validation mot de passe
-|--------------------------------------------------------------------------
-*/
-
-// Message d'erreur du mot de passe.
-const passwordError = computed(() => {
-  if (!password.value) {
-    return "";
-  }
-
-  if (password.value.length !== 8) {
-    return "Le mot de passe doit contenir exactement 8 caractères.";
-  }
-
-  if (/\s/.test(password.value)) {
-    return "Le mot de passe ne doit pas contenir d’espace.";
-  }
-
-  if (!/[A-Za-z]/.test(password.value)) {
-    return "Le mot de passe doit contenir au moins une lettre.";
-  }
-
-  if (!/\d/.test(password.value)) {
-    return "Le mot de passe doit contenir au moins un chiffre.";
-  }
-
-  if (!passwordRegex.test(password.value)) {
-    return "Le mot de passe contient des caractères non autorisés.";
-  }
-
-  return "";
-});
-
-// Le mot de passe est-il valide ?
-const passwordIsValid = computed(() => {
-  return passwordRegex.test(password.value);
-});
-
-/*
-|--------------------------------------------------------------------------
-| Confirmation
-|--------------------------------------------------------------------------
-*/
-
-// Message d'erreur de la confirmation du mot de passe.
-const passwordConfirmationError = computed(() => {
-  if (!passwordConfirmation.value) {
-    return "";
-  }
-
-  if (passwordConfirmation.value !== password.value) {
-    return "Les deux mots de passe ne correspondent pas.";
-  }
-
-  return "";
-});
-
-// La confirmation est-elle identique au mot de passe ?
-const passwordConfirmationIsValid = computed(() => {
-  return (
-    passwordConfirmation.value !== "" &&
-    passwordConfirmation.value === password.value &&
-    passwordIsValid.value
-  );
-});
+const passwordConfirmationError = computed(() =>
+  serverErrors.value.password_confirm ||
+  (passwordConfirmation.value
+    ? erreurConfirmationMotDePasse(password.value, passwordConfirmation.value)
+    : "")
+);
+const passwordConfirmationIsValid = computed(() =>
+  !serverErrors.value.password_confirm &&
+  !erreurConfirmationMotDePasse(password.value, passwordConfirmation.value) &&
+  passwordIsValid.value
+);
 
 /*
 |--------------------------------------------------------------------------
@@ -361,7 +168,7 @@ const passwordConfirmationIsValid = computed(() => {
 // Le formulaire est valide si tous les champs sont corrects et les conditions acceptées.
 const formIsValid = computed(() => {
   return (
-    selectedRole.value !== "" &&
+    !erreurRole(selectedRoleForApi.value) &&
     firstNameIsValid.value &&
     lastNameIsValid.value &&
     emailIsValid.value &&
@@ -401,30 +208,13 @@ const selectedRoleForApi = computed(() => {
   return selectedRole.value === "prestataire" ? "PRESTATAIRE" : "CLIENT";
 });
 
-// Trouve un message d'erreur lisible dans la réponse du serveur.
-const getApiErrorMessage = (data) => {
-  if (data?.detail) {
-    return data.detail;
-  }
-
-  if (typeof data === "object" && data !== null) {
-    const firstError = Object.values(data).flat().find(Boolean);
-
-    if (firstError) {
-      return String(firstError);
-    }
-  }
-
-  return "Impossible de créer le compte. Veuillez réessayer.";
-};
-
 /*
 |--------------------------------------------------------------------------
 | Inscription
 |--------------------------------------------------------------------------
 */
 
-// Inscription : dernières vérifications, envoi au serveur, puis redirection vers la connexion.
+// Inscription : dernières vérifications, envoi au serveur, puis page « Vérifiez votre e-mail ».
 const handleRegister = async () => {
   errorMessage.value = "";
 
@@ -432,8 +222,8 @@ const handleRegister = async () => {
    * Vérifications finales
    */
 
-  if (!selectedRole.value) {
-    errorMessage.value = "Veuillez sélectionner votre rôle.";
+  if (erreurRole(selectedRoleForApi.value)) {
+    errorMessage.value = erreurRole(selectedRoleForApi.value);
     return;
   }
 
@@ -474,12 +264,14 @@ const handleRegister = async () => {
   }
 
   isLoading.value = true;
+  serverErrors.value = {};
 
   try {
-    await authStore.register({
-        first_name: firstName.value.trim(),
-        last_name: lastName.value.trim(),
-        email: email.value.trim(),
+    // Mêmes normalisations que le backend (qui les refait de toute façon).
+    const reponse = await authStore.register({
+        first_name: normaliserNom(firstName.value),
+        last_name: normaliserNom(lastName.value),
+        email: normaliserEmail(email.value),
         phone: phoneDigits.value,
         password: password.value,
         password_confirm: passwordConfirmation.value,
@@ -487,10 +279,34 @@ const handleRegister = async () => {
         accept_terms: acceptTerms.value,
       });
 
-    router.push("/login");
+    // Page « Vérifiez votre adresse e-mail » ; l'adresse passe par la
+    // session du navigateur plutôt que par l'URL.
+    sessionStorage.setItem("mimosy_email_a_verifier", normaliserEmail(email.value));
+    // Compte créé mais e-mail non parti (Brevo indisponible...) : la page
+    // suivante l'indique et propose directement un nouveau lien.
+    if (reponse?.email_verification_envoyee === false) {
+      sessionStorage.setItem("mimosy_envoi_verification_echoue", "1");
+    } else {
+      sessionStorage.removeItem("mimosy_envoi_verification_echoue");
+    }
+    router.push({ name: "verifier-email" });
   } catch (error) {
+    // Erreurs DRF par champ → affichées sous chaque champ ; le reste en haut.
+    const { champs, general } = extraireErreursApi(
+      error.data,
+      error.status === 429
+        ? "Trop de tentatives. Patientez une minute avant de réessayer."
+        : "Impossible de créer le compte. Veuillez réessayer.",
+    );
+    serverErrors.value = champs;
+    const champsAffiches = ["first_name", "last_name", "email", "phone", "password", "password_confirm"];
+    const autres = Object.entries(champs)
+      .filter(([champ]) => !champsAffiches.includes(champ))
+      .map(([, message]) => message);
     errorMessage.value =
-      error.message || "Impossible de créer le compte. Veuillez réessayer.";
+      general ||
+      autres[0] ||
+      "Certains champs sont à corriger : voir les messages sous le formulaire.";
   } finally {
     isLoading.value = false;
   }
@@ -700,7 +516,7 @@ const handleGoogleSignup = () => {
                   type="text"
                   autocomplete="given-name"
                   placeholder="Fatou"
-                  maxlength="30"
+                  :maxlength="NOM_LONGUEUR_MAX"
                   class="h-[42px] w-full rounded-[10px] border bg-white px-3 text-sm text-[#0F172A] outline-none transition placeholder:text-[#64748B] focus:ring-4"
                   :class="
                     firstNameError
@@ -736,7 +552,7 @@ const handleGoogleSignup = () => {
                   type="text"
                   autocomplete="family-name"
                   placeholder="Sarr"
-                  maxlength="30"
+                  :maxlength="NOM_LONGUEUR_MAX"
                   class="h-[42px] w-full rounded-[10px] border bg-white px-3 text-sm text-[#0F172A] outline-none transition placeholder:text-[#64748B] focus:ring-4"
                   :class="
                     lastNameError
@@ -773,7 +589,7 @@ const handleGoogleSignup = () => {
                 type="email"
                 autocomplete="email"
                 placeholder="fatousarr@domaine.sn"
-                maxlength="100"
+                :maxlength="EMAIL_LONGUEUR_MAX"
                 class="h-[42px] w-full rounded-[10px] border bg-white px-3 text-sm text-[#0F172A] outline-none transition placeholder:text-[#64748B] focus:ring-4"
                 :class="
                   emailError
@@ -858,7 +674,7 @@ const handleGoogleSignup = () => {
                     :type="showPassword ? 'text' : 'password'"
                     autocomplete="new-password"
                     placeholder="••••••••"
-                    maxlength="8"
+                    :maxlength="MOT_DE_PASSE_LONGUEUR_MAX"
                     class="h-[42px] w-full rounded-[10px] border bg-white px-3 pr-16 text-sm text-[#0F172A] outline-none transition placeholder:text-[#64748B] focus:ring-4"
                     :class="
                       passwordError
@@ -886,8 +702,8 @@ const handleGoogleSignup = () => {
                 </p>
 
                 <p v-else class="mt-1 text-[10px] text-[#94A3B8]">
-                  Lettre + chiffre · exactement 8 caractères ·
-                  {{ password.length }}/8
+                  Au moins 8 caractères, dont une lettre et un chiffre ·
+                  {{ password.length }} caractère{{ password.length > 1 ? "s" : "" }}
                 </p>
               </div>
 
@@ -908,7 +724,7 @@ const handleGoogleSignup = () => {
                     :type="showPasswordConfirmation ? 'text' : 'password'"
                     autocomplete="new-password"
                     placeholder="••••••••"
-                    maxlength="8"
+                    :maxlength="MOT_DE_PASSE_LONGUEUR_MAX"
                     class="h-[42px] w-full rounded-[10px] border bg-white px-3 pr-16 text-sm text-[#0F172A] outline-none transition placeholder:text-[#64748B] focus:ring-4"
                     :class="
                       passwordConfirmationError

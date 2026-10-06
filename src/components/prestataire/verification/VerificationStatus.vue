@@ -146,7 +146,7 @@ const contenu = computed(() => ({
       <!-- Bouton vers la page de vérification (après chargement). -->
       <RouterLink
         v-if="!chargementDocument"
-        to="/prestataire/verification"
+        to="/prestataire/parcours"
         class="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[#2D6A4F] px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-[#24573F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2D6A4F] focus-visible:ring-offset-2"
       >
         {{ contenu.actionLabel }}

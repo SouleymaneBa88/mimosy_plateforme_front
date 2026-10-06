@@ -41,14 +41,11 @@ const errorMessage = ref("");
 const emailRegex = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
 
 /*
- * Mot de passe :
- * - exactement 8 caractères
- * - au moins une lettre
- * - au moins un chiffre
- * - uniquement lettres et chiffres
- * - majuscule facultative
+ * Mot de passe : à la connexion, on vérifie seulement qu'il est saisi.
+ * Les règles de création (voir utils/validation.js) ne s'appliquent qu'à
+ * l'inscription : c'est le backend qui dit si le mot de passe est correct,
+ * et un ancien mot de passe ne doit jamais être bloqué par le navigateur.
  */
-const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8}$/;
 
 /*
 |--------------------------------------------------------------------------
@@ -61,10 +58,8 @@ const emailIsValid = computed(() => {
   return emailRegex.test(email.value.trim());
 });
 
-// Le mot de passe respecte-t-il la règle ?
-const passwordIsValid = computed(() => {
-  return passwordRegex.test(password.value);
-});
+// Un mot de passe a-t-il été saisi ?
+const passwordIsValid = computed(() => password.value.length > 0);
 
 /*
 |--------------------------------------------------------------------------
@@ -85,30 +80,8 @@ const emailError = computed(() => {
   return "";
 });
 
-// Message d'erreur sous le champ mot de passe, selon ce qui ne va pas.
-const passwordError = computed(() => {
-  if (!password.value) {
-    return "";
-  }
-
-  if (password.value.length !== 8) {
-    return "Le mot de passe doit contenir exactement 8 caractères.";
-  }
-
-  if (!/[A-Za-z]/.test(password.value)) {
-    return "Le mot de passe doit contenir au moins une lettre.";
-  }
-
-  if (!/\d/.test(password.value)) {
-    return "Le mot de passe doit contenir au moins un chiffre.";
-  }
-
-  if (/\s/.test(password.value)) {
-    return "Le mot de passe ne doit pas contenir d’espace.";
-  }
-
-  return "";
-});
+// Pas de message sous le champ mot de passe : aucune règle à respecter à la connexion.
+const passwordError = computed(() => "");
 
 /*
 |--------------------------------------------------------------------------
@@ -180,12 +153,6 @@ const handleLogin = async () => {
     return;
   }
 
-  if (!passwordIsValid.value) {
-    errorMessage.value =
-      "Le mot de passe doit contenir exactement 8 caractères, avec au moins une lettre et un chiffre.";
-    return;
-  }
-
   isLoading.value = true;
 
   try {
@@ -200,7 +167,15 @@ const handleLogin = async () => {
       ADMIN: "/admin",
     }[authStore.role] || "/";
 
-    router.push(destination);
+    // Adresse e-mail pas encore vérifiée : la connexion reste possible, mais
+    // l'utilisateur est d'abord dirigé vers la page de vérification.
+    router.push(
+      authStore.emailNonVerifie
+        ? { name: "verifier-email" }
+        : authStore.prestataireNonValide
+          ? { name: "prestataire-parcours" }
+          : destination,
+    );
 
     // Demander la localisation après une connexion réussie, SANS bloquer la
     // redirection : tant que l'utilisateur n'a pas répondu à la demande
@@ -216,7 +191,13 @@ const handleLogin = async () => {
         console.warn("Localisation non disponible :", error);
       });
   } catch (error) {
-      errorMessage.value = error.message || "Adresse e-mail ou mot de passe incorrect.";
+      // 401 : identifiants refusés (le message de SimpleJWT est en anglais).
+      errorMessage.value =
+        error.status === 401 || !error.message
+          ? "Adresse e-mail ou mot de passe incorrect."
+          : error.status === 429
+            ? "Trop de tentatives. Patientez une minute avant de réessayer."
+            : error.message;
     } finally {
       isLoading.value = false;
     }
@@ -444,7 +425,7 @@ const handleGoogleLogin = () => {
                   :type="showPassword ? 'text' : 'password'"
                   autocomplete="current-password"
                   placeholder="••••••••"
-                  maxlength="8"
+                  maxlength="128"
                   class="h-12 w-full rounded-xl border bg-white px-4 pr-20 text-[15px] text-[#051F20] outline-none transition placeholder:text-[#94A3B8] focus:ring-4"
                   :class="
                     passwordError
@@ -471,17 +452,6 @@ const handleGoogleLogin = () => {
                 >
                   {{ passwordError }}
                 </p>
-
-                <p
-                  v-else-if="passwordIsValid"
-                  class="text-xs font-medium text-[#2F6250]"
-                >
-                  Mot de passe valide.
-                </p>
-
-                <span class="ml-auto text-xs text-[#94A3B8]">
-                  {{ password.length }}/8
-                </span>
               </div>
             </div>
 
@@ -577,6 +547,16 @@ const handleGoogleLogin = () => {
             >
               Créer un compte
             </button>
+          </div>
+
+          <!-- Lien de confirmation d'e-mail perdu ou expiré. -->
+          <div class="mt-3 text-center text-sm">
+            <router-link
+              :to="{ name: 'verifier-email' }"
+              class="font-medium text-[#64748B] transition hover:text-[#2F6250]"
+            >
+              Renvoyer l'e-mail de confirmation
+            </router-link>
           </div>
         </div>
       </section>

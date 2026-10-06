@@ -1,888 +1,635 @@
 <!--
-  Tableau de bord du PRESTATAIRE : chiffres clés (offres, note, demandes),
-  demandes en attente, et un bandeau qui l'aide à compléter son profil.
+  Tableau de bord du PRESTATAIRE.
+
+  Pensé pour être compris en un coup d'œil :
+    1. « À faire maintenant » : les actions qui attendent le prestataire ;
+    2. sa vérification (étape actuelle, progression) ;
+    3. ses chiffres clés (demandes, prestations, rendez-vous, revenus, note) ;
+    4. l'évolution de son activité (Chart.js) ;
+    5. ses dernières demandes, prochains rendez-vous et derniers avis.
+  Les statistiques viennent de GET /api/profil/prestataire/tableau-de-bord/
+  (agrégées par le serveur) ; revenus = montants réellement libérés.
 -->
 <script setup>
-// Outils Vue, routeur et icônes.
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { Bar } from 'vue-chartjs'
 import {
   ArrowRight,
-  ArrowUpRight,
+  BadgeCheck,
+  Briefcase,
   CalendarDays,
-  Check,
+  ChartNoAxesColumn,
+  CheckCheck,
+  CircleCheck,
+  ClipboardList,
   Plus,
   RefreshCw,
+  ShieldCheck,
   Star,
-  Briefcase,
-  MessageSquare,
+  UserPen,
+  Wallet,
 } from 'lucide-vue-next'
 
-// Les composants de la page.
 import AppLayout from '@/components/layout/AppLayout.vue'
-import EmptyState from '@/components/common/EmptyState.vue'
-// L'en-tête prestataire est rendu automatiquement par AppLayout pour
-// role="prestataire" : pas besoin de l'importer ici.
+import ChartPanel from '@/components/charts/ChartPanel.vue'
+import RepartitionAnneau from '@/components/charts/RepartitionAnneau.vue'
+import {
+  SERIES,
+  STATUTS,
+  aDesValeurs,
+  formaterCompact,
+  formaterMontant,
+  formaterNombre,
+  libelleMois,
+  optionsCartesiennes,
+  serieBarres,
+} from '@/components/charts/chartTheme'
+import ActiviteTimeline from '@/components/dashboard/ActiviteTimeline.vue'
+import DashboardSection from '@/components/dashboard/DashboardSection.vue'
+import KpiCard from '@/components/dashboard/KpiCard.vue'
+import { MBadge, MButton, MStatusBadge } from '@/components/ui'
 
-// Les stores et les appels à l'API.
 import { useAuthStore } from '@/stores/auth'
 import { useDemandePrestationStore } from '@/stores/demandePrestation'
 import { useRendezVousStore } from '@/stores/rendezVous'
-
+import * as parcoursService from '@/services/parcoursService'
 import * as prestataireService from '@/services/prestataireService'
 import * as reviewService from '@/services/reviewService'
 
-// Le routeur et les stores.
 const router = useRouter()
-
 const authStore = useAuthStore()
 const demandeStore = useDemandePrestationStore()
-// Le store centralise les rendez-vous du prestataire connecté.
 const rendezVousStore = useRendezVousStore()
 
-// États : chargement et erreur.
-const loading = ref(false)
-const error = ref('')
-
-// Les offres de services, les avis et le profil du prestataire.
+const chargement = ref(true)
+const erreur = ref('')
 const offres = ref([])
 const avis = ref([])
 const profil = ref(null)
+const tableau = ref(null)
+const parcours = ref(null)
 
-// Le bandeau d'aide a-t-il été fermé ? (mémorisé pour la session du navigateur)
-const bandeauFerme = ref(
-  sessionStorage.getItem('mimosy_onboarding_ferme') === '1',
-)
-
-/* ---------------------------------------------------------
- * Utilisateur
- * ------------------------------------------------------- */
-const userName = computed(() => {
-  return (
-    [authStore.user?.first_name, authStore.user?.last_name]
-      .filter(Boolean)
-      .join(' ') || 'Prestataire'
-  )
-})
-
-// La date du jour en toutes lettres.
+/* ---------------------------------------------------------- en-tête */
+const prenom = computed(() => authStore.user?.first_name || 'Prestataire')
 const dateDuJour = computed(() => {
-  const texte = new Date().toLocaleDateString('fr-FR', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  })
+  const texte = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
   return texte.charAt(0).toUpperCase() + texte.slice(1)
 })
 
-/* ---------------------------------------------------------
- * Avis, offres, statistiques
- * ------------------------------------------------------- */
-const avisPublies = computed(() => {
-  return avis.value.filter((item) => item.statut === 'PUBLIE')
+/* ---------------------------------------------------------- vérification */
+const statutVerification = computed(() => tableau.value?.statut_verification || profil.value?.statut_verification || '')
+const verifie = computed(() => statutVerification.value === 'VERIFIE')
+const etapeCourante = computed(() => parcours.value?.etapes?.find((e) => e.cle === parcours.value.etape_courante))
+
+const verification = computed(() => {
+  const p = parcours.value
+  if (verifie.value) {
+    return { ton: 'verified', titre: 'Votre profil est vérifié', texte: 'Les clients voient que votre profil a été validé par l’équipe MIMOSY.' }
+  }
+  if (p?.decision === 'REJETE' || statutVerification.value === 'REJETE') {
+    return { ton: 'danger', titre: 'Votre dossier n’a pas été retenu', texte: p?.motif_decision || 'Consultez votre parcours pour en savoir plus.' }
+  }
+  if (p?.decision === 'A_VERIFIER') {
+    return { ton: 'warning', titre: 'L’équipe MIMOSY vous demande de compléter votre dossier', texte: p.motif_decision || '' }
+  }
+  if (p?.statut === 'DOSSIER_EN_REVUE') {
+    return { ton: 'info', titre: 'Votre dossier est en cours d’examen', texte: 'Un administrateur va le consulter. Vous serez prévenu de sa décision.' }
+  }
+  return {
+    ton: 'warning',
+    titre: 'Votre vérification n’est pas terminée',
+    texte: etapeCourante.value ? `Prochaine étape : ${etapeCourante.value.titre}.` : 'Terminez votre parcours de vérification pour être visible des clients.',
+  }
 })
 
-// La note moyenne (nombre) calculée sur les avis publiés.
-const noteMoyenneValeur = computed(() => {
-  if (!avisPublies.value.length) return 0
+/* ---------------------------------------------------------- à faire */
+const demandesEnAttente = computed(() => demandeStore.demandes.filter((d) => d.statut === 'EN_ATTENTE').length)
+const rdvAConfirmer = computed(() =>
+  rendezVousStore.rendezVous.filter((r) => r.statut === 'EN_ATTENTE' && new Date(r.date_heure_debut) >= new Date()).length,
+)
+const completion = computed(() => profil.value?.completion || null)
+const offresActives = computed(() => offres.value.filter((o) => o.disponible))
 
-  const total = avisPublies.value.reduce(
-    (sum, item) => sum + Number(item.note || 0),
-    0,
-  )
-
-  return total / avisPublies.value.length
+const aFaire = computed(() => {
+  const actions = []
+  const p = parcours.value
+  if (!verifie.value && p && p.statut !== 'DOSSIER_EN_REVUE' && p.decision !== 'REJETE') {
+    actions.push({
+      cle: 'verification',
+      icone: ShieldCheck,
+      titre: p.decision === 'A_VERIFIER' ? 'Compléter mon dossier de vérification' : 'Continuer ma vérification',
+      texte: etapeCourante.value ? `Étape ${p.numero_etape} sur ${p.nombre_etapes} : ${etapeCourante.value.libelle}` : 'Votre parcours de vérification',
+      to: '/prestataire/parcours',
+      important: true,
+    })
+  }
+  if (demandesEnAttente.value) {
+    actions.push({
+      cle: 'demandes',
+      icone: ClipboardList,
+      titre: `Répondre à ${demandesEnAttente.value} demande${demandesEnAttente.value > 1 ? 's' : ''}`,
+      texte: 'Des clients attendent votre réponse',
+      to: '/prestataire/demandes',
+      important: true,
+    })
+  }
+  if (rdvAConfirmer.value) {
+    actions.push({
+      cle: 'rdv',
+      icone: CalendarDays,
+      titre: `Confirmer ${rdvAConfirmer.value} rendez-vous`,
+      texte: 'Rendez-vous en attente de votre confirmation',
+      to: '/prestataire/rendez-vous',
+    })
+  }
+  if (completion.value && !completion.value.est_publiable) {
+    actions.push({
+      cle: 'profil',
+      icone: UserPen,
+      titre: 'Compléter mon profil',
+      texte: `Profil complété à ${completion.value.pourcentage} %`,
+      to: '/prestataire/profil',
+    })
+  }
+  if (!offresActives.value.length) {
+    actions.push({
+      cle: 'services',
+      icone: Briefcase,
+      titre: 'Ajouter mes services',
+      texte: 'Sans service, les clients ne peuvent pas vous trouver',
+      to: '/prestataire/services',
+    })
+  }
+  return actions
 })
 
-// La note moyenne affichée (texte).
-const noteMoyenne = computed(() => {
-  return `${noteMoyenneValeur.value.toFixed(1).replace('.', ',')} / 5`
-})
+/* ---------------------------------------------------------- chiffres clés */
+const parStatut = computed(() => tableau.value?.demandes?.par_statut || {})
+const totalDemandes = computed(() => Object.values(parStatut.value).reduce((s, n) => s + n, 0))
+const devise = computed(() => tableau.value?.revenus?.devise || 'FCFA')
+const noteMoyenne = computed(() => tableau.value?.avis?.note_moyenne)
 
-// Nombre d'offres actives.
-const offresActives = computed(() => {
-  return offres.value.filter((item) => item.disponible)
-})
+const evolutions = computed(() => tableau.value?.evolutions ?? {})
 
-// Les chiffres clés affichés en haut.
-const stats = computed(() => [
+const indicateurs = computed(() => [
   {
-    label: 'Offres disponibles',
-    value: offresActives.value.length,
-    icon: Briefcase,
+    label: 'Demandes reçues',
+    value: formaterNombre(totalDemandes.value),
+    hint: `${formaterNombre(parStatut.value.EN_ATTENTE ?? 0)} en attente de réponse`,
+    icon: ClipboardList,
+    evolution: evolutions.value.demandes,
+    serie: tableau.value?.demandes?.serie?.recues,
+    to: '/prestataire/demandes',
   },
   {
-    label: 'Avis publiés',
-    value: avisPublies.value.length,
-    icon: MessageSquare,
+    label: 'Prestations terminées',
+    value: formaterNombre(parStatut.value.TERMINEE ?? 0),
+    hint: `${formaterNombre(parStatut.value.ACCEPTEE ?? 0)} acceptées en cours`,
+    icon: CircleCheck,
+    evolution: evolutions.value.terminees,
+    serie: tableau.value?.demandes?.serie?.terminees,
+    to: '/prestataire/demandes',
+  },
+  {
+    label: 'Rendez-vous à venir',
+    value: formaterNombre(tableau.value?.rendez_vous?.a_venir ?? 0),
+    hint: 'En attente ou confirmés',
+    icon: CalendarDays,
+    to: '/prestataire/rendez-vous',
+  },
+  {
+    label: 'Revenus reçus',
+    value: formaterMontant(tableau.value?.revenus?.total_libere ?? 0, devise.value),
+    hint: `Disponible : ${formaterMontant(tableau.value?.revenus?.solde_disponible ?? 0, devise.value)}`,
+    icon: Wallet,
+    evolution: evolutions.value.revenus,
+    formater: (n) => formaterMontant(n, devise.value),
+    serie: tableau.value?.revenus?.serie?.montant,
+    to: '/prestataire/wallet',
+    accent: true,
   },
   {
     label: 'Note moyenne',
-    value: noteMoyenne.value,
+    value: noteMoyenne.value != null ? `${String(noteMoyenne.value.toFixed(1)).replace('.', ',')} / 5` : null,
+    hint: `${formaterNombre(tableau.value?.avis?.nombre ?? 0)} avis publiés`,
     icon: Star,
+    to: '/prestataire/avis',
   },
 ])
 
-/* ---------------------------------------------------------
- * Rendez-vous
- * ------------------------------------------------------- */
-// Seuls les rendez-vous futurs encore actifs sont utiles dans le dashboard.
-// Le tri explicite protège l'affichage même si l'ordre de l'API évolue.
-const rendezVousAVenir = computed(() => {
-  const maintenant = new Date()
-  const statutsActifs = ['EN_ATTENTE', 'CONFIRME']
+/* ---------------------------------------------------------- graphiques */
+// Aucune demande, aucun avis, aucun revenu : pas de graphiques vides.
+const sansActivite = computed(
+  () => !totalDemandes.value && !(tableau.value?.avis?.nombre) && !(tableau.value?.revenus?.total_libere),
+)
+const labels = computed(() => (tableau.value?.mois ?? []).map(libelleMois))
+const serieDemandes = computed(() => tableau.value?.demandes?.serie ?? { recues: [], terminees: [] })
+const serieRevenus = computed(() => tableau.value?.revenus?.serie?.montant ?? [])
 
-  return rendezVousStore.rendezVous
-    .filter((rendezVous) =>
-      statutsActifs.includes(rendezVous.statut) &&
-      new Date(rendezVous.date_heure_debut) >= maintenant,
-    )
-    .sort(
-      (premier, second) =>
-        new Date(premier.date_heure_debut) - new Date(second.date_heure_debut),
-    )
-})
+const graphiquePrestations = computed(() => ({
+  labels: labels.value,
+  datasets: [
+    serieBarres('Demandes reçues', serieDemandes.value.recues, SERIES[1]),
+    serieBarres('Terminées', serieDemandes.value.terminees, SERIES[0]),
+  ],
+}))
+const optionsPrestations = optionsCartesiennes()
 
-// La liste latérale reste courte, le compteur conserve le total réel.
-const prochainsRendezVous = computed(() => rendezVousAVenir.value.slice(0, 3))
-const nombreRendezVousAVenir = computed(() => rendezVousAVenir.value.length)
+const graphiqueRevenus = computed(() => ({
+  labels: labels.value,
+  datasets: [serieBarres('Revenus reçus', serieRevenus.value, SERIES[0])],
+}))
+const optionsRevenus = (() => {
+  const options = optionsCartesiennes({ formatY: formaterCompact, entiers: false })
+  options.plugins.legend.display = false
+  options.plugins.tooltip.callbacks.label = (c) => ` ${formaterMontant(c.parsed.y)}`
+  return options
+})()
 
-const rendezVousStatutLabels = {
-  EN_ATTENTE: 'En attente',
-  CONFIRME: 'Confirmé',
+function tableauMensuel(colonnes, ...series) {
+  return { colonnes: ['Mois', ...colonnes], lignes: labels.value.map((mois, i) => [mois, ...series.map((s) => s(i))]) }
 }
 
-// Les trois avis les plus récents alimentent l'aperçu latéral.
+const LIBELLES_STATUT = {
+  EN_ATTENTE: 'En attente',
+  ACCEPTEE: 'Acceptées',
+  REALISEE: 'Réalisées (validation client)',
+  TERMINEE: 'Terminées',
+  REFUSEE: 'Refusées',
+  ANNULEE: 'Annulées',
+}
+const COULEURS_STATUT = {
+  EN_ATTENTE: STATUTS.attente,
+  ACCEPTEE: SERIES[1],
+  REALISEE: STATUTS.info,
+  TERMINEE: STATUTS.succes,
+  REFUSEE: STATUTS.neutre,
+  ANNULEE: STATUTS.danger,
+}
+const partsDemandes = computed(() =>
+  Object.keys(LIBELLES_STATUT)
+    .map((statut) => ({ libelle: LIBELLES_STATUT[statut], valeur: parStatut.value[statut] ?? 0, couleur: COULEURS_STATUT[statut] }))
+    .filter((part) => part.valeur > 0),
+)
+
+// Répartition des notes : de 5 à 1 étoile(s).
+const repartitionNotes = computed(() => {
+  const repartition = tableau.value?.avis?.repartition || {}
+  const total = Object.values(repartition).reduce((s, n) => s + n, 0)
+  return [5, 4, 3, 2, 1].map((note) => ({ note, nombre: repartition[note] ?? 0, part: total ? ((repartition[note] ?? 0) / total) * 100 : 0 }))
+})
+
+/* ---------------------------------------------------------- activité */
+// Construite uniquement à partir de ses propres demandes, rendez-vous et avis.
+const TYPES_ACTIVITE = {
+  DEMANDE_RECUE: { libelle: 'Nouvelle demande', icone: ClipboardList, ton: 'info', categorie: 'demandes', lien: () => '/prestataire/demandes' },
+  PRESTATION_TERMINEE: { libelle: 'Prestation terminée', icone: CheckCheck, ton: 'brand', categorie: 'demandes', lien: () => '/prestataire/demandes' },
+  RENDEZ_VOUS: { libelle: 'Rendez-vous pris', icone: CalendarDays, ton: 'info', categorie: 'rendez_vous', lien: () => '/prestataire/rendez-vous' },
+  AVIS_RECU: { libelle: 'Nouvel avis', icone: Star, ton: 'neutral', categorie: 'avis', lien: () => '/prestataire/avis' },
+}
+const CATEGORIES_ACTIVITE = [
+  { value: 'demandes', label: 'Demandes' },
+  { value: 'rendez_vous', label: 'Rendez-vous' },
+  { value: 'avis', label: 'Avis' },
+]
+const activite = computed(() => {
+  const items = []
+  for (const d of demandeStore.demandes) {
+    if (d.date_creation) items.push({ type: 'DEMANDE_RECUE', date: d.date_creation, message: `${d.client_nom || 'Un client'} · ${d.service_nom || 'Service'}` })
+    if (d.statut === 'TERMINEE' && d.date_validation) {
+      items.push({ type: 'PRESTATION_TERMINEE', date: d.date_validation, message: `${d.service_nom || 'Prestation'} pour ${d.client_nom || 'un client'}` })
+    }
+  }
+  for (const r of rendezVousStore.rendezVous) {
+    if (r.date_creation) items.push({ type: 'RENDEZ_VOUS', date: r.date_creation, message: `${r.client_nom || 'Un client'} · ${formatDateHeure(r.date_heure_debut)}` })
+  }
+  for (const a of avis.value) {
+    if (a.statut === 'PUBLIE' && a.date_creation) items.push({ type: 'AVIS_RECU', date: a.date_creation, message: `${a.note}/5${a.commentaire ? ` — ${a.commentaire}` : ''}` })
+  }
+  return items.sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 30)
+})
+
+/* ---------------------------------------------------------- listes */
+const demandesRecentes = computed(() => demandeStore.demandes.slice(0, 5))
+const prochainsRendezVous = computed(() =>
+  rendezVousStore.rendezVous
+    .filter((r) => ['EN_ATTENTE', 'CONFIRME'].includes(r.statut) && new Date(r.date_heure_debut) >= new Date())
+    .sort((a, b) => new Date(a.date_heure_debut) - new Date(b.date_heure_debut))
+    .slice(0, 3),
+)
 const avisRecents = computed(() =>
-  [...avisPublies.value]
-    .sort((premier, second) =>
-      new Date(second.date_creation) - new Date(premier.date_creation),
-    )
+  avis.value
+    .filter((a) => a.statut === 'PUBLIE')
+    .sort((a, b) => new Date(b.date_creation) - new Date(a.date_creation))
     .slice(0, 3),
 )
 
-/* ---------------------------------------------------------
- * Demandes
- * ------------------------------------------------------- */
-const demandesRecentes = computed(() => {
-  return demandeStore.demandes.slice(0, 5)
-})
-
-// Les demandes encore en attente de réponse.
-const demandesEnAttente = computed(() => {
-  return demandeStore.demandes.filter(
-    (demande) => demande.statut === 'EN_ATTENTE',
-  ).length
-})
-
-// Libellés lisibles et couleurs des statuts.
-const statutLabels = {
-  EN_ATTENTE: 'En attente',
-  ACCEPTEE: 'Acceptée',
-  REFUSEE: 'Refusée',
-  REALISEE: 'Validation en attente',
-  TERMINEE: 'Terminée',
-  ANNULEE: 'Annulée',
-}
-
-const statutClasses = {
-  EN_ATTENTE: 'bg-[#F2F3F0] text-[#1A1C1A]',
-  ACCEPTEE: 'bg-[#2D6A4F] text-white',
-  REFUSEE: 'bg-[#F2F3F0] text-[#1A1C1A]',
-  REALISEE: 'bg-[#FFF7E6] text-[#9A723C]',
-  TERMINEE: 'bg-[#F2F3F0] text-[#1A1C1A]',
-  ANNULEE: 'bg-[#FEE2E2] text-[#991B1B]',
-}
-
-// Première lettre d'un nom (pour l'avatar).
-function initiale(nom) {
-  return (nom || 'C').charAt(0).toUpperCase()
-}
-
-// Met une date au format français.
 function formatDate(date) {
-  return date ? new Date(date).toLocaleDateString('fr-FR') : '—'
+  return date ? new Date(date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '—'
 }
-
-// Formate un créneau lisible, par exemple « 5 oct. · 09:30 ».
 function formatDateHeure(date) {
-  if (!date) return '—'
-
-  return new Date(date).toLocaleString('fr-FR', {
-    day: 'numeric',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  return date ? new Date(date).toLocaleString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'
 }
 
-/* ---------------------------------------------------------
- * Onboarding
- * ------------------------------------------------------- */
-const LIBELLES_ETAPES = {
-  informations_personnelles: 'Informations personnelles',
-  informations_professionnelles: 'Informations professionnelles',
-  localisation: 'Localisation',
-  services: 'Services',
-  disponibilites: 'Disponibilités',
-  verification_identite: "Vérification d'identité",
-}
-
-// Le pourcentage de complétion du profil (calculé par le serveur).
-const completion = computed(() => profil.value?.completion || null)
-
-// Les étapes de complétion à afficher, et celles qui restent.
-const etapesAffichees = computed(() => {
-  if (!completion.value) return []
-
-  return Object.entries(completion.value.etapes).map(([cle, complete]) => ({
-    cle,
-    libelle: LIBELLES_ETAPES[cle] || cle,
-    complete,
-  }))
-})
-
-const etapesRestantes = computed(() => {
-  return etapesAffichees.value.filter((etape) => !etape.complete).length
-})
-
-// Le profil est-il incomplet ?
-const profilIncomplet = computed(() => {
-  return completion.value ? !completion.value.est_publiable : false
-})
-
-// Ferme le bandeau d'aide et s'en souvient.
-function fermerBandeau() {
-  bandeauFerme.value = true
-  sessionStorage.setItem('mimosy_onboarding_ferme', '1')
-}
-
-/* ---------------------------------------------------------
- * Navigation
- * ------------------------------------------------------- */
-function voirToutesLesDemandes() {
-  router.push('/prestataire/demandes')
-}
-
-function gererServices() {
-  router.push('/prestataire/services')
-}
-
-function completerProfil() {
-  router.push('/prestataire/profil')
-}
-
-// Les deux aperçus renvoient vers leurs pages complètes.
-function voirRendezVous() {
-  router.push('/prestataire/rendez-vous')
-}
-
-function voirTousLesAvis() {
-  router.push('/prestataire/avis')
-}
-
-/* ---------------------------------------------------------
- * Chargement
- * ------------------------------------------------------- */
-async function chargerTableauDeBord() {
-  loading.value = true
-  error.value = ''
-
-  try {
-    const [offersData, reviewsData, profilData] = await Promise.all([
-      prestataireService.listMyServiceOffers(),
-      reviewService.listReviews(),
-      prestataireService.getMyProviderProfile(),
-      demandeStore.chargerDemandes(true),
-      rendezVousStore.chargerRendezVous(),
-    ])
-
-    offres.value = Array.isArray(offersData)
-      ? offersData
-      : offersData?.results || []
-
-    avis.value = Array.isArray(reviewsData)
-      ? reviewsData
-      : reviewsData?.results || []
-
-    profil.value = profilData
-  } catch (requestError) {
-    error.value =
-      requestError?.message ||
-      'Une erreur est survenue lors du chargement du tableau de bord.'
-  } finally {
-    loading.value = false
+/* ---------------------------------------------------------- chargement */
+async function charger() {
+  chargement.value = true
+  erreur.value = ''
+  const liste = (data) => (Array.isArray(data) ? data : data?.results || [])
+  const resultats = await Promise.allSettled([
+    prestataireService.getMonTableauDeBord(6),
+    prestataireService.listMyServiceOffers(),
+    reviewService.listReviews(),
+    prestataireService.getMyProviderProfile(),
+    parcoursService.getParcours(),
+    demandeStore.chargerDemandes(true),
+    rendezVousStore.chargerRendezVous(),
+  ])
+  const [resTableau, resOffres, resAvis, resProfil, resParcours] = resultats
+  if (resTableau.status === 'fulfilled') tableau.value = resTableau.value
+  if (resOffres.status === 'fulfilled') offres.value = liste(resOffres.value)
+  if (resAvis.status === 'fulfilled') avis.value = liste(resAvis.value)
+  if (resProfil.status === 'fulfilled') profil.value = resProfil.value
+  // Le parcours peut être indisponible (ex. e-mail non vérifié) : le tableau de bord reste utilisable.
+  if (resParcours.status === 'fulfilled') parcours.value = resParcours.value
+  if (resTableau.status === 'rejected' && resProfil.status === 'rejected') {
+    erreur.value = resTableau.reason?.message || 'Une erreur est survenue lors du chargement de votre tableau de bord.'
   }
+  chargement.value = false
 }
 
-// On charge le tableau de bord au montage.
-onMounted(chargerTableauDeBord)
+onMounted(charger)
 </script>
 
 <template>
   <AppLayout role="prestataire" background="#F2F3F0">
-    <div class="mx-auto flex w-full  flex-col gap-8 lg:gap-10 ">
+    <div class="flex flex-col gap-8">
+      <!-- En-tête -->
+      <section class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p class="text-sm text-muted">{{ dateDuJour }}</p>
+          <h1 class="font-serif text-[36px] leading-10 text-ink sm:text-[44px] sm:leading-[48px]">Bonjour {{ prenom }},</h1>
+          <p class="mt-1 text-base text-ink-soft">Voici où en est votre activité.</p>
+        </div>
+        <MButton :icon="Plus" @click="router.push('/prestataire/services')">Ajouter un service</MButton>
+      </section>
 
-          <!-- ================================================= -->
-          <!-- EN-TÊTE -->
-          <!-- ================================================= -->
-          <section class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-            <div class="flex flex-col gap-2">
-              <p class="font-['DM_Sans'] text-sm text-[#1A1C1A] opacity-50">
-                {{ dateDuJour }}
-              </p>
+      <!-- Chargement -->
+      <div v-if="chargement" class="flex flex-col gap-6" aria-busy="true">
+        <span class="sr-only">Chargement de votre activité…</span>
+        <div class="h-40 animate-pulse rounded-card bg-sunken motion-reduce:animate-none" />
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+          <div v-for="n in 5" :key="n" class="h-28 animate-pulse rounded-card bg-sunken motion-reduce:animate-none" />
+        </div>
+      </div>
 
-              <h1
-                class="font-['Instrument_Serif'] text-[36px] font-normal leading-[40px] text-[#1A1C1A] sm:text-[48px] sm:leading-[52px]"
-              >
-                Bonjour {{ userName }},
-              </h1>
+      <!-- Erreur -->
+      <div v-else-if="erreur" class="flex flex-col gap-4 rounded-card border border-[#E8C9C3] bg-danger-soft p-5 sm:flex-row sm:items-center sm:justify-between" role="alert">
+        <p class="text-sm text-danger">{{ erreur }}</p>
+        <MButton variant="outline" size="sm" :icon="RefreshCw" @click="charger">Réessayer</MButton>
+      </div>
 
-              <p class="font-['DM_Sans'] text-base leading-6 text-[#1A1C1A] opacity-60">
-                Voici un résumé de votre activité aujourd'hui.
-              </p>
+      <template v-else>
+        <!-- À faire + vérification -->
+        <div class="grid gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+          <section class="rounded-card border border-line bg-surface p-5 sm:p-6" aria-labelledby="titre-a-faire">
+            <h2 id="titre-a-faire" class="font-serif text-2xl leading-8 text-ink">À faire maintenant</h2>
+            <div v-if="!aFaire.length" class="mt-4 flex items-center gap-3 rounded-xl bg-brand-soft px-4 py-4 text-sm text-brand">
+              <CircleCheck :size="20" aria-hidden="true" />
+              <span><strong>Tout est à jour.</strong> Aucune action ne vous attend pour le moment.</span>
             </div>
-
-            <button
-              type="button"
-              class="inline-flex w-full cursor-pointer items-center justify-center gap-2 bg-[#2D6A4F] px-5 py-3 font-['DM_Sans'] text-sm font-bold text-white transition-colors hover:bg-[#24573F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2D6A4F] focus-visible:ring-offset-2 sm:w-auto rounded-2xl"
-              @click="gererServices"
-            >
-              <Plus class="h-4 w-4" :stroke-width="2" />
-              Ajouter un service
-            </button>
+            <ul v-else class="mt-4 flex flex-col gap-2.5">
+              <li v-for="action in aFaire" :key="action.cle">
+                <router-link
+                  :to="action.to"
+                  class="group flex items-center gap-3 rounded-xl border px-4 py-3.5 transition-colors"
+                  :class="action.important ? 'border-brand/30 bg-raised hover:border-brand' : 'border-line bg-raised hover:border-line-strong'"
+                >
+                  <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg" :class="action.important ? 'bg-brand text-white' : 'bg-sunken text-ink-soft'" aria-hidden="true">
+                    <component :is="action.icone" :size="18" :stroke-width="1.8" />
+                  </span>
+                  <span class="min-w-0 flex-1">
+                    <span class="block text-[15px] font-semibold text-ink">{{ action.titre }}</span>
+                    <span class="block text-sm text-ink-soft">{{ action.texte }}</span>
+                  </span>
+                  <ArrowRight :size="18" class="shrink-0 text-brand transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                </router-link>
+              </li>
+            </ul>
           </section>
 
-          <!-- ================================================= -->
-          <!-- CHARGEMENT (squelette) -->
-          <!-- ================================================= -->
-          <div
-            v-if="loading"
-            class="flex flex-col gap-8"
-            aria-busy="true"
-            aria-live="polite"
-          >
-            <span class="sr-only">Chargement de votre activité...</span>
-
-            <div class="grid grid-cols-1 gap-4 md:grid-cols-3 md:gap-6">
-              <div
-                v-for="n in 3"
-                :key="n"
-                class="h-[168px] animate-pulse border border-[#E5E7E2] bg-[#FAFAF8] motion-reduce:animate-none"
-              />
+          <section class="flex flex-col gap-4 rounded-card border border-line bg-surface p-5 sm:p-6" aria-labelledby="titre-verification">
+            <div class="flex items-center justify-between gap-3">
+              <h2 id="titre-verification" class="font-serif text-2xl leading-8 text-ink">Ma vérification</h2>
+              <BadgeCheck v-if="verifie" :size="22" class="text-brand" aria-hidden="true" />
             </div>
-
-            <div class="grid grid-cols-1 gap-6 xl:grid-cols-3">
-              <div class="h-[360px] animate-pulse border border-[#E5E7E2] bg-[#FAFAF8] motion-reduce:animate-none xl:col-span-2" />
-              <div class="h-[360px] animate-pulse border border-[#E5E7E2] bg-[#FAFAF8] motion-reduce:animate-none" />
+            <div>
+              <MBadge :variant="verification.ton" dot>{{ verification.titre }}</MBadge>
+              <p v-if="verification.texte" class="mt-2 text-sm text-ink-soft">{{ verification.texte }}</p>
             </div>
-          </div>
-
-          <!-- ================================================= -->
-          <!-- ERREUR -->
-          <!-- ================================================= -->
-          <div
-            v-else-if="error"
-            class="flex flex-col gap-4 border border-[#E5B8B2] bg-[#FFF0EE] p-5 sm:flex-row sm:items-center sm:justify-between"
-            role="alert"
-          >
-            <p class="font-['DM_Sans'] text-sm leading-5 text-[#A85148]">
-              {{ error }}
-            </p>
-
-            <button
-              type="button"
-              class="inline-flex cursor-pointer items-center gap-2 self-start font-['DM_Sans'] text-sm font-semibold text-[#A85148] transition-opacity hover:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A85148] focus-visible:ring-offset-2 sm:self-auto"
-              @click="chargerTableauDeBord"
-            >
-              <RefreshCw class="h-4 w-4" :stroke-width="2" />
-              Réessayer
-            </button>
-          </div>
-
-          <template v-else>
-
-            <!-- ============================================= -->
-            <!-- ONBOARDING -->
-            <!-- ============================================= -->
-            <section
-              v-if="!bandeauFerme && profilIncomplet"
-              class="border border-[#2D6A4F]/30 bg-[#E2EAE4] p-5 sm:p-6 lg:p-8 rounded-2xl"
-            >
-              <div class="flex items-start justify-between gap-4">
-                <div>
-                  <p class="font-['Instrument_Serif'] text-2xl leading-8 text-[#1A1C1A]">
-                    Votre profil est complété à {{ completion.pourcentage }} %
-                  </p>
-
-                  <p class="mt-1 max-w-2xl font-['DM_Sans'] text-sm leading-5 text-[#1A1C1A] opacity-60">
-                    Tant que votre profil n'est pas complet, vos services ne
-                    sont pas visibles par les clients.
-                    <template v-if="etapesRestantes">
-                      Il reste {{ etapesRestantes }}
-                      {{ etapesRestantes > 1 ? 'étapes' : 'étape' }}.
-                    </template>
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  class="shrink-0 cursor-pointer font-['DM_Sans'] text-sm font-semibold text-[#2D6A4F] transition-opacity hover:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2D6A4F] focus-visible:ring-offset-2"
-                  @click="fermerBandeau"
-                >
-                  Plus tard
-                </button>
+            <div v-if="parcours?.etapes?.length">
+              <div class="mb-2 flex items-center justify-between text-xs text-ink-soft">
+                <span>Progression</span>
+                <span class="tabular font-semibold">{{ parcours.pourcentage }} %</span>
               </div>
-
-              <div
-                class="mt-5 h-2 w-full overflow-hidden bg-white mx-5"
-                role="progressbar"
-                :aria-valuenow="completion.pourcentage"
-                aria-valuemin="0"
-                aria-valuemax="100"
-                aria-label="Progression du profil"
-              >
-                <div
-                  class="h-full bg-[#2D6A4F] transition-all duration-500 motion-reduce:transition-none"
-                  :style="{ width: `${completion.pourcentage}%` }"
-                />
+              <div class="h-2 overflow-hidden rounded-full bg-sunken" role="progressbar" :aria-valuenow="parcours.pourcentage" aria-valuemin="0" aria-valuemax="100" aria-label="Progression de la vérification">
+                <div class="h-full rounded-full bg-brand transition-[width] duration-700 motion-reduce:transition-none" :style="{ width: `${parcours.pourcentage}%` }" />
               </div>
-
-              <ul class="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                <li
-                  v-for="etape in etapesAffichees"
-                  :key="etape.cle"
-                  class="flex items-center gap-2"
-                >
+              <ol class="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 sm:grid-cols-3">
+                <li v-for="etape in parcours.etapes" :key="etape.cle" class="flex items-center gap-1.5 text-xs" :class="etape.etat === 'a_faire' ? 'text-muted' : 'text-ink'">
                   <span
-                    class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
-                    :class="
-                      etape.complete
-                        ? 'bg-[#2D6A4F] text-white'
-                        : 'border border-[#94A3B8]'
-                    "
+                    class="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold"
+                    :class="etape.etat === 'termine' ? 'bg-brand text-white' : etape.etat === 'en_cours' ? 'border-2 border-warning' : 'border border-line-strong'"
                     aria-hidden="true"
-                  >
-                    <Check v-if="etape.complete" class="h-3 w-3" :stroke-width="3" />
-                  </span>
+                  >{{ etape.etat === 'termine' ? '✓' : '' }}</span>
+                  {{ etape.libelle }}
+                </li>
+              </ol>
+            </div>
+            <MButton v-if="!verifie" variant="outline" size="sm" :icon-right="ArrowRight" to="/prestataire/parcours" class="self-start">Voir mon parcours</MButton>
+          </section>
+        </div>
 
-                  <span
-                    class="font-['DM_Sans'] text-sm"
-                    :class="etape.complete ? 'text-[#1A1C1A]' : 'text-[#64748B]'"
-                  >
-                    {{ etape.libelle }}
-                    <span class="sr-only">
-                      {{ etape.complete ? '(terminée)' : '(à faire)' }}
-                    </span>
-                  </span>
+        <!-- Chiffres clés -->
+        <section class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-6" aria-label="Mes chiffres clés">
+          <KpiCard
+            v-for="(item, index) in indicateurs"
+            :key="item.label"
+            v-bind="item"
+            :jours="evolutions.jours || 30"
+            class="animate-rise"
+            :class="index < 3 ? 'lg:col-span-2' : index === 4 ? 'col-span-2 lg:col-span-3' : 'lg:col-span-3'"
+            :style="{ '--reveal-delay': `${index * 50}ms` }"
+          />
+        </section>
+
+        <!-- Graphiques : seulement quand il y a quelque chose à montrer -->
+        <section v-if="sansActivite" class="flex flex-col items-center gap-3 rounded-card border border-dashed border-line-strong bg-surface px-6 py-10 text-center animate-rise" data-test="statistiques-vides">
+          <span class="flex h-11 w-11 items-center justify-center rounded-full bg-brand-soft text-brand" aria-hidden="true"><ChartNoAxesColumn :size="20" /></span>
+          <h2 class="font-serif text-2xl leading-8 text-ink">Vos statistiques arrivent bientôt</h2>
+          <p class="max-w-md text-sm text-ink-soft">
+            Dès votre première demande, vous suivrez ici vos prestations, vos revenus et vos avis, mois par mois.
+          </p>
+        </section>
+
+        <div v-else class="grid gap-6 xl:grid-cols-2">
+          <ChartPanel
+            titre="Mes prestations"
+            description="Demandes reçues et prestations terminées, mois par mois (6 derniers mois)."
+            :vide="!aDesValeurs(serieDemandes.recues, serieDemandes.terminees)"
+            message-vide="Vous n'avez pas encore reçu de demande. Vos prestations apparaîtront ici."
+            :tableau="tableauMensuel(['Reçues', 'Terminées'], (i) => serieDemandes.recues[i], (i) => serieDemandes.terminees[i])"
+          >
+            <Bar :data="graphiquePrestations" :options="optionsPrestations" aria-label="Demandes reçues et terminées par mois" />
+          </ChartPanel>
+
+          <ChartPanel
+            titre="Mes revenus"
+            description="Argent versé sur votre portefeuille après chaque prestation terminée (commission déduite)."
+            :vide="!aDesValeurs(serieRevenus)"
+            message-vide="Aucun revenu reçu pour le moment. Vos gains s'afficheront ici après vos premières prestations."
+            :tableau="tableauMensuel([`Revenus (${devise})`], (i) => formaterNombre(serieRevenus[i]))"
+          >
+            <Bar :data="graphiqueRevenus" :options="optionsRevenus" aria-label="Revenus reçus par mois" />
+          </ChartPanel>
+
+          <ChartPanel
+            titre="Mes demandes par statut"
+            description="Où en sont toutes les demandes que vous avez reçues."
+            :vide="!partsDemandes.length"
+            message-vide="Aucune demande pour le moment."
+            :hauteur="200"
+          >
+            <RepartitionAnneau :parts="partsDemandes" libelle-total="demandes" />
+          </ChartPanel>
+
+          <ChartPanel
+            titre="Mes avis clients"
+            description="Votre note moyenne et la répartition des notes publiées."
+            :vide="!(tableau?.avis?.nombre)"
+            message-vide="Vous n'avez pas encore d'avis. Après chaque prestation, vos clients pourront vous noter."
+            :hauteur="200"
+          >
+            <div class="grid h-full items-center gap-6 sm:grid-cols-[auto_minmax(0,1fr)]">
+              <div class="text-center sm:pr-4">
+                <p class="tabular font-serif text-5xl leading-none text-ink">{{ noteMoyenne != null ? String(noteMoyenne.toFixed(1)).replace('.', ',') : '—' }}</p>
+                <p class="mt-1 flex items-center justify-center gap-0.5 text-star" aria-hidden="true">
+                  <Star v-for="n in 5" :key="n" :size="14" :fill="noteMoyenne != null && n <= Math.round(noteMoyenne) ? 'currentColor' : 'none'" />
+                </p>
+                <p class="mt-1 text-xs text-muted">{{ formaterNombre(tableau?.avis?.nombre ?? 0) }} avis</p>
+              </div>
+              <ul class="flex flex-col gap-2" aria-label="Répartition des notes">
+                <li v-for="ligne in repartitionNotes" :key="ligne.note" class="grid grid-cols-[3.5rem_minmax(0,1fr)_2rem] items-center gap-2 text-xs">
+                  <span class="text-ink-soft">{{ ligne.note }} étoile{{ ligne.note > 1 ? 's' : '' }}</span>
+                  <span class="h-2 overflow-hidden rounded-full bg-sunken"><span class="block h-full rounded-full bg-star" :style="{ width: `${ligne.part}%` }" /></span>
+                  <span class="tabular text-right font-semibold text-ink">{{ ligne.nombre }}</span>
                 </li>
               </ul>
-
-              <button
-                type="button"
-                class="mt-6 inline-flex w-full cursor-pointer items-center justify-center gap-2 bg-[#2D6A4F] px-5 py-3 font-['DM_Sans'] text-sm font-bold text-white transition-colors hover:bg-[#24573F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2D6A4F] focus-visible:ring-offset-2 sm:w-auto rounded-2xl"
-                @click="completerProfil"
-              >
-                Compléter mon profil
-                <ArrowRight class="h-4 w-4" :stroke-width="2" />
-              </button>
-            </section>
-
-            <!-- ============================================= -->
-            <!-- INDICATEURS PRINCIPAUX -->
-            <!-- ============================================= -->
-            <section class="grid grid-cols-1 gap-4 md:grid-cols-3 md:gap-6">
-
-              <!-- Demandes en attente -->
-              <button
-                type="button"
-                class="group flex min-h-[168px] cursor-pointer flex-col justify-between gap-4 border border-[#E5E7E2] bg-[#FAFAF8] p-6 text-left transition-colors hover:border-[#2D6A4F]/40 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2D6A4F] focus-visible:ring-offset-2 lg:p-8 rounded-2xl"
-                @click="voirToutesLesDemandes"
-              >
-                <p class="font-['DM_Sans'] text-xs font-bold uppercase leading-4 tracking-[1.2px] text-[#1A1C1A] opacity-50">
-                  Demandes en attente
-                </p>
-
-                <div class="flex items-end justify-between gap-4">
-                  <span class="font-['Instrument_Serif'] text-5xl font-normal leading-[48px] text-[#1A1C1A]">
-                    {{ demandesEnAttente }}
-                  </span>
-
-                  <span class="flex items-center gap-1 font-['DM_Sans'] text-sm leading-5 text-[#2D6A4F]">
-                    Traiter
-                    <ArrowUpRight
-                      class="h-4 w-4 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 motion-reduce:transition-none"
-                    />
-                  </span>
-                </div>
-              </button>
-
-              <!-- Rendez-vous : compteur réellement calculé depuis le store. -->
-              <button
-                type="button"
-                class="group flex min-h-[168px] cursor-pointer flex-col justify-between gap-4 border border-[#E5E7E2] bg-[#FAFAF8] p-6 text-left transition-colors hover:border-[#2D6A4F]/40 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2D6A4F] focus-visible:ring-offset-2 lg:p-8 rounded-2xl"
-                @click="voirRendezVous"
-              >
-                <p class="font-['DM_Sans'] text-xs font-bold uppercase leading-4 tracking-[1.2px] text-[#1A1C1A] opacity-50">
-                  Rendez-vous à venir
-                </p>
-
-                <div class="flex items-end justify-between gap-4">
-                  <span class="font-['Instrument_Serif'] text-5xl font-normal leading-[48px] text-[#1A1C1A]">
-                    {{ nombreRendezVousAVenir }}
-                  </span>
-
-                  <span class="flex items-center gap-1 font-['DM_Sans'] text-sm leading-5 text-[#2D6A4F]">
-                    Voir l'agenda
-                    <ArrowUpRight
-                      class="h-4 w-4 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 motion-reduce:transition-none"
-                    />
-                  </span>
-                </div>
-              </button>
-
-              <!-- Revenus -->
-              <article class="flex min-h-[168px] flex-col justify-between gap-4 border border-[#2D6A4F] bg-[#2D6A4F] p-6 lg:p-8 rounded-2xl">
-                <p class="font-['DM_Sans'] text-xs font-bold uppercase leading-4 tracking-[1.2px] text-[#F2F3F0] opacity-70">
-                  Revenus du mois
-                </p>
-
-                <div class="flex flex-wrap items-end justify-between gap-2">
-                  <div class="flex items-baseline">
-                    <span class="font-['Instrument_Serif'] text-5xl font-normal leading-[48px] text-white">
-                      —
-                    </span>
-                    <span class="ml-2 font-['Instrument_Serif'] text-lg leading-7 text-white">
-                      FCFA
-                    </span>
-                  </div>
-
-                  <span class="font-['DM_Sans'] text-sm leading-5 text-white opacity-80">
-                    Voir dans Revenus
-                  </span>
-                </div>
-              </article>
-            </section>
-
-            <!-- ============================================= -->
-            <!-- INDICATEURS SECONDAIRES -->
-            <!-- ============================================= -->
-            <section
-              class="grid grid-cols-1 divide-y divide-[#E5E7E2] border border-[#E5E7E2] bg-[#FAFAF8] sm:grid-cols-3 sm:divide-x sm:divide-y-0"
-              aria-label="Vos indicateurs"
-            >
-              <div
-                v-for="stat in stats"
-                :key="stat.label"
-                class="flex items-center gap-4 px-6 py-5"
-              >
-                <span
-                  class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#E5E7E2] bg-white text-[#2D6A4F]"
-                  aria-hidden="true"
-                >
-                  <component :is="stat.icon" class="h-4 w-4" :stroke-width="2" />
-                </span>
-
-                <div class="min-w-0">
-                  <p class="font-['Instrument_Serif'] text-2xl leading-7 text-[#1A1C1A]">
-                    {{ stat.value }}
-                  </p>
-                  <p class="truncate font-['DM_Sans'] text-sm text-[#1A1C1A] opacity-60">
-                    {{ stat.label }}
-                  </p>
-                </div>
-              </div>
-            </section>
-
-            <!-- ============================================= -->
-            <!-- DEMANDES + COLONNE LATÉRALE -->
-            <!-- ============================================= -->
-            <div class="grid grid-cols-1 gap-6 xl:grid-cols-3">
-
-              <!-- Demandes récentes -->
-              <section class="border border-[#E5E7E2] bg-[#FAFAF8] p-5 sm:p-6 lg:p-8 xl:col-span-2 rounded-2xl">
-                <div class="mb-6 flex items-center justify-between gap-4 lg:mb-8">
-                  <h2 class="font-['Instrument_Serif'] text-2xl font-normal leading-8 text-[#1A1C1A]">
-                    Demandes récentes
-                  </h2>
-
-                  <button
-                    v-if="demandesRecentes.length"
-                    type="button"
-                    class="cursor-pointer border-b border-[#1A1C1A] pb-1 font-['DM_Sans'] text-xs font-bold uppercase leading-4 tracking-[1.2px] text-[#1A1C1A] transition-opacity hover:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2D6A4F] focus-visible:ring-offset-2"
-                    @click="voirToutesLesDemandes"
-                  >
-                    Voir tout
-                  </button>
-                </div>
-
-                <EmptyState
-                  v-if="!demandesRecentes.length"
-                  title="Aucune demande"
-                  message="Les demandes reçues de vos clients apparaîtront ici."
-                />
-
-                <template v-else>
-                  <!-- Mobile : liste de cartes -->
-                  <ul class="flex flex-col divide-y divide-[#E5E7E2] md:hidden">
-                    <li
-                      v-for="demande in demandesRecentes"
-                      :key="demande.id"
-                      class="flex items-start gap-3 py-4 first:pt-0 last:pb-0"
-                    >
-                      <div
-                        class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#E5E7E2] bg-white font-['DM_Sans'] text-xs font-semibold text-[#2D6A4F]"
-                        aria-hidden="true"
-                      >
-                        {{ initiale(demande.client_nom) }}
-                      </div>
-
-                      <div class="min-w-0 flex-1">
-                        <div class="flex items-start justify-between gap-2">
-                          <p class="truncate font-['DM_Sans'] text-sm font-medium text-[#1A1C1A]">
-                            {{ demande.client_nom || 'Client' }}
-                          </p>
-
-                          <span
-                            class="inline-flex shrink-0 px-2 py-0.5 font-['DM_Sans'] text-[10px] font-bold uppercase leading-[15px]"
-                            :class="statutClasses[demande.statut] || 'bg-[#F2F3F0] text-[#1A1C1A]'"
-                          >
-                            {{ statutLabels[demande.statut] || demande.statut }}
-                          </span>
-                        </div>
-
-                        <p class="mt-1 truncate font-['DM_Sans'] text-sm text-[#1A1C1A] opacity-70">
-                          {{ demande.service_nom || 'Service' }}
-                        </p>
-
-                        <p class="mt-1 font-['DM_Sans'] text-xs text-[#1A1C1A] opacity-50">
-                          {{ formatDate(demande.date_creation) }}
-                        </p>
-                      </div>
-                    </li>
-                  </ul>
-
-                  <!-- Tablette / desktop : tableau -->
-                  <div class="hidden overflow-x-auto md:block">
-                    <table class="w-full border-collapse">
-                      <thead>
-                        <tr class="border-b border-[#E5E7E2]">
-                          <th scope="col" class="pb-4 text-left font-['DM_Sans'] text-xs font-bold uppercase tracking-[1.2px] text-[#1A1C1A] opacity-50">
-                            Client
-                          </th>
-                          <th scope="col" class="pb-4 text-left font-['DM_Sans'] text-xs font-bold uppercase tracking-[1.2px] text-[#1A1C1A] opacity-50">
-                            Service
-                          </th>
-                          <th scope="col" class="pb-4 text-left font-['DM_Sans'] text-xs font-bold uppercase tracking-[1.2px] text-[#1A1C1A] opacity-50">
-                            Date
-                          </th>
-                          <th scope="col" class="pb-4 text-right font-['DM_Sans'] text-xs font-bold uppercase tracking-[1.2px] text-[#1A1C1A] opacity-50">
-                            Statut
-                          </th>
-                        </tr>
-                      </thead>
-
-                      <tbody>
-                        <tr
-                          v-for="demande in demandesRecentes"
-                          :key="demande.id"
-                          class="border-b border-[#E5E7E2] transition-colors last:border-b-0 hover:bg-white"
-                        >
-                          <td class="py-4 pr-4">
-                            <div class="flex items-center gap-3">
-                              <div
-                                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#E5E7E2] bg-white font-['DM_Sans'] text-xs font-semibold text-[#2D6A4F]"
-                                aria-hidden="true"
-                              >
-                                {{ initiale(demande.client_nom) }}
-                              </div>
-                              <span class="font-['DM_Sans'] text-sm font-medium leading-5 text-[#1A1C1A]">
-                                {{ demande.client_nom || 'Client' }}
-                              </span>
-                            </div>
-                          </td>
-
-                          <td class="py-4 pr-4 font-['DM_Sans'] text-sm leading-5 text-[#1A1C1A]">
-                            {{ demande.service_nom || 'Service' }}
-                          </td>
-
-                          <td class="whitespace-nowrap py-4 pr-4 font-['DM_Sans'] text-sm leading-5 text-[#1A1C1A] opacity-60">
-                            {{ formatDate(demande.date_creation) }}
-                          </td>
-
-                          <td class="py-4 text-right">
-                            <span
-                              class="inline-flex whitespace-nowrap px-3 py-1 font-['DM_Sans'] text-[10px] font-bold uppercase leading-[15px]"
-                              :class="statutClasses[demande.statut] || 'bg-[#F2F3F0] text-[#1A1C1A]'"
-                            >
-                              {{ statutLabels[demande.statut] || demande.statut }}
-                            </span>
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </template>
-              </section>
-
-              <!-- Colonne latérale -->
-              <div class="flex flex-col gap-6">
-
-                <!-- Prochains rendez-vous : aperçu des trois prochains créneaux actifs. -->
-                <section class="flex-1 border border-[#E5E7E2] bg-[#FAFAF8] p-5 sm:p-6 lg:p-8 rounded-2xl">
-                  <div class="flex items-center justify-between gap-3 pb-6">
-                    <h2 class="font-['Instrument_Serif'] text-2xl font-normal leading-8 text-[#1A1C1A]">
-                      Prochains RDV
-                    </h2>
-                    <button
-                      v-if="prochainsRendezVous.length"
-                      type="button"
-                      class="border-b border-[#1A1C1A] pb-1 font-['DM_Sans'] text-xs font-bold uppercase tracking-[1.2px] text-[#1A1C1A]"
-                      @click="voirRendezVous"
-                    >
-                      Voir tout
-                    </button>
-                  </div>
-
-                  <div
-                    v-if="!prochainsRendezVous.length"
-                    class="flex flex-col items-center justify-center gap-3 border border-dashed border-[#E5E7E2] px-4 py-8 text-center"
-                  >
-                    <span class="flex h-10 w-10 items-center justify-center rounded-full border border-[#E5E7E2] bg-white text-[#2D6A4F]">
-                      <CalendarDays class="h-4 w-4" :stroke-width="2" />
-                    </span>
-                    <p class="font-['DM_Sans'] text-sm text-[#1A1C1A] opacity-50">
-                      Aucun rendez-vous à venir.
-                    </p>
-                  </div>
-
-                  <ul v-else class="flex flex-col divide-y divide-[#E5E7E2]">
-                    <li
-                      v-for="rendezVous in prochainsRendezVous"
-                      :key="rendezVous.id"
-                      class="py-3 first:pt-0 last:pb-0"
-                    >
-                      <p class="truncate font-['DM_Sans'] text-sm font-semibold text-[#1A1C1A]">
-                        {{ rendezVous.client_nom || 'Client' }}
-                      </p>
-                      <p class="mt-1 truncate font-['DM_Sans'] text-xs text-[#1A1C1A] opacity-60">
-                        {{ rendezVous.service_nom || 'Service' }} · {{ formatDateHeure(rendezVous.date_heure_debut) }}
-                      </p>
-                      <span class="mt-2 inline-flex bg-[#E2EAE4] px-2 py-0.5 font-['DM_Sans'] text-[10px] font-bold uppercase text-[#2D6A4F]">
-                        {{ rendezVousStatutLabels[rendezVous.statut] || rendezVous.statut }}
-                      </span>
-                    </li>
-                  </ul>
-                </section>
-
-                <!-- Derniers avis : seuls les avis publiés sont accessibles au prestataire. -->
-                <section class="border border-[#E5E7E2] bg-[#FAFAF8] p-5 sm:p-6 rounded-2xl">
-                  <div class="flex items-center justify-between gap-3 pb-5">
-                    <h2 class="font-['Instrument_Serif'] text-2xl font-normal leading-8 text-[#1A1C1A]">
-                      Derniers avis
-                    </h2>
-                    <button
-                      v-if="avisRecents.length"
-                      type="button"
-                      class="border-b border-[#1A1C1A] pb-1 font-['DM_Sans'] text-xs font-bold uppercase tracking-[1.2px] text-[#1A1C1A]"
-                      @click="voirTousLesAvis"
-                    >
-                      Voir tout
-                    </button>
-                  </div>
-
-                  <p v-if="!avisRecents.length" class="font-['DM_Sans'] text-sm text-[#1A1C1A] opacity-50">
-                    Aucun avis publié pour le moment.
-                  </p>
-
-                  <ul v-else class="flex flex-col divide-y divide-[#E5E7E2]">
-                    <li v-for="avisItem in avisRecents" :key="avisItem.id" class="py-3 first:pt-0 last:pb-0">
-                      <div class="flex items-center justify-between gap-3">
-                        <span class="flex items-center gap-1 font-['DM_Sans'] text-sm font-semibold text-[#1A1C1A]">
-                          <Star class="h-4 w-4 fill-[#D99A36] text-[#D99A36]" :stroke-width="1.5" />
-                          {{ avisItem.note }} / 5
-                        </span>
-                        <span class="font-['DM_Sans'] text-xs text-[#1A1C1A] opacity-50">
-                          {{ formatDate(avisItem.date_creation) }}
-                        </span>
-                      </div>
-                      <p v-if="avisItem.commentaire" class="mt-2 line-clamp-2 font-['DM_Sans'] text-xs leading-5 text-[#1A1C1A] opacity-60">
-                        {{ avisItem.commentaire }}
-                      </p>
-                    </li>
-                  </ul>
-                </section>
-
-                <!-- Ajouter un service -->
-                <button
-                  type="button"
-                  class="group flex w-full cursor-pointer flex-col items-center justify-center border border-[#E5E7E2] bg-[#FAFAF8] px-6 py-8 transition-colors duration-200 hover:border-[#2D6A4F]/40 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2D6A4F] focus-visible:ring-offset-2 rounded-2xl"
-                  @click="gererServices"
-                >
-                  <span class="flex h-14 w-14 items-center justify-center rounded-full border border-[#E5E7E2] transition-colors group-hover:border-[#2D6A4F] group-hover:bg-[#2D6A4F]">
-                    <Plus
-                      class="h-5 w-5 text-[#2D6A4F] transition-colors group-hover:text-white"
-                      :stroke-width="1.8"
-                    />
-                  </span>
-
-                  <span class="mt-4 font-['Instrument_Serif'] text-xl font-normal leading-7 text-[#1A1C1A]">
-                    Ajouter un service
-                  </span>
-
-                  <span class="mt-2 max-w-[240px] text-center font-['DM_Sans'] text-xs leading-[19.5px] text-[#1A1C1A] opacity-50">
-                    Élargissez votre offre pour attirer plus de clients à Dakar.
-                  </span>
-                </button>
-              </div>
             </div>
+          </ChartPanel>
+        </div>
 
-            <!-- ============================================= -->
-            <!-- PERFORMANCES FINANCIÈRES -->
-            <!-- ============================================= -->
-            <!-- <section class="border border-[#E5E7E2] bg-[#FAFAF8] p-5 sm:p-6 lg:p-8 rounded-2xl">
-              <div class="flex flex-wrap items-center justify-between gap-4">
-                <h2 class="font-['Instrument_Serif'] text-2xl font-normal leading-8 text-[#1A1C1A]">
-                  Performances financières
-                </h2>
+        <!-- Activité + agenda -->
+        <div class="grid items-start gap-6 xl:grid-cols-3">
+          <DashboardSection class="xl:col-span-2" titre="Activité récente" description="Vos dernières demandes, rendez-vous et avis." :ordre="2">
+            <ActiviteTimeline
+              :items="activite"
+              :types="TYPES_ACTIVITE"
+              :categories="CATEGORIES_ACTIVITE"
+              :limite="6"
+              message-vide="Votre activité apparaîtra ici dès votre première demande."
+            />
+          </DashboardSection>
 
-                <div class="flex items-center gap-4">
-                  <span class="flex items-center gap-2">
-                    <span class="h-2 w-2 rounded-full bg-[#2D6A4F]" />
-                    <span class="font-['DM_Sans'] text-[10px] font-bold uppercase leading-[15px] tracking-[1px] text-[#1A1C1A]">
-                      Revenus
-                    </span>
-                  </span>
-
-                  <span class="flex items-center gap-2 opacity-30">
-                    <span class="h-2 w-2 rounded-full bg-[#1A1C1A]" />
-                    <span class="font-['DM_Sans'] text-[10px] font-bold uppercase leading-[15px] tracking-[1px] text-[#1A1C1A]">
-                      Moyenne
-                    </span>
-                  </span>
-                </div>
-              </div> -->
-
-              <!-- Graphique fantôme en attendant les données -->
-              <!-- <div class="relative mt-8 h-44 border-t border-[#E5E7E2]">
-                <div class="absolute inset-x-0 bottom-0 flex h-full items-end gap-2 px-1 pt-6 opacity-[0.08] sm:gap-3" aria-hidden="true">
-                  <div
-                    v-for="(h, i) in [35, 55, 40, 70, 50, 65, 45, 80, 60, 75, 55, 90]"
-                    :key="i"
-                    class="flex-1 bg-[#2D6A4F]"
-                    :style="{ height: `${h}%` }"
-                  />
-                </div>
-
-                <div class="relative flex h-full items-center justify-center px-4">
-                  <p class="max-w-md text-center font-['DM_Sans'] text-sm text-[#1A1C1A] opacity-50">
-                    Vos revenus s'afficheront ici dès vos premières prestations terminées.
-                  </p>
-                </div>
+          <div class="flex flex-col gap-6">
+            <section class="rounded-card border border-line bg-surface p-5 sm:p-6">
+              <div class="mb-3 flex items-center justify-between gap-3">
+                <h2 class="font-serif text-2xl leading-8 text-ink">Prochains rendez-vous</h2>
+                <router-link v-if="prochainsRendezVous.length" to="/prestataire/rendez-vous" class="text-sm font-semibold text-brand hover:underline">Voir tout</router-link>
               </div>
-            </section> -->
+              <p v-if="!prochainsRendezVous.length" class="text-sm text-ink-soft">Aucun rendez-vous à venir.</p>
+              <ul v-else class="divide-y divide-line">
+                <li v-for="rdv in prochainsRendezVous" :key="rdv.id" class="py-3">
+                  <p class="truncate text-sm font-semibold text-ink">{{ rdv.client_nom || 'Client' }}</p>
+                  <p class="truncate text-xs text-ink-soft">{{ rdv.service_nom || 'Service' }} · {{ formatDateHeure(rdv.date_heure_debut) }}</p>
+                  <MBadge class="mt-1.5" :variant="rdv.statut === 'CONFIRME' ? 'success' : 'warning'" size="sm">{{ rdv.statut === 'CONFIRME' ? 'Confirmé' : 'À confirmer' }}</MBadge>
+                </li>
+              </ul>
+            </section>
 
+            <section class="rounded-card border border-line bg-surface p-5 sm:p-6">
+              <div class="mb-3 flex items-center justify-between gap-3">
+                <h2 class="font-serif text-2xl leading-8 text-ink">Derniers avis</h2>
+                <router-link v-if="avisRecents.length" to="/prestataire/avis" class="text-sm font-semibold text-brand hover:underline">Voir tout</router-link>
+              </div>
+              <p v-if="!avisRecents.length" class="text-sm text-ink-soft">Aucun avis publié pour le moment.</p>
+              <ul v-else class="divide-y divide-line">
+                <li v-for="item in avisRecents" :key="item.id" class="py-3">
+                  <p class="flex items-center gap-0.5 text-star" :aria-label="`${item.note} sur 5`">
+                    <Star v-for="n in 5" :key="n" :size="12" :fill="n <= item.note ? 'currentColor' : 'none'" aria-hidden="true" />
+                  </p>
+                  <p v-if="item.commentaire" class="mt-1 line-clamp-2 text-sm text-ink">{{ item.commentaire }}</p>
+                  <p class="mt-1 text-xs text-muted">{{ formatDate(item.date_creation) }}</p>
+                </li>
+              </ul>
+            </section>
+          </div>
+        </div>
+
+        <!-- Dernières demandes -->
+        <DashboardSection titre="Mes dernières demandes" description="Les 5 demandes les plus récentes de vos clients." :ordre="3">
+          <template v-if="demandesRecentes.length" #actions>
+            <MButton variant="ghost" size="sm" :icon-right="ArrowRight" to="/prestataire/demandes">Toutes mes demandes</MButton>
           </template>
+          <p v-if="!demandesRecentes.length" class="rounded-xl border border-dashed border-line-strong px-4 py-8 text-center text-sm text-ink-soft">
+            Les demandes de vos clients apparaîtront ici.
+          </p>
+          <template v-else>
+            <!-- Grand écran : tableau -->
+            <div class="hidden overflow-hidden rounded-xl border border-line md:block">
+              <table class="w-full text-left text-sm">
+                <thead class="bg-sunken text-[11px] font-bold uppercase tracking-wider text-muted">
+                  <tr>
+                    <th class="px-4 py-2.5" scope="col">Client</th>
+                    <th class="px-4 py-2.5" scope="col">Service</th>
+                    <th class="px-4 py-2.5" scope="col">Reçue le</th>
+                    <th class="px-4 py-2.5" scope="col">Date souhaitée</th>
+                    <th class="px-4 py-2.5 text-right" scope="col">Statut</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-line bg-raised">
+                  <tr v-for="demande in demandesRecentes" :key="demande.id" class="cursor-pointer transition-colors hover:bg-brand-mist" @click="router.push('/prestataire/demandes')">
+                    <td class="px-4 py-3">
+                      <span class="flex items-center gap-2.5">
+                        <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-soft text-xs font-bold text-brand" aria-hidden="true">{{ (demande.client_nom || 'C').charAt(0).toUpperCase() }}</span>
+                        <span class="font-semibold text-ink">{{ demande.client_nom || 'Client' }}</span>
+                      </span>
+                    </td>
+                    <td class="px-4 py-3 text-ink">{{ demande.service_nom || '—' }}</td>
+                    <td class="px-4 py-3 text-ink-soft">{{ formatDate(demande.date_creation) }}</td>
+                    <td class="px-4 py-3 text-ink-soft">{{ formatDateHeure(demande.date_souhaitee) }}</td>
+                    <td class="px-4 py-3 text-right"><MStatusBadge :status="demande.statut" size="sm" /></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <!-- Petit écran : cartes -->
+            <ul class="flex flex-col gap-2.5 md:hidden">
+              <li v-for="demande in demandesRecentes" :key="demande.id">
+                <router-link to="/prestataire/demandes" class="flex flex-col gap-2 rounded-xl border border-line bg-raised p-3.5">
+                  <span class="flex items-center justify-between gap-2">
+                    <span class="truncate font-semibold text-ink">{{ demande.client_nom || 'Client' }}</span>
+                    <MStatusBadge :status="demande.statut" size="sm" />
+                  </span>
+                  <span class="text-sm text-ink-soft">{{ demande.service_nom || 'Service' }}</span>
+                  <span class="text-xs text-muted">Reçue le {{ formatDate(demande.date_creation) }} · souhaitée {{ formatDateHeure(demande.date_souhaitee) }}</span>
+                </router-link>
+              </li>
+            </ul>
+          </template>
+        </DashboardSection>
+      </template>
     </div>
   </AppLayout>
 </template>

@@ -55,7 +55,7 @@ const DESTINATION_PAR_TYPE_PRESTATAIRE = {
   RENDEZ_VOUS: { name: 'prestataire-rendez-vous' },
   LITIGE: { name: 'prestataire-litiges' },
   AVIS: { name: 'prestataire-avis' },
-  VERIFICATION: { name: 'prestataire-verification' },
+  VERIFICATION: { name: 'prestataire-parcours' },
   // Un signalement n'a pas de page de suivi dédiée côté prestataire (seule
   // l'administration le traite) : pas de destination à inventer.
   SIGNALEMENT: null,

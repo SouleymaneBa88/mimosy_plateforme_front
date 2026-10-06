@@ -154,8 +154,14 @@ onBeforeUnmount(() => {
  * Actions
  * ------------------------------------------- */
 // Le lien est-il celui de la page actuelle ?
-const isActive = (path) => {
+// "alias" : autres chemins rattachés à la même entrée de menu (ex. la file
+// des documents fait partie de « Vérifications »).
+const isActive = (path, alias = []) => {
   if (route.path === path) {
+    return true
+  }
+
+  if (alias.some((chemin) => route.path === chemin || route.path.startsWith(`${chemin}/`))) {
     return true
   }
 
@@ -309,11 +315,11 @@ const goHome = () => {
         :class="[
           'group flex min-h-[45px] w-full items-center gap-3 rounded-xl px-4 py-3 text-left',
           'transition-colors duration-200',
-          isActive(item.path)
+          isActive(item.path, item.alias)
             ? 'bg-mimosy-primary text-white'
             : 'text-mimosy-text hover:bg-mimosy-page',
         ]"
-        :aria-current="isActive(item.path) ? 'page' : undefined"
+        :aria-current="isActive(item.path, item.alias) ? 'page' : undefined"
         :aria-label="item.label"
         :title="item.label"
         @click="handleNavigation(item.path)"

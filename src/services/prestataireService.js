@@ -10,6 +10,9 @@ export const updateMyProviderProfile = (payload) =>
   apiFetch(API_ENDPOINTS.providerProfile, { method: 'PATCH', body: payload })
 
 // Liste les services que je propose.
+// Statistiques agrégées par le serveur (demandes, revenus libérés, avis, rendez-vous).
+export const getMonTableauDeBord = (mois = 6) => apiFetch(`${API_ENDPOINTS.monTableauDeBord}?mois=${mois}`)
+
 export const listMyServiceOffers = () => apiFetch(API_ENDPOINTS.providerOffers)
 
 // Ajoute un nouveau service à mon offre.

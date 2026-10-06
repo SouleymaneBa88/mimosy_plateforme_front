@@ -11,7 +11,7 @@
  */
 // Outils Vue et icônes.
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { Expand, FileImage, ShieldCheck } from 'lucide-vue-next'
+import { ArrowLeft, Expand, FileImage, ShieldCheck } from 'lucide-vue-next'
 
 // Les composants de la page (mise en page + design system).
 import AppLayout from '@/components/layout/AppLayout.vue'
@@ -268,7 +268,10 @@ onBeforeUnmount(libererTousLesApercus)
 <template>
   <AppLayout role="admin" background="#F2F3F0">
     <div class="mx-auto flex w-full flex-col gap-6">
-      <ClientHeader title="Vérifications d'identité" subtitle="Documents en attente de décision." />
+      <router-link to="/admin/dossiers" class="flex w-fit items-center gap-1.5 text-sm font-medium text-brand hover:underline">
+        <ArrowLeft class="h-4 w-4" aria-hidden="true" /> Toutes les vérifications
+      </router-link>
+      <ClientHeader title="File des documents" subtitle="Documents analysés automatiquement, en attente de décision. Pour le parcours complet d'un prestataire, ouvrez son dossier." />
 
       <!-- États : chargement, erreur, vide. -->
       <MCard v-if="loading"><MLoader variant="skeleton" :lines="5" label="Chargement des documents…" /></MCard>

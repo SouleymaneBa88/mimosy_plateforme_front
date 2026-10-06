@@ -36,6 +36,8 @@ const router = createRouter({
     { path: '/', name: 'landing', component: LandingPage },
     { path: '/login', name: 'login', component: LoginPage },
     { path: '/register', name: 'register', component: RegisterPage },
+    // Confirmation de l'adresse e-mail (lien reçu par e-mail) et renvoi du lien.
+    { path: '/verifier-email', name: 'verifier-email', component: () => import('@/views/VerifierEmail.vue') },
     // Pages du CLIENT.
     { path: '/client', name: 'client-home', component: HomeClient, meta: { requiresAuth: true, roles: ['CLIENT'] } },
     // Ancienne page "Trouver un service" : remplacée par Prestataires.vue,
@@ -66,8 +68,11 @@ const router = createRouter({
     { path: '/prestataire/services', name: 'prestataire-services', component: () => import('@/views/prestataire/Services.vue'), meta: { requiresAuth: true, roles: ['PRESTATAIRE'] } },
     { path: '/prestataire/messages', name: 'prestataire-messages', component: () => import('@/views/prestataire/Messages.vue'), meta: { requiresAuth: true, roles: ['PRESTATAIRE'] } },
     { path: '/prestataire/avis', name: 'prestataire-avis', component: () => import('@/views/prestataire/Avis.vue'), meta: { requiresAuth: true, roles: ['PRESTATAIRE'] } },
-    { path: '/prestataire/profil', name: 'prestataire-profil', component: () => import('@/views/prestataire/Profil.vue'), meta: { requiresAuth: true, roles: ['PRESTATAIRE'] } },
-    { path: '/prestataire/verification', name: 'prestataire-verification', component: () => import('@/views/prestataire/Verification.vue'), meta: { requiresAuth: true, roles: ['PRESTATAIRE'] } },
+    { path: '/prestataire/profil', name: 'prestataire-profil', component: () => import('@/views/prestataire/Profil.vue'), meta: { requiresAuth: true, roles: ['PRESTATAIRE'], avantValidation: true } },
+    // Parcours « Vérifier mon profil professionnel » (profil, documents, cohérence, entretien IA).
+    { path: '/prestataire/parcours', name: 'prestataire-parcours', component: () => import('@/views/prestataire/Parcours.vue'), meta: { requiresAuth: true, roles: ['PRESTATAIRE'], avantValidation: true } },
+    // Ancienne page de vérification : remplacée par le parcours (lien conservé).
+    { path: '/prestataire/verification', redirect: '/prestataire/parcours' },
     { path: '/prestataire/litiges', name: 'prestataire-litiges', component: () => import('@/views/prestataire/MesLitiges.vue'), meta: { requiresAuth: true, roles: ['PRESTATAIRE'] } },
     { path: '/prestataire/wallet', name: 'prestataire-wallet', component: () => import('@/views/prestataire/Wallet.vue'), meta: { requiresAuth: true, roles: ['PRESTATAIRE'] } },
     // Pages de l'ADMINISTRATEUR.
@@ -77,6 +82,8 @@ const router = createRouter({
     { path: '/admin/demandes', name: 'admin-demandes', component: () => import('@/views/admin/Demandes.vue'), meta: { requiresAuth: true, roles: ['ADMIN'] } },
     { path: '/admin/devis', name: 'admin-devis', component: () => import('@/views/admin/Devis.vue'), meta: { requiresAuth: true, roles: ['ADMIN'] } },
     { path: '/admin/rendez-vous', name: 'admin-rendez-vous', component: () => import('@/views/admin/RendezVous.vue'), meta: { requiresAuth: true, roles: ['ADMIN'] } },
+    { path: '/admin/dossiers', name: 'admin-dossiers', component: () => import('@/views/admin/DossiersVerification.vue'), meta: { requiresAuth: true, roles: ['ADMIN'] } },
+    { path: '/admin/dossiers/:id', name: 'admin-dossier', component: () => import('@/views/admin/DossierVerification.vue'), props: true, meta: { requiresAuth: true, roles: ['ADMIN'] } },
     { path: '/admin/verifications', name: 'admin-verifications', component: () => import('@/views/admin/Verifications.vue'), meta: { requiresAuth: true, roles: ['ADMIN'] } },
     { path: '/admin/avis', name: 'admin-avis', component: () => import('@/views/admin/Avis.vue'), meta: { requiresAuth: true, roles: ['ADMIN'] } },
     { path: '/admin/signalements', name: 'admin-signalements', component: () => import('@/views/admin/Signalements.vue'), meta: { requiresAuth: true, roles: ['ADMIN'] } },
@@ -95,6 +102,18 @@ router.beforeEach((to) => {
   // Pas connecté : on envoie vers la page de connexion, en retenant où il voulait aller.
   if (requiresAuth && !authStore.isAuthenticated) {
     return { name: 'login', query: { redirect: to.fullPath } }
+  }
+
+  // Connecté mais adresse e-mail pas encore vérifiée : les espaces protégés
+  // attendent la vérification (le backend refuse aussi les actions protégées).
+  if (requiresAuth && authStore.emailNonVerifie) {
+    return { name: 'verifier-email' }
+  }
+
+  // Prestataire pas encore validé : seules les pages du parcours (et ses
+  // paramètres) sont accessibles ; le reste attend la décision de l'admin.
+  if (requiresAuth && authStore.prestataireNonValide && !to.matched.some((route) => route.meta.avantValidation)) {
+    return { name: 'prestataire-parcours' }
   }
 
   // Connecté mais pas le bon rôle : on renvoie vers sa propre page d'accueil.

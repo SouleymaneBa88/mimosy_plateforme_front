@@ -120,8 +120,8 @@ export const navigationByRole = {
       icon: CalendarDays,
     },
     {
-      label: 'Vérification',
-      path: '/prestataire/verification',
+      label: 'Mon profil professionnel',
+      path: '/prestataire/parcours',
       icon: ShieldCheck,
     },
     {
@@ -173,9 +173,12 @@ export const navigationByRole = {
       path: '/admin/services',
       icon: Tags,
     },
+    // Point d'entrée unique de la vérification : dossiers complets, et la
+    // file des documents (/admin/verifications) accessible depuis la page.
     {
       label: 'Vérifications',
-      path: '/admin/verifications',
+      path: '/admin/dossiers',
+      alias: ['/admin/verifications'],
       icon: ShieldCheck,
     },
     // Entrée désactivée : la modération des avis n'est pas affichée dans le menu.

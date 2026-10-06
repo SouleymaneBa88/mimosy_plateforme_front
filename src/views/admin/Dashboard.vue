@@ -1,1589 +1,570 @@
 <!--
-  Tableau de bord ADMIN : les chiffres clés (demandes, vérifications,
-  litiges, paiements), la liste des choses "à traiter", l'activité
-  récente et une courbe des revenus. Les données se rechargent
-  automatiquement toutes les 60 secondes.
+  Tableau de bord ADMIN : vision globale de l'activité MIMOSY.
+
+  Hiérarchie de lecture :
+    1. quatre indicateurs principaux, avec leur évolution réelle
+       (30 derniers jours contre les 30 précédents) et leur tendance ;
+    2. une bande d'indicateurs secondaires ;
+    3. « À traiter » (files d'attente réelles) et l'activité récente ;
+    4. l'évolution mensuelle (Chart.js), calculée par le serveur.
+  Aucune valeur n'est estimée : un mois sans activité vaut 0.
 -->
 <script setup>
-// Outils Vue (defineComponent et h servent à créer de petits composants dans ce fichier).
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { Bar, Line } from 'vue-chartjs'
 import {
-  computed,
-  defineComponent,
-  h,
-  onBeforeUnmount,
-  onMounted,
-  ref,
-  watch,
-} from 'vue'
-// Le routeur (pour ouvrir les autres pages admin).
-import { useRouter } from 'vue-router'
+  ArrowRight,
+  BadgeCheck,
+  Briefcase,
+  CalendarDays,
+  CheckCheck,
+  CircleCheck,
+  ClipboardList,
+  CreditCard,
+  FileText,
+  FileWarning,
+  Flag,
+  RefreshCw,
+  RotateCcw,
+  Scale,
+  ShieldCheck,
+  ShieldX,
+  Star,
+  UserPlus,
+  Users,
+  Wallet,
+} from 'lucide-vue-next'
 
-// Les composants de la page et les appels à l'API admin.
 import AppLayout from '@/components/layout/AppLayout.vue'
-import ErrorState from '@/components/common/ErrorState.vue'
-
+import ChartPanel from '@/components/charts/ChartPanel.vue'
+import RepartitionAnneau from '@/components/charts/RepartitionAnneau.vue'
+import {
+  SERIES,
+  STATUTS,
+  aDesValeurs,
+  formaterCompact,
+  formaterMontant,
+  formaterNombre,
+  libelleMois,
+  optionsCartesiennes,
+  serieBarres,
+  serieLigne,
+} from '@/components/charts/chartTheme'
+import ActiviteTimeline from '@/components/dashboard/ActiviteTimeline.vue'
+import DashboardSection from '@/components/dashboard/DashboardSection.vue'
+import KpiCard from '@/components/dashboard/KpiCard.vue'
+import { MButton, MErrorState, MTabs } from '@/components/ui'
 import * as adminService from '@/services/adminService'
 
-/* ================================================================== */
-/* CONSTANTES                                                          */
-/* ================================================================== */
+const INTERVALLE_ACTUALISATION = 120_000
 
-// Recharger les données toutes les 60 s.
-const INTERVALLE_AUTO_REFRESH = 60_000
-// Mettre à jour l'heure affichée toutes les 30 s.
-const INTERVALLE_HORLOGE = 30_000
-// Nombre d'éléments "à traiter" affichés, et nombre d'activités affichées avant "voir plus".
-const NB_A_TRAITER = 3
-const NB_ACTIVITE = 4
-// Jours par défaut pour l'axe du graphique.
-const JOURS_DEFAUT = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
+const PERIODES = [
+  { value: 6, label: '6 mois' },
+  { value: 12, label: '12 mois' },
+]
 
-// true si l'utilisateur préfère réduire les animations.
-const mouvementReduit =
-  typeof window !== 'undefined' &&
-  window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+const chargement = ref(true)
+const actualisation = ref(false)
+const erreur = ref('')
+const erreurPartielle = ref('')
 
-/* ================================================================== */
-/* ICÔNES & NOMBRE ANIMÉ                                               */
-/* ================================================================== */
-
-// Le dessin (en SVG) de chaque petite icône.
-const ICONES = {
-  hausse: 'M12 19V5 M6 11l6-6 6 6',
-  baisse: 'M12 5v14 M6 13l6 6 6-6',
-  lieu: 'M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21Z M12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z',
-  service: 'M4 7h16v12H4z M9 7V5h6v2',
-  personne: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z M4 21a8 8 0 0 1 16 0',
-  bouclier: 'M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6l7-3Z M9 12l2 2 4-4',
-  alerte: 'M12 8v5 M12 16.5h.01 M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z',
-}
-
-// Petit composant "Icone" : dessine l'icône demandée en SVG.
-const Icone = defineComponent({
-  props: {
-    nom: { type: String, required: true },
-    taille: { type: Number, default: 12 },
-    epaisseur: { type: Number, default: 2.2 },
-  },
-  setup(props) {
-    return () =>
-      h(
-        'svg',
-        {
-          width: props.taille,
-          height: props.taille,
-          viewBox: '0 0 24 24',
-          fill: 'none',
-          stroke: 'currentColor',
-          'stroke-width': props.epaisseur,
-          'stroke-linecap': 'round',
-          'stroke-linejoin': 'round',
-          'aria-hidden': 'true',
-        },
-        [h('path', { d: ICONES[props.nom] })],
-      )
-  },
-})
-
-// Outil pour afficher les nombres au format français (ex. 1 248).
-const formateurNombre = new Intl.NumberFormat('fr-FR')
-
-// Affiche un nombre ; avec "padding", les nombres < 10 ont un zéro devant (ex. "07").
-function formaterValeur(n, padding) {
-  if (padding && n >= 0 && n < 10) return `0${n}`
-  return formateurNombre.format(n)
-}
-
-// Petit composant "NombreAnime" : le nombre "défile" jusqu'à sa nouvelle valeur.
-const NombreAnime = defineComponent({
-  props: {
-    valeur: { type: Number, default: 0 },
-    padding: { type: Boolean, default: false },
-  },
-  setup(props) {
-    const affiche = ref(0)
-    let frame = null
-
-    // À chaque changement de valeur, on anime de l'ancienne vers la nouvelle en 0,7 s.
-    watch(
-      () => props.valeur,
-      (cible, precedent) => {
-        cancelAnimationFrame(frame)
-        const depart = Number(precedent ?? 0)
-        const arrivee = Number(cible ?? 0)
-        if (mouvementReduit || depart === arrivee) {
-          affiche.value = arrivee
-          return
-        }
-        const debut = performance.now()
-        const etape = (t) => {
-          const p = Math.min((t - debut) / 700, 1)
-          // Effet "ralenti à la fin" (courbe d'animation).
-          affiche.value = Math.round(depart + (arrivee - depart) * (1 - Math.pow(1 - p, 3)))
-          if (p < 1) frame = requestAnimationFrame(etape)
-        }
-        frame = requestAnimationFrame(etape)
-      },
-      { immediate: true },
-    )
-
-    onBeforeUnmount(() => cancelAnimationFrame(frame))
-
-    return () => h('span', { class: 'chiffres' }, formaterValeur(affiche.value, props.padding))
-  },
-})
-
-/* ================================================================== */
-/* ÉTAT                                                                */
-/* ================================================================== */
-
-const router = useRouter()
-
-// États : premier chargement, rechargement discret, et erreurs.
-const loading = ref(true)
-const rafraichissement = ref(false)
-const errorMessage = ref('')
-const erreurRafraichissement = ref('')
-
-// Les statistiques et l'activité récente reçues du serveur.
 const stats = ref(null)
+const tendances = ref(null)
 const activite = ref([])
-
-// Les listes d'éléments à traiter : documents, avis, retraits.
-const listeDocuments = ref([])
-const listeAvis = ref([])
-const listeRetraits = ref([])
-
-// Les compteurs affichés.
-const documentsAVerifier = ref(0)
-const avisEnAttente = ref(0)
+const compteursDossiers = ref(null)
 const retraitsEnAttente = ref(0)
-const paiementsReussis = ref(0)
-
-// Valeurs du chargement précédent (pour afficher les variations), dernière mise à jour, heure actuelle,
-// activité dépliée ou non, et point du graphique survolé par la souris.
-const valeursPrecedentes = ref(null)
+const periode = ref(12)
 const derniereMiseAJour = ref(null)
-const maintenant = ref(Date.now())
-const activiteDepliee = ref(false)
-const pointSurvole = ref(null)
 
-// Les minuteurs (rechargement automatique et horloge).
-let minuteurRefresh = null
-let minuteurHorloge = null
+let minuteur = null
 
-/* ================================================================== */
-/* CHARGEMENT                                                          */
-/* ================================================================== */
+/* ------------------------------------------------------------------ */
+/* Chargement                                                          */
+/* ------------------------------------------------------------------ */
 
-// Charge toutes les données du tableau de bord.
-// silencieux=true : rechargement discret, sans remplacer tout l'écran par un chargement.
 async function charger({ silencieux = false } = {}) {
-  const dejaCharge = stats.value !== null
+  if (silencieux && stats.value) actualisation.value = true
+  else chargement.value = true
+  erreur.value = ''
+  erreurPartielle.value = ''
 
-  if (silencieux && dejaCharge) rafraichissement.value = true
-  else loading.value = true
+  // allSettled : une source indisponible n'empêche pas d'afficher les autres.
+  const [resStats, resTendances, resActivite, resCompteurs, resRetraits] = await Promise.allSettled([
+    adminService.getDashboardStats(),
+    adminService.getTendances(periode.value),
+    adminService.getActiviteRecente(30),
+    adminService.getCompteursDossiers(),
+    adminService.listRetraits('EN_ATTENTE'),
+  ])
 
-  errorMessage.value = ''
-  erreurRafraichissement.value = ''
+  if (resStats.status === 'rejected') {
+    if (!stats.value) erreur.value = resStats.reason?.message || 'Impossible de charger le tableau de bord.'
+    else erreurPartielle.value = resStats.reason?.message || "L'actualisation a échoué."
+  } else {
+    stats.value = resStats.value
+  }
+  if (resTendances.status === 'fulfilled') tendances.value = resTendances.value
+  if (resActivite.status === 'fulfilled') activite.value = resActivite.value?.resultats ?? []
+  if (resCompteurs.status === 'fulfilled') compteursDossiers.value = resCompteurs.value
+  if (resRetraits.status === 'fulfilled') {
+    const liste = resRetraits.value
+    retraitsEnAttente.value = Array.isArray(liste) ? liste.length : liste?.count ?? liste?.results?.length ?? 0
+  }
+  const echecs = [resTendances, resActivite, resCompteurs, resRetraits].filter((r) => r.status === 'rejected')
+  if (!erreur.value && echecs.length) erreurPartielle.value = 'Certaines données sont momentanément indisponibles.'
 
+  derniereMiseAJour.value = new Date()
+  chargement.value = false
+  actualisation.value = false
+}
+
+async function changerPeriode() {
   try {
-    // On lance les 5 requêtes en même temps.
-    const [dashboard, activiteData, documents, avis, retraits] = await Promise.all([
-      adminService.getDashboardStats(),
-      adminService.getActiviteRecente(12),
-      adminService.listDocumentsAVerifier(),
-      adminService.listAvisEnAttente(),
-      adminService.listRetraits('EN_ATTENTE'),
-    ])
-
-    // On garde les anciennes valeurs pour calculer les variations.
-    if (dejaCharge) {
-      valeursPrecedentes.value = Object.fromEntries(
-        statistiquesPrincipales.value.map((s) => [s.type, s.valeur]),
-      )
-    }
-
-    stats.value = dashboard
-    activite.value = activiteData?.resultats ?? []
-
-    listeDocuments.value = Array.isArray(documents) ? documents : []
-    listeAvis.value = Array.isArray(avis) ? avis : []
-    listeRetraits.value = Array.isArray(retraits) ? retraits : []
-
-    documentsAVerifier.value = documents?.length ?? 0
-    avisEnAttente.value = avis?.length ?? 0
-    retraitsEnAttente.value = retraits?.length ?? 0
-    paiementsReussis.value = dashboard?.paiements?.reussis ?? 0
-
-    derniereMiseAJour.value = Date.now()
-    maintenant.value = Date.now()
-  } catch (error) {
-    const message = error?.message || 'Impossible de charger le tableau de bord.'
-    if (dejaCharge) erreurRafraichissement.value = message
-    else errorMessage.value = message
-  } finally {
-    loading.value = false
-    rafraichissement.value = false
+    tendances.value = await adminService.getTendances(periode.value)
+  } catch (e) {
+    erreurPartielle.value = e.message
   }
 }
 
-// Rechargement manuel (bouton), sauf si un chargement est déjà en cours.
 function actualiser() {
-  if (loading.value || rafraichissement.value) return
-  charger({ silencieux: true })
+  if (!chargement.value && !actualisation.value) charger({ silencieux: true })
 }
 
-// Quand l'onglet redevient visible, on recharge si les données sont trop anciennes.
-function surVisibilite() {
-  if (document.visibilityState !== 'visible') return
-  maintenant.value = Date.now()
-  if (Date.now() - (derniereMiseAJour.value ?? 0) > INTERVALLE_AUTO_REFRESH) actualiser()
-}
+watch(periode, changerPeriode)
 
-/* ================================================================== */
-/* OUTILS DE LECTURE DES DONNÉES                                       */
-/* ================================================================== */
+/* ------------------------------------------------------------------ */
+/* Indicateurs                                                         */
+/* ------------------------------------------------------------------ */
 
-/* Renvoie la première valeur non vide parmi plusieurs chemins ("a.b.c") */
-function lire(objet, ...chemins) {
-  for (const chemin of chemins) {
-    const valeur = chemin.split('.').reduce((o, cle) => o?.[cle], objet)
-    if (valeur !== undefined && valeur !== null && valeur !== '') return valeur
-  }
-  return null
-}
+const u = computed(() => stats.value?.utilisateurs ?? {})
+const d = computed(() => stats.value?.demandes ?? {})
+const evolutions = computed(() => tendances.value?.evolutions ?? {})
+const litigesOuverts = computed(() => (stats.value?.litiges?.en_attente ?? 0) + (stats.value?.litiges?.en_cours ?? 0))
+const somme = (a = [], b = []) => a.map((v, i) => v + (b[i] ?? 0))
 
-// Renvoie le nom d'une personne, en cherchant dans plusieurs champs possibles.
-function nomPersonne(objet, ...racines) {
-  for (const racine of racines) {
-    const p = racine ? lire(objet, racine) : objet
-    if (!p) continue
-    if (typeof p === 'string') return p
-    const complet = lire(p, 'nom_complet', 'full_name', 'nom_affiche')
-    if (complet) return complet
-    const prenomNom = [lire(p, 'prenom', 'first_name'), lire(p, 'nom', 'last_name')]
-      .filter(Boolean)
-      .join(' ')
-    if (prenomNom) return prenomNom
-  }
-  return null
-}
-
-// Renvoie la date d'un objet, en essayant plusieurs noms de champ.
-function extraireDate(objet) {
-  return lire(objet, 'date_creation', 'created_at', 'date_soumission', 'date_demande', 'date', 'updated_at')
-}
-
-// Transforme une date en nombre (millisecondes), 0 si la date est invalide.
-function horodatage(date) {
-  const t = new Date(date ?? NaN).getTime()
-  return Number.isNaN(t) ? 0 : t
-}
-
-/* ================================================================== */
-/* KPI                                                                 */
-/* ================================================================== */
-
-// Nombre de litiges ouverts (en attente + en cours).
-const nombreLitiges = computed(
-  () => (stats.value?.litiges?.en_attente ?? 0) + (stats.value?.litiges?.en_cours ?? 0),
-)
-
-// Montant total des paiements, si le serveur le fournit.
-const montantPaiements = computed(() => {
-  const m = lire(stats.value, 'paiements.montant_total', 'paiements.montant', 'paiements.total_montant')
-  return m !== null && Number.isFinite(Number(m)) ? Number(m) : null
-})
-
-// Les 4 chiffres clés affichés en haut.
-const statistiquesPrincipales = computed(() => [
+const indicateursPrincipaux = computed(() => [
   {
-    type: 'demande',
-    label: 'Demandes en attente',
-    valeur: stats.value?.demandes?.en_attente ?? 0,
-    suffixe: '',
+    label: 'Demandes de prestation',
+    value: formaterNombre(d.value.total ?? 0),
+    icon: Briefcase,
+    evolution: evolutions.value.demandes,
+    serie: tendances.value?.demandes?.total,
+    hint: `${formaterNombre(d.value.en_attente ?? 0)} en attente de réponse`,
+    to: '/admin/demandes',
   },
   {
-    type: 'verification',
-    label: 'Vérifications',
-    valeur: documentsAVerifier.value,
-    suffixe: 'Prestataires',
+    label: 'Utilisateurs inscrits',
+    value: formaterNombre(u.value.total ?? 0),
+    icon: Users,
+    evolution: evolutions.value.inscriptions,
+    serie: somme(tendances.value?.inscriptions?.clients, tendances.value?.inscriptions?.prestataires),
+    hint: `${formaterNombre(u.value.clients ?? 0)} clients · ${formaterNombre(u.value.prestataires ?? 0)} prestataires`,
+    to: '/admin/utilisateurs',
   },
   {
-    type: 'litige',
+    label: 'Paiements encaissés',
+    value: formaterMontant(stats.value?.paiements?.montant_total ?? 0),
+    icon: CreditCard,
+    evolution: evolutions.value.paiements,
+    formater: (n) => formaterMontant(n),
+    serie: tendances.value?.paiements?.montant,
+    hint: `${formaterNombre(stats.value?.paiements?.reussis ?? 0)} paiements réussis`,
+    to: '/admin/paiements',
+    accent: true,
+  },
+  {
     label: 'Litiges ouverts',
-    valeur: nombreLitiges.value,
-    suffixe: nombreLitiges.value > 0 ? 'Critique' : 'Aucun',
-    critique: nombreLitiges.value > 0,
-  },
-  {
-    type: 'paiement',
-    label: 'Paiements réussis',
-    // si le backend fournit un montant, on l'affiche en k FCFA comme sur la maquette
-    valeur: montantPaiements.value !== null ? Math.round(montantPaiements.value / 1000) : paiementsReussis.value,
-    suffixe: montantPaiements.value !== null ? 'k FCFA' : 'Transactions',
-    mis_en_avant: true,
+    value: formaterNombre(litigesOuverts.value),
+    icon: Scale,
+    evolution: evolutions.value.litiges,
+    baisseFavorable: true,
+    serie: tendances.value?.litiges?.ouverts,
+    hint: `${formaterNombre(stats.value?.litiges?.total ?? 0)} litiges au total`,
+    to: '/admin/litiges',
   },
 ])
 
-// Différence avec le chargement précédent (0 si pas de changement).
-function variation(type, valeur) {
-  const avant = valeursPrecedentes.value?.[type]
-  if (avant === undefined || avant === valeur) return 0
-  return valeur - avant
-}
-
-/* ================================================================== */
-/* À TRAITER : éléments réels, du plus récent au plus ancien           */
-/* ================================================================== */
-
-// Construit la liste des éléments à traiter (documents, retraits, avis), du plus récent au plus ancien.
-const elementsATraiter = computed(() => {
-  const elements = []
-
-  for (const doc of listeDocuments.value) {
-    const nom = nomPersonne(doc, 'prestataire', 'utilisateur', 'user', '') || 'Prestataire'
-    const metier = lire(doc, 'prestataire.metier', 'prestataire.categorie', 'metier', 'categorie', 'type_document')
-    elements.push({
-      id: `doc-${lire(doc, 'id') ?? elements.length}`,
-      categorie: 'Vérification identité',
-      titre: metier ? `${nom} — Prestataire ${metier}` : `${nom} — Prestataire`,
-      meta: lire(doc, 'prestataire.localisation', 'prestataire.ville', 'localisation', 'ville', 'adresse') || 'Documents à vérifier',
-      icone: 'lieu',
-      date: extraireDate(doc),
-      route: 'admin-verifications',
-    })
-  }
-
-  for (const retrait of listeRetraits.value) {
-    const montant = Number(lire(retrait, 'montant', 'amount'))
-    const nom = nomPersonne(retrait, 'prestataire', 'utilisateur', 'user')
-    elements.push({
-      id: `ret-${lire(retrait, 'id') ?? elements.length}`,
-      categorie: 'Retrait en attente',
-      titre: Number.isFinite(montant)
-        ? `Retrait demandé — ${formateurNombre.format(montant)} FCFA`
-        : 'Retrait demandé',
-      meta: nom ? `Prestataire: ${nom}` : 'Paiements',
-      icone: 'personne',
-      date: extraireDate(retrait),
-      route: 'admin-paiements',
-    })
-  }
-
-  for (const avis of listeAvis.value) {
-    const note = lire(avis, 'note', 'rating')
-    const nom = nomPersonne(avis, 'client', 'auteur', 'utilisateur')
-    elements.push({
-      id: `avis-${lire(avis, 'id') ?? elements.length}`,
-      categorie: 'Avis à modérer',
-      titre: lire(avis, 'commentaire', 'contenu') || (note ? `Avis ${note}/5` : 'Nouvel avis'),
-      meta: nom ? `Client: ${nom}` : 'Modération',
-      icone: 'personne',
-      date: extraireDate(avis),
-      route: 'admin-avis',
-    })
-  }
-
-  elements.sort((a, b) => horodatage(b.date) - horodatage(a.date))
-
-  // Les litiges ne sont connus qu'en nombre : ils passent en priorité
-  if (nombreLitiges.value > 0) {
-    elements.unshift({
-      id: 'litiges',
-      categorie: 'Litige client',
-      titre: `${nombreLitiges.value} litige${nombreLitiges.value > 1 ? 's' : ''} ouvert${nombreLitiges.value > 1 ? 's' : ''}`,
-      meta: 'Centre des litiges',
-      icone: 'service',
-      date: null,
-      route: 'admin-litiges',
-    })
-  }
-
-  return elements
+// Bande secondaire : chiffres utiles mais moins prioritaires.
+// Séparateurs : grille 2×2 sur mobile, une ligne de 4 sur grand écran.
+const SEPARATEURS = ['border-r border-b lg:border-b-0', 'border-b lg:border-b-0 lg:border-r', 'border-r', '']
+const tauxVerifies = computed(() => (u.value.prestataires ? Math.round(((u.value.prestataires_verifies ?? 0) / u.value.prestataires) * 100) : 0))
+const indicateursSecondaires = computed(() => {
+  const parStatut = stats.value?.rendez_vous_par_statut ?? {}
+  return [
+    {
+      label: 'Prestataires vérifiés',
+      value: `${formaterNombre(u.value.prestataires_verifies ?? 0)} / ${formaterNombre(u.value.prestataires ?? 0)}`,
+      sous: `${formaterNombre(u.value.prestataires_en_attente ?? 0)} en attente · ${formaterNombre(u.value.prestataires_rejetes ?? 0)} rejetés`,
+      progression: tauxVerifies.value,
+      icon: BadgeCheck,
+      to: '/admin/dossiers',
+    },
+    {
+      label: 'Prestations terminées',
+      value: formaterNombre(d.value.terminees ?? 0),
+      sous: d.value.total ? `${Math.round(((d.value.terminees ?? 0) / d.value.total) * 100)} % des demandes` : 'Aucune demande',
+      icon: CircleCheck,
+      to: '/admin/demandes',
+    },
+    {
+      label: 'Rendez-vous',
+      value: formaterNombre(stats.value?.rendez_vous?.total ?? 0),
+      sous: `${formaterNombre((parStatut.EN_ATTENTE ?? 0) + (parStatut.CONFIRME ?? 0))} en attente ou confirmés`,
+      icon: CalendarDays,
+      to: '/admin/rendez-vous',
+    },
+    {
+      label: 'Avis clients',
+      value: formaterNombre(stats.value?.avis?.total ?? 0),
+      sous: `${formaterNombre(stats.value?.avis?.en_attente ?? 0)} en attente de modération`,
+      icon: Star,
+      to: '/admin/avis',
+    },
+  ]
 })
 
-// Seuls les premiers éléments sont affichés.
-const elementsATraiterAffiches = computed(() => elementsATraiter.value.slice(0, NB_A_TRAITER))
+/* ------------------------------------------------------------------ */
+/* À traiter : uniquement des files d'attente réelles                   */
+/* ------------------------------------------------------------------ */
 
-// "Système opérationnel" s'il n'y a aucune erreur.
-const systemeOperationnel = computed(() => !errorMessage.value && !erreurRafraichissement.value)
+const aTraiter = computed(() =>
+  [
+    { cle: 'dossiers', libelle: 'Dossiers à décider', detail: 'Dossiers complets transmis', nombre: compteursDossiers.value?.par_statut?.DOSSIER_EN_REVUE ?? 0, icon: ShieldCheck, to: { path: '/admin/dossiers', query: { statut: 'DOSSIER_EN_REVUE' } } },
+    { cle: 'documents', libelle: 'Documents à vérifier', detail: 'Décision humaine requise', nombre: compteursDossiers.value?.documents_a_verifier ?? 0, icon: FileWarning, to: '/admin/verifications' },
+    { cle: 'litiges', libelle: 'Litiges en attente', detail: 'Pas encore pris en charge', nombre: stats.value?.litiges?.en_attente ?? 0, icon: Scale, to: '/admin/litiges', critique: true },
+    { cle: 'retraits', libelle: 'Retraits à traiter', detail: 'Demandes des prestataires', nombre: retraitsEnAttente.value, icon: Wallet, to: '/admin/paiements' },
+    { cle: 'avis', libelle: 'Avis à modérer', detail: 'En attente de modération', nombre: stats.value?.avis?.en_attente ?? 0, icon: Star, to: '/admin/avis' },
+    { cle: 'signalements', libelle: 'Signalements', detail: 'En attente de traitement', nombre: stats.value?.signalements?.en_attente ?? 0, icon: Flag, to: '/admin/signalements' },
+  ].sort((a, b) => b.nombre - a.nombre),
+)
+const totalATraiter = computed(() => aTraiter.value.reduce((s, item) => s + item.nombre, 0))
+const aTraiterActifs = computed(() => aTraiter.value.filter((item) => item.nombre > 0))
+const aTraiterVides = computed(() => aTraiter.value.filter((item) => !item.nombre))
 
-/* ================================================================== */
-/* ACTIVITÉ                                                            */
-/* ================================================================== */
+/* ------------------------------------------------------------------ */
+/* Activité récente                                                    */
+/* ------------------------------------------------------------------ */
 
-// Libellés lisibles des types d'activité.
-const libellesActivite = {
-  NOUVEL_UTILISATEUR: 'Nouvel utilisateur',
-  NOUVELLE_DEMANDE: 'Nouvelle demande',
-  NOUVEAU_DEVIS: 'Nouveau devis',
-  NOUVEL_AVIS: 'Nouvel avis',
-  NOUVEAU_SIGNALEMENT: 'Signalement',
-  NOUVEAU_LITIGE: 'Litige',
-  PAIEMENT_REUSSI: 'Paiement réussi',
+const versDossier = (item) => (item.objet_id ? { name: 'admin-dossier', params: { id: item.objet_id } } : '/admin/dossiers')
+const TYPES_ACTIVITE = {
+  NOUVEL_UTILISATEUR: { libelle: 'Nouvelle inscription', icone: UserPlus, ton: 'neutral', categorie: 'comptes', lien: () => '/admin/utilisateurs' },
+  NOUVELLE_DEMANDE: { libelle: 'Nouvelle demande', icone: ClipboardList, ton: 'info', categorie: 'prestations', lien: () => '/admin/demandes' },
+  NOUVEAU_DEVIS: { libelle: 'Demande de devis', icone: FileText, ton: 'info', categorie: 'prestations', lien: () => '/admin/devis' },
+  NOUVEAU_RENDEZ_VOUS: { libelle: 'Nouveau rendez-vous', icone: CalendarDays, ton: 'info', categorie: 'prestations', lien: () => '/admin/rendez-vous' },
+  PRESTATION_TERMINEE: { libelle: 'Prestation terminée', icone: CheckCheck, ton: 'brand', categorie: 'prestations', lien: () => '/admin/demandes' },
+  PAIEMENT_REUSSI: { libelle: 'Paiement reçu', icone: CreditCard, ton: 'brand', categorie: 'paiements', lien: () => '/admin/paiements' },
+  NOUVEL_AVIS: { libelle: 'Nouvel avis', icone: Star, ton: 'neutral', categorie: 'avis', lien: () => '/admin/avis' },
+  NOUVEAU_SIGNALEMENT: { libelle: 'Signalement', icone: Flag, ton: 'warning', categorie: 'litiges', lien: () => '/admin/signalements' },
+  NOUVEAU_LITIGE: { libelle: 'Litige ouvert', icone: Scale, ton: 'danger', categorie: 'litiges', lien: () => '/admin/litiges' },
+  VERIFICATION_SOUMISE: { libelle: 'Dossier à examiner', icone: ShieldCheck, ton: 'warning', categorie: 'verifications', lien: versDossier },
+  VERIFICATION_VALIDEE: { libelle: 'Prestataire validé', icone: BadgeCheck, ton: 'brand', categorie: 'verifications', lien: versDossier },
+  VERIFICATION_REJETEE: { libelle: 'Dossier rejeté', icone: ShieldX, ton: 'danger', categorie: 'verifications', lien: versDossier },
+  VERIFICATION_RENVOYEE: { libelle: 'Dossier renvoyé', icone: RotateCcw, ton: 'info', categorie: 'verifications', lien: versDossier },
+}
+const CATEGORIES_ACTIVITE = [
+  { value: 'prestations', label: 'Prestations' },
+  { value: 'paiements', label: 'Paiements' },
+  { value: 'verifications', label: 'Vérifications' },
+  { value: 'litiges', label: 'Litiges' },
+  { value: 'avis', label: 'Avis' },
+  { value: 'comptes', label: 'Inscriptions' },
+]
+
+/* ------------------------------------------------------------------ */
+/* Graphiques                                                          */
+/* ------------------------------------------------------------------ */
+
+const labels = computed(() => (tendances.value?.mois ?? []).map(libelleMois))
+const libellePeriode = computed(() => `sur ${periode.value} mois`)
+const total = (serie = []) => serie.reduce((s, v) => s + (v || 0), 0)
+
+function tableauMensuel(colonnes, ...series) {
+  return { colonnes: ['Mois', ...colonnes], lignes: labels.value.map((mois, i) => [mois, ...series.map((serie) => serie(i))]) }
 }
 
-// Types d'activité mis en évidence (litiges et signalements).
-const typesSensibles = ['NOUVEAU_LITIGE', 'NOUVEAU_SIGNALEMENT']
+const demandesSeries = computed(() => {
+  const s = tendances.value?.demandes ?? { total: [], terminees: [], annulees: [] }
+  const enCours = s.total.map((t, i) => Math.max(t - (s.terminees[i] ?? 0) - (s.annulees[i] ?? 0), 0))
+  return { ...s, enCours }
+})
+const graphiqueDemandes = computed(() => ({
+  labels: labels.value,
+  datasets: [
+    serieBarres('Terminées', demandesSeries.value.terminees, SERIES[0], { empile: true }),
+    serieBarres('En cours', demandesSeries.value.enCours, SERIES[1], { empile: true }),
+    serieBarres('Annulées ou refusées', demandesSeries.value.annulees, SERIES[2], { empile: true }),
+  ],
+}))
+const optionsDemandes = optionsCartesiennes({ empile: true })
 
-// Petites fonctions d'affichage de l'activité : libellé, acteur, avatar, initiales.
-function libelleActivite(type) {
-  return libellesActivite[type] || type || 'Activité'
-}
+const graphiqueInscriptions = computed(() => ({
+  labels: labels.value,
+  datasets: [
+    serieLigne('Clients', tendances.value?.inscriptions?.clients ?? [], SERIES[1]),
+    serieLigne('Prestataires', tendances.value?.inscriptions?.prestataires ?? [], SERIES[0]),
+  ],
+}))
+const optionsLignes = optionsCartesiennes()
 
-function acteurEvenement(e) {
-  return nomPersonne(e, 'acteur', 'utilisateur', 'client', 'prestataire') || '—'
-}
+const graphiquePaiements = computed(() => ({
+  labels: labels.value,
+  datasets: [serieBarres('Montant encaissé', tendances.value?.paiements?.montant ?? [], SERIES[0])],
+}))
+const optionsPaiements = (() => {
+  const options = optionsCartesiennes({ formatY: formaterCompact, entiers: false })
+  options.plugins.legend.display = false
+  options.plugins.tooltip.callbacks.label = (c) => ` ${formaterMontant(c.parsed.y)}`
+  return options
+})()
 
-function avatarEvenement(e) {
-  return lire(e, 'avatar', 'photo', 'acteur.avatar', 'acteur.photo', 'utilisateur.avatar', 'utilisateur.photo')
-}
+const graphiqueLitiges = computed(() => ({
+  labels: labels.value,
+  datasets: [serieLigne('Litiges ouverts', tendances.value?.litiges?.ouverts ?? [], SERIES[2], { remplir: true })],
+}))
+const optionsLitiges = (() => {
+  const options = optionsCartesiennes()
+  options.plugins.legend.display = false
+  return options
+})()
 
-function initiales(nom) {
-  if (!nom || nom === '—') return '·'
-  return nom.trim().split(/\s+/).slice(0, 2).map((m) => m[0]?.toUpperCase() ?? '').join('')
-}
+const partsVerification = computed(() => [
+  { libelle: 'Vérifiés', valeur: u.value.prestataires_verifies ?? 0, couleur: STATUTS.succes, to: { path: '/admin/dossiers', query: { statut: 'VALIDE' } } },
+  { libelle: 'En attente', valeur: u.value.prestataires_en_attente ?? 0, couleur: STATUTS.attente, to: '/admin/dossiers' },
+  { libelle: 'Rejetés', valeur: u.value.prestataires_rejetes ?? 0, couleur: STATUTS.danger, to: { path: '/admin/dossiers', query: { statut: 'REJETE' } } },
+])
 
-// L'activité affichée : tout, ou seulement les premières lignes.
-const activiteAffichee = computed(() =>
-  activiteDepliee.value ? activite.value : activite.value.slice(0, NB_ACTIVITE),
+const partsCategories = computed(() =>
+  (tendances.value?.categories ?? []).map((ligne, i) => ({
+    libelle: ligne.categorie,
+    valeur: ligne.nombre,
+    couleur: ligne.categorie === 'Autres' ? STATUTS.neutre : SERIES[i % SERIES.length],
+  })),
 )
 
-/* ================================================================== */
-/* REVENUS                                                             */
-/* ================================================================== */
+/* ------------------------------------------------------------------ */
+/* En-tête et cycle de vie                                             */
+/* ------------------------------------------------------------------ */
 
-// Les points de la courbe des revenus (si le serveur les fournit).
-const historiqueRevenus = computed(() => {
-  const source =
-    lire(stats.value, 'revenus.historique', 'revenus_hebdomadaires') ??
-    (Array.isArray(stats.value?.revenus) ? stats.value.revenus : [])
+const dateDuJour = (() => {
+  const texte = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  return texte.charAt(0).toUpperCase() + texte.slice(1)
+})()
+const heureMiseAJour = computed(() => derniereMiseAJour.value?.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) ?? '')
 
-  if (!Array.isArray(source)) return []
-
-  return source
-    .map((p, i) => ({
-      label: p.label ?? p.jour ?? libelleJour(p.date) ?? JOURS_DEFAUT[i] ?? `${i + 1}`,
-      valeur: Number(p.montant ?? p.total ?? p.valeur ?? 0),
-      objectif: p.objectif !== undefined && p.objectif !== null ? Number(p.objectif) : null,
-    }))
-    .filter((p) => Number.isFinite(p.valeur))
-})
-
-// L'objectif global de revenus (si fourni).
-const objectifGlobal = computed(() => {
-  const o = lire(stats.value, 'revenus.objectif')
-  return o !== null && Number.isFinite(Number(o)) ? Number(o) : null
-})
-
-// Y a-t-il un objectif à afficher ?
-const aObjectif = computed(
-  () => objectifGlobal.value !== null || historiqueRevenus.value.some((p) => p.objectif !== null),
-)
-
-// L'échelle verticale du graphique : un maximum "rond" et 5 graduations.
-const echelle = computed(() => {
-  const valeurs = historiqueRevenus.value.flatMap((p) => [p.valeur, p.objectif ?? 0])
-  if (objectifGlobal.value !== null) valeurs.push(objectifGlobal.value)
-  const max = Math.max(...valeurs, 0)
-
-  if (!max) return { max: 80000, graduations: [80000, 60000, 40000, 20000, 0] }
-
-  const brut = max / 4
-  const puissance = Math.pow(10, Math.floor(Math.log10(brut)))
-  const pas = [1, 2, 2.5, 5, 10].map((m) => m * puissance).find((p) => p >= brut)
-  return { max: pas * 4, graduations: [4, 3, 2, 1, 0].map((i) => i * pas) }
-})
-
-// Affiche un montant en milliers (ex. 12 000 -> "12k").
-function formaterK(valeur) {
-  if (valeur >= 1000) return `${formateurNombre.format(Math.round(valeur / 1000))}k`
-  return `${formateurNombre.format(valeur)}`
+function surVisibilite() {
+  if (document.visibilityState === 'visible' && Date.now() - (derniereMiseAJour.value?.getTime() ?? 0) > INTERVALLE_ACTUALISATION) actualiser()
 }
 
-// Position (x, y) de chaque point dans le graphique, en pourcentage.
-const points = computed(() => {
-  const liste = historiqueRevenus.value
-  const n = liste.length
-  return liste.map((p, i) => {
-    const obj = p.objectif ?? objectifGlobal.value
-    return {
-      ...p,
-      x: n === 1 ? 50 : (i / (n - 1)) * 100,
-      y: 100 - (p.valeur / echelle.value.max) * 100,
-      yObjectif: obj !== null ? 100 - (obj / echelle.value.max) * 100 : null,
-    }
-  })
-})
-
-// Étiquettes de l'axe horizontal.
-const etiquettesX = computed(() =>
-  points.value.length
-    ? points.value.map((p) => ({ label: p.label, x: p.x }))
-    : JOURS_DEFAUT.map((label, i) => ({ label, x: (i / 6) * 100 })),
-)
-
-// Les tracés SVG : la ligne, la zone colorée sous la ligne, et la ligne d'objectif.
-const cheminLigne = computed(() =>
-  points.value.map((p, i) => `${i ? 'L' : 'M'}${p.x},${p.y}`).join(' '),
-)
-
-const cheminAire = computed(() => {
-  const pts = points.value
-  if (!pts.length) return ''
-  return `${cheminLigne.value} L${pts[pts.length - 1].x},100 L${pts[0].x},100 Z`
-})
-
-const cheminObjectif = computed(() =>
-  points.value
-    .filter((p) => p.yObjectif !== null)
-    .map((p, i) => `${i ? 'L' : 'M'}${p.x},${p.yObjectif}`)
-    .join(' '),
-)
-
-/* ================================================================== */
-/* TEMPS                                                               */
-/* ================================================================== */
-
-// Texte du type "Il y a 5 min", "Hier", "Il y a 3 j".
-function tempsRelatif(date) {
-  const t = horodatage(date)
-  if (!t) return ''
-  const s = Math.round((maintenant.value - t) / 1000)
-  if (s < 60) return "À l'instant"
-  if (s < 3600) return `Il y a ${Math.round(s / 60)} min`
-  if (s < 86400) return `Il y a ${Math.round(s / 3600)}h`
-  const jours = Math.round(s / 86400)
-  return jours === 1 ? 'Hier' : `Il y a ${jours} j`
-}
-
-// Heure du type "14:30", "Hier, 14:30" ou "12 Mar, 14:30".
-function formaterHeure(date) {
-  const t = horodatage(date)
-  if (!t) return ''
-  const valeur = new Date(t)
-  const heure = valeur.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
-  const aujourdhui = new Date(maintenant.value)
-  const hier = new Date(maintenant.value)
-  hier.setDate(hier.getDate() - 1)
-
-  if (valeur.toDateString() === aujourdhui.toDateString()) return heure
-  if (valeur.toDateString() === hier.toDateString()) return `Hier, ${heure}`
-
-  const jour = valeur.getDate()
-  const mois = valeur.toLocaleDateString('fr-FR', { month: 'short' }).replace('.', '')
-  return `${jour} ${mois.charAt(0).toUpperCase()}${mois.slice(1)}, ${heure}`
-}
-
-// Nom court du jour (ex. "Lun").
-function libelleJour(date) {
-  const t = horodatage(date)
-  if (!t) return null
-  const j = new Date(t).toLocaleDateString('fr-FR', { weekday: 'short' }).replace('.', '')
-  return j.charAt(0).toUpperCase() + j.slice(1)
-}
-
-// Ouvre une autre page admin.
-function ouvrirSection(route) {
-  if (route) router.push({ name: route })
-}
-
-/* ================================================================== */
-/* CYCLE DE VIE                                                        */
-/* ================================================================== */
-
-// Au montage : premier chargement, horloge, rechargement automatique, et écoute de la visibilité de l'onglet.
 onMounted(() => {
   charger()
-  minuteurHorloge = setInterval(() => (maintenant.value = Date.now()), INTERVALLE_HORLOGE)
-  minuteurRefresh = setInterval(() => {
-    if (document.visibilityState === 'visible') actualiser()
-  }, INTERVALLE_AUTO_REFRESH)
+  minuteur = setInterval(() => document.visibilityState === 'visible' && actualiser(), INTERVALLE_ACTUALISATION)
   document.addEventListener('visibilitychange', surVisibilite)
 })
 
-// Au démontage : on arrête tout.
 onBeforeUnmount(() => {
-  clearInterval(minuteurRefresh)
-  clearInterval(minuteurHorloge)
+  clearInterval(minuteur)
   document.removeEventListener('visibilitychange', surVisibilite)
 })
 </script>
 
 <template>
   <AppLayout role="admin" background="#F2F3F0">
-    <div class="page">
-      <!-- ========================= EN-TÊTE ========================= -->
-      <header class="entete">
-        <h1 class="titre-page">Tableau de bord</h1>
-        <p class="sous-titre">Vue d'ensemble de l'activité MIMOSY</p>
+    <div class="flex flex-col gap-6 lg:gap-8">
+      <!-- En-tête -->
+      <header class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div>
+          <p class="text-sm text-muted">{{ dateDuJour }}</p>
+          <h1 class="font-serif text-[38px] leading-[44px] text-ink sm:text-[46px] sm:leading-[52px]">Tableau de bord</h1>
+          <p class="mt-1 text-sm text-ink-soft">L'activité de MIMOSY, calculée sur les données réelles de la plateforme.</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <MTabs v-model="periode" :tabs="PERIODES" label="Période des graphiques" variant="pill" />
+          <MButton variant="outline" size="sm" :icon="RefreshCw" :loading="actualisation" data-test="actualiser" @click="actualiser">Actualiser</MButton>
+          <span v-if="heureMiseAJour" class="w-full text-right text-xs text-muted md:w-auto">Mis à jour à {{ heureMiseAJour }}</span>
+        </div>
       </header>
 
-      <!-- ========================= CHARGEMENT ========================= -->
-      <template v-if="loading && !stats">
-        <div class="rangee-kpi" aria-busy="true" aria-label="Chargement">
-          <div v-for="n in 4" :key="n" class="carte squelette" style="height: 138px" />
+      <!-- Chargement : squelettes à la forme du contenu final -->
+      <div v-if="chargement" class="flex flex-col gap-6" aria-busy="true">
+        <span class="sr-only">Chargement du tableau de bord…</span>
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div v-for="n in 4" :key="n" class="h-[172px] animate-pulse rounded-card bg-[#E9EBE6] motion-reduce:animate-none" />
         </div>
-        <div class="rangee-principale">
-          <div class="carte squelette" style="height: 480px" />
-          <div class="carte squelette" style="height: 480px" />
+        <div class="h-[92px] animate-pulse rounded-card bg-[#E9EBE6] motion-reduce:animate-none" />
+        <div class="grid gap-6 xl:grid-cols-5">
+          <div class="h-[340px] animate-pulse rounded-card bg-[#E9EBE6] motion-reduce:animate-none xl:col-span-2" />
+          <div class="h-[340px] animate-pulse rounded-card bg-[#E9EBE6] motion-reduce:animate-none xl:col-span-3" />
         </div>
-      </template>
+      </div>
 
-      <!-- ========================= ERREUR ========================= -->
-      <ErrorState v-else-if="errorMessage" :message="errorMessage" @retry="charger" />
+      <MErrorState v-else-if="erreur" :message="erreur" @retry="charger" />
 
       <template v-else>
-        <div v-if="erreurRafraichissement" class="bandeau-erreur" role="alert">
-          <span>L'actualisation a échoué : {{ erreurRafraichissement }}</span>
-          <button type="button" class="lien-souligne lien-rouge" @click="actualiser">Réessayer</button>
+        <div v-if="erreurPartielle" class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#E8C9C3] bg-danger-soft px-4 py-3 text-sm text-danger" role="alert">
+          <span>{{ erreurPartielle }}</span>
+          <button type="button" class="cursor-pointer font-semibold underline underline-offset-4" @click="actualiser">Réessayer</button>
         </div>
 
-        <!-- ========================= KPI ========================= -->
-        <section class="rangee-kpi" :class="{ attenue: rafraichissement }" aria-label="Indicateurs principaux">
-          <article
-            v-for="s in statistiquesPrincipales"
-            :key="s.type"
-            class="carte carte-kpi rounded-2xl"
-            :class="{ 'carte-verte': s.mis_en_avant }"
+        <!-- 1. Indicateurs principaux -->
+        <section aria-label="Indicateurs principaux" class="grid grid-cols-2 gap-3 sm:gap-4 transition-opacity sm:grid-cols-2 xl:grid-cols-4" :class="{ 'opacity-60': actualisation }">
+          <KpiCard
+            v-for="(item, index) in indicateursPrincipaux"
+            :key="item.label"
+            v-bind="item"
+            :jours="evolutions.jours || 30"
+            class="animate-rise"
+            :style="{ '--reveal-delay': `${index * 50}ms` }"
+          />
+        </section>
+
+        <!-- 2. Indicateurs secondaires -->
+        <section aria-label="Indicateurs secondaires" class="animate-rise grid grid-cols-2 overflow-hidden rounded-card border border-line bg-surface lg:grid-cols-4" style="--reveal-delay: 200ms">
+          <router-link
+            v-for="(item, index) in indicateursSecondaires"
+            :key="item.label"
+            :to="item.to"
+            class="group flex flex-col gap-1 border-line p-4 transition-colors hover:bg-raised sm:p-5"
+            :class="SEPARATEURS[index]"
           >
-            <p class="etiquette" :class="s.mis_en_avant ? 'etiquette-claire' : ''">{{ s.label }}</p>
-
-            <div class="ligne-valeur">
-              <span class="valeur" :class="{ 'texte-rouge': s.critique, 'texte-blanc': s.mis_en_avant }">
-                <NombreAnime :valeur="s.valeur" :padding="!s.mis_en_avant" />
-              </span>
-
-              <span
-                v-if="variation(s.type, s.valeur) !== 0"
-                class="variation"
-                :class="
-                  s.mis_en_avant ? 'texte-blanc' : variation(s.type, s.valeur) > 0 ? 'texte-vert' : 'texte-rouge'
-                "
-                title="Depuis la dernière actualisation"
-              >
-                <Icone :nom="variation(s.type, s.valeur) > 0 ? 'hausse' : 'baisse'" :taille="11" :epaisseur="2.6" />
-                {{ variation(s.type, s.valeur) > 0 ? '+' : '' }}{{ variation(s.type, s.valeur) }}
-              </span>
-
-              <span
-                v-else-if="s.suffixe"
-                class="suffixe"
-                :class="{ 'suffixe-rouge': s.critique, 'suffixe-blanc': s.mis_en_avant, 'suffixe-grand': s.suffixe === 'k FCFA' }"
-              >
-                {{ s.suffixe }}
-              </span>
-            </div>
-          </article>
+            <span class="flex items-center gap-1.5 text-xs font-semibold text-ink-soft">
+              <component :is="item.icon" :size="14" :stroke-width="1.9" class="text-brand" aria-hidden="true" />
+              {{ item.label }}
+            </span>
+            <span class="tabular font-serif text-[26px] leading-8 text-ink">{{ item.value }}</span>
+            <span v-if="item.progression !== undefined" class="h-1 overflow-hidden rounded-full bg-sunken" aria-hidden="true">
+              <span class="block h-full rounded-full bg-brand transition-[width] duration-700" :style="{ width: `${item.progression}%` }" />
+            </span>
+            <span class="truncate text-xs text-muted">{{ item.sous }}</span>
+          </router-link>
         </section>
 
-        <!-- ========================= À TRAITER + ACTIVITÉ ========================= -->
-        <section class="rangee-principale" :class="{ attenue: rafraichissement }">
-          <!-- À TRAITER -->
-          <article class="carte carte-section rounded-2xl">
-            <div class="entete-section">
-              <h2 class="titre-section">À traiter</h2>
-              <span class="etiquette opacite-40">
-                {{ elementsATraiter.length ? 'Priorité haute' : 'À jour' }}
-              </span>
-            </div>
-
-            <ol v-if="elementsATraiterAffiches.length" class="timeline">
-              <li
-                v-for="(el, index) in elementsATraiterAffiches"
-                :key="el.id"
-                class="item-timeline"
-                :class="{
-                  'item-actif': index === 0,
-                  'item-dernier': index === elementsATraiterAffiches.length - 1,
-                }"
-              >
-                <button type="button" class="bouton-item" @click="ouvrirSection(el.route)">
-                  <span class="point" aria-hidden="true" />
-                  <span class="item-haut">
-                    <span class="etiquette" :class="index === 0 ? 'texte-vert' : 'opacite-40'">{{ el.categorie }}</span>
-                    <span class="item-temps">{{ tempsRelatif(el.date) }}</span>
+        <!-- 3. À traiter + activité -->
+        <div class="grid items-start gap-6 xl:grid-cols-5">
+          <DashboardSection
+            class="xl:col-span-2"
+            titre="À traiter"
+            :description="totalATraiter ? `${formaterNombre(totalATraiter)} élément${totalATraiter > 1 ? 's' : ''} attendent une action` : 'Aucune file d’attente : tout est à jour'"
+            :ordre="4"
+            data-test="a-traiter"
+          >
+            <ul v-if="aTraiterActifs.length" class="flex flex-col gap-2">
+              <li v-for="item in aTraiterActifs" :key="item.cle">
+                <router-link :to="item.to" class="group flex items-center gap-3 rounded-xl border border-line bg-raised px-3.5 py-3 transition-[border-color,transform] duration-150 hover:-translate-y-px hover:border-brand/40">
+                  <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg" :class="item.critique ? 'bg-danger-soft text-danger' : 'bg-warning-soft text-warning'" aria-hidden="true">
+                    <component :is="item.icon" :size="17" :stroke-width="1.8" />
                   </span>
-                  <span class="item-titre">{{ el.titre }}</span>
-                  <span class="item-meta">
-                    <Icone :nom="el.icone" :taille="12" />
-                    {{ el.meta }}
+                  <span class="min-w-0 flex-1">
+                    <span class="block truncate text-sm font-semibold text-ink">{{ item.libelle }}</span>
+                    <span class="block truncate text-xs text-muted">{{ item.detail }}</span>
                   </span>
-                </button>
+                  <span class="tabular rounded-full bg-ink px-2.5 py-0.5 text-xs font-bold text-white">{{ item.nombre }}</span>
+                  <ArrowRight :size="15" class="shrink-0 text-muted transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                </router-link>
               </li>
-            </ol>
-
-            <p v-else class="vide">Aucun élément en attente. Tout est à jour.</p>
-
-            <div class="bloc-statut">
-              <div class="statut">
-                <span class="statut-icone" :class="{ 'statut-icone-rouge': !systemeOperationnel }">
-                  <Icone :nom="systemeOperationnel ? 'bouclier' : 'alerte'" :taille="16" :epaisseur="2" />
-                </span>
-                <div>
-                  <p class="statut-titre">Statut système</p>
-                  <p class="statut-texte">
-                    {{ systemeOperationnel ? 'Tous les services sont opérationnels' : 'Certaines données sont indisponibles' }}
-                  </p>
-                </div>
-              </div>
+            </ul>
+            <div v-else class="flex items-center gap-3 rounded-xl bg-brand-soft px-4 py-4 text-sm text-brand">
+              <CircleCheck :size="20" aria-hidden="true" />
+              <span><strong>Tout est à jour.</strong> Aucune décision ni validation en attente.</span>
             </div>
-          </article>
-
-          <!-- ACTIVITÉ RÉCENTE -->
-          <article class="carte carte-section carte-activite rounded-2xl">
-            <div class="entete-section">
-              <h2 class="titre-section">Activité récente</h2>
-              <button
-                v-if="activite.length > NB_ACTIVITE"
-                type="button"
-                class="lien-souligne"
-                :aria-expanded="activiteDepliee"
-                @click="activiteDepliee = !activiteDepliee"
-              >
-                {{ activiteDepliee ? 'Réduire' : 'Voir tout' }}
-              </button>
+            <div v-if="aTraiterVides.length" class="flex flex-wrap gap-x-4 gap-y-1.5 border-t border-line pt-3">
+              <router-link v-for="item in aTraiterVides" :key="item.cle" :to="item.to" class="flex items-center gap-1.5 text-xs text-muted hover:text-brand">
+                <CircleCheck :size="12" aria-hidden="true" /> {{ item.libelle }} : 0
+              </router-link>
             </div>
+          </DashboardSection>
 
-            <p v-if="!activite.length" class="vide">Aucune activité récente.</p>
+          <DashboardSection class="xl:col-span-3" titre="Activité récente" description="Ce qui vient de se passer sur la plateforme." :ordre="5">
+            <ActiviteTimeline :items="activite" :types="TYPES_ACTIVITE" :categories="CATEGORIES_ACTIVITE" :limite="7" />
+          </DashboardSection>
+        </div>
 
-            <div v-else class="tableau" role="table" aria-label="Activité récente">
-              <div class="ligne ligne-entete" role="row">
-                <span class="etiquette" role="columnheader">Événement</span>
-                <span class="etiquette col-acteur" role="columnheader">Acteur</span>
-                <span class="etiquette aligne-droite" role="columnheader">Heure</span>
-              </div>
+        <!-- 4. Évolution -->
+        <div class="flex flex-wrap items-baseline justify-between gap-2 pt-2">
+          <h2 class="font-serif text-[28px] leading-9 text-ink">Évolution de l'activité</h2>
+          <p class="text-sm text-muted">{{ periode }} derniers mois, mois en cours inclus</p>
+        </div>
 
-              <div
-                v-for="(ev, index) in activiteAffichee"
-                :key="ev.id || `${ev.type}-${index}`"
-                class="ligne ligne-donnee"
-                :class="{ 'sans-bordure': index === activiteAffichee.length - 1 }"
-                role="row"
-              >
-                <div class="cellule-evenement" role="cell">
-                  <p class="evenement-titre">{{ libelleActivite(ev.type) }}</p>
-                  <p class="evenement-detail" :class="{ 'texte-rouge opacite-100': typesSensibles.includes(ev.type) }">
-                    {{ ev.message || 'Aucun détail disponible' }}
-                  </p>
-                </div>
+        <div class="grid gap-6 xl:grid-cols-2" :class="{ 'opacity-60': actualisation }">
+          <ChartPanel
+            titre="Demandes de prestation"
+            description="Demandes créées chaque mois, selon leur statut actuel."
+            :chiffre="formaterNombre(total(demandesSeries.total))"
+            :chiffre-libelle="`demandes ${libellePeriode}`"
+            :vide="!aDesValeurs(demandesSeries.total)"
+            message-vide="Aucune demande de prestation sur la période."
+            :tableau="tableauMensuel(['Terminées', 'En cours', 'Annulées/refusées', 'Total'], (i) => demandesSeries.terminees[i], (i) => demandesSeries.enCours[i], (i) => demandesSeries.annulees[i], (i) => demandesSeries.total[i])"
+            :ordre="6"
+          >
+            <Bar :data="graphiqueDemandes" :options="optionsDemandes" aria-label="Demandes de prestation par mois" />
+          </ChartPanel>
 
-                <div class="col-acteur cellule-acteur" role="cell">
-                  <img
-                    v-if="avatarEvenement(ev)"
-                    :src="avatarEvenement(ev)"
-                    alt=""
-                    class="avatar"
-                  />
-                  <span v-else class="avatar avatar-initiales" aria-hidden="true">
-                    {{ initiales(acteurEvenement(ev)) }}
-                  </span>
-                  <span class="acteur-nom">{{ acteurEvenement(ev) }}</span>
-                </div>
+          <ChartPanel
+            titre="Inscriptions"
+            description="Nouveaux comptes clients et prestataires par mois."
+            :chiffre="formaterNombre(total(tendances?.inscriptions?.clients) + total(tendances?.inscriptions?.prestataires))"
+            :chiffre-libelle="`inscriptions ${libellePeriode}`"
+            :vide="!aDesValeurs(tendances?.inscriptions?.clients, tendances?.inscriptions?.prestataires)"
+            message-vide="Aucune inscription sur la période."
+            :tableau="tableauMensuel(['Clients', 'Prestataires'], (i) => tendances.inscriptions.clients[i], (i) => tendances.inscriptions.prestataires[i])"
+            :ordre="7"
+          >
+            <Line :data="graphiqueInscriptions" :options="optionsLignes" aria-label="Inscriptions par mois" />
+          </ChartPanel>
 
-                <time class="heure" :datetime="ev.date" role="cell">{{ formaterHeure(ev.date) }}</time>
-              </div>
-            </div>
-          </article>
-        </section>
+          <ChartPanel
+            titre="Vérification des prestataires"
+            description="Statut de vérification actuel de chaque prestataire inscrit."
+            :vide="!(u.prestataires ?? 0)"
+            message-vide="Aucun prestataire inscrit pour le moment."
+            :hauteur="200"
+            :ordre="8"
+          >
+            <RepartitionAnneau :parts="partsVerification" libelle-total="prestataires" />
+            <template #pied>
+              <router-link to="/admin/dossiers" class="inline-flex items-center gap-1.5 text-sm font-semibold text-brand hover:underline">
+                Ouvrir les vérifications <ArrowRight :size="14" aria-hidden="true" />
+              </router-link>
+            </template>
+          </ChartPanel>
 
-        <!-- ========================= REVENUS ========================= -->
-        <section class="carte carte-revenus rounded-2xl" :class="{ attenue: rafraichissement }">
-          <div class="entete-section">
-            <h2 class="titre-revenus">Croissance des revenus</h2>
-            <div class="legende">
-              <span class="legende-item">
-                <span class="legende-point" />
-                <span class="legende-texte">Revenus (k FCFA)</span>
-              </span>
-              <span v-if="aObjectif || !points.length" class="legende-item opacite-30">
-                <span class="legende-point legende-point-noir" />
-                <span class="legende-texte">Objectif</span>
-              </span>
-            </div>
-          </div>
+          <ChartPanel
+            titre="Catégories de services demandées"
+            description="Répartition de toutes les demandes par catégorie."
+            :vide="!partsCategories.length"
+            message-vide="Aucune demande n'a encore été passée."
+            :hauteur="200"
+            :ordre="9"
+          >
+            <RepartitionAnneau :parts="partsCategories" libelle-total="demandes" />
+          </ChartPanel>
 
-          <div class="graphique">
-            <!-- Axe Y -->
-            <span
-              v-for="(g, i) in echelle.graduations"
-              :key="g"
-              class="axe-y"
-              :style="{ top: `calc(10px + ${(i / 4) * 160}px)` }"
-            >
-              {{ formaterK(g) }}
-            </span>
+          <ChartPanel
+            titre="Paiements encaissés"
+            description="Montant des paiements réussis par mois."
+            :chiffre="formaterMontant(total(tendances?.paiements?.montant))"
+            :chiffre-libelle="libellePeriode"
+            :vide="!aDesValeurs(tendances?.paiements?.montant)"
+            message-vide="Aucun paiement réussi sur la période."
+            :tableau="tableauMensuel(['Paiements', 'Montant (FCFA)'], (i) => tendances.paiements.nombre[i], (i) => formaterNombre(tendances.paiements.montant[i]))"
+            :ordre="10"
+          >
+            <Bar :data="graphiquePaiements" :options="optionsPaiements" aria-label="Montant des paiements réussis par mois" />
+          </ChartPanel>
 
-            <!-- Zone de tracé -->
-            <div class="zone-trace">
-              <svg class="svg-trace" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-                <path v-if="cheminAire" :d="cheminAire" fill="rgba(45, 106, 79, 0.05)" />
-                <path
-                  v-if="cheminObjectif"
-                  :d="cheminObjectif"
-                  fill="none"
-                  stroke="#1A1C1A"
-                  stroke-opacity="0.3"
-                  stroke-width="1.5"
-                  stroke-dasharray="4 4"
-                  vector-effect="non-scaling-stroke"
-                />
-                <path
-                  v-if="cheminLigne"
-                  :d="cheminLigne"
-                  fill="none"
-                  stroke="#2D6A4F"
-                  stroke-width="3"
-                  stroke-linejoin="round"
-                  stroke-linecap="round"
-                  vector-effect="non-scaling-stroke"
-                />
-              </svg>
-
-              <button
-                v-for="(p, i) in points"
-                :key="i"
-                type="button"
-                class="point-graphique"
-                :class="{ survole: pointSurvole === i }"
-                :style="{ left: p.x + '%', top: p.y + '%' }"
-                :aria-label="`${p.label} : ${formateurNombre.format(p.valeur)} FCFA`"
-                @mouseenter="pointSurvole = i"
-                @mouseleave="pointSurvole = null"
-                @focus="pointSurvole = i"
-                @blur="pointSurvole = null"
-              />
-
-              <div
-                v-if="pointSurvole !== null && points[pointSurvole]"
-                class="infobulle"
-                :style="{ left: points[pointSurvole].x + '%', top: points[pointSurvole].y + '%' }"
-              >
-                <span class="infobulle-jour">{{ points[pointSurvole].label }}</span>
-                <span>{{ formateurNombre.format(points[pointSurvole].valeur) }} FCFA</span>
-              </div>
-
-              <p v-if="!points.length" class="graphique-vide">
-                Historique des revenus indisponible
-              </p>
-            </div>
-
-            <!-- Axe X -->
-            <span
-              v-for="e in etiquettesX"
-              :key="e.label + e.x"
-              class="axe-x"
-              :style="{ left: `calc(40px + (100% - 40px) * ${e.x / 100})` }"
-            >
-              {{ e.label }}
-            </span>
-          </div>
-        </section>
+          <ChartPanel
+            titre="Litiges ouverts"
+            description="Nouveaux litiges déclarés chaque mois."
+            :chiffre="formaterNombre(total(tendances?.litiges?.ouverts))"
+            :chiffre-libelle="`litiges ${libellePeriode}`"
+            :vide="!aDesValeurs(tendances?.litiges?.ouverts)"
+            message-vide="Aucun litige ouvert sur la période."
+            :tableau="tableauMensuel(['Litiges ouverts'], (i) => tendances.litiges.ouverts[i])"
+            :ordre="11"
+          >
+            <Line :data="graphiqueLitiges" :options="optionsLitiges" aria-label="Litiges ouverts par mois" />
+          </ChartPanel>
+        </div>
       </template>
     </div>
   </AppLayout>
 </template>
-
-<style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&family=Instrument+Serif&family=Inter:wght@400&display=swap');
-</style>
-
-<style scoped>
-/* ================================================================ */
-/* Valeurs reprises telles quelles de la maquette                    */
-/* ================================================================ */
-
-.page {
-  --encre: #1a1c1a;
-  --vert: #2d6a4f;
-  --rouge: #991b1b;
-  --bordure: #e5e7e2;
-  --carte: #fafaf8;
-  --gris-clair: #f2f3f0;
-
-  display: flex;
-  flex-direction: column;
-  gap: 40px;
-  padding: 40px;
-  min-height: 100%;
-  background: #fffdf9;
-  color: var(--encre);
-  font-family: 'DM Sans', system-ui, sans-serif;
-}
-
-/* ---------- Typo ---------- */
-
-.entete {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.titre-page {
-  margin: 0;
-  font-family: 'Instrument Serif', Georgia, serif;
-  font-size: 48px;
-  font-weight: 400;
-  line-height: 48px;
-}
-
-.sous-titre {
-  margin: 0;
-  font-size: 16px;
-  line-height: 24px;
-  opacity: 0.6;
-}
-
-.etiquette {
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 18px;
-  letter-spacing: 1.2px;
-  text-transform: uppercase;
-}
-
-.titre-section {
-  margin: 0;
-  font-family: 'Instrument Serif', Georgia, serif;
-  font-size: 24px;
-  font-weight: 400;
-  line-height: 36px;
-}
-
-.titre-revenus {
-  margin: 0;
-  font-family: 'Instrument Serif', Georgia, serif;
-  font-size: 20px;
-  font-weight: 400;
-  line-height: 30px;
-}
-
-.chiffres {
-  font-variant-numeric: tabular-nums;
-}
-
-.opacite-30 { opacity: 0.3; }
-.opacite-40 { opacity: 0.4; }
-.opacite-100 { opacity: 1 !important; }
-.texte-vert { color: var(--vert); }
-.texte-rouge { color: var(--rouge); }
-.texte-blanc { color: #fff; }
-
-/* ---------- Cartes ---------- */
-
-.carte {
-  background: var(--carte);
-  outline: 1px solid var(--bordure);
-  outline-offset: -1px;
-}
-
-.carte-verte {
-  background: var(--vert);
-}
-
-.attenue {
-  opacity: 0.6;
-  transition: opacity 0.3s ease;
-}
-
-/* ---------- KPI ---------- */
-
-.rangee-kpi {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 32px;
-  transition: opacity 0.3s ease;
-}
-
-.carte-kpi {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 32px;
-}
-
-.carte-kpi .etiquette {
-  line-height: 16px;
-  opacity: 0.5;
-}
-
-.carte-kpi .etiquette-claire {
-  color: #f2f3f0;
-  opacity: 0.7;
-}
-
-.ligne-valeur {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  min-height: 40px;
-}
-
-.valeur {
-  font-size: 36px;
-  line-height: 40px;
-  font-weight: 400;
-}
-
-.variation {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 14px;
-  line-height: 21px;
-  letter-spacing: 0.75px;
-}
-
-.suffixe {
-  font-size: 14px;
-  line-height: 21px;
-  opacity: 0.4;
-}
-
-.suffixe-rouge {
-  color: var(--rouge);
-  opacity: 0.6;
-}
-
-.suffixe-blanc {
-  color: #fff;
-  opacity: 1;
-}
-
-.suffixe-grand {
-  font-size: 18px;
-  line-height: 27px;
-  margin-left: -8px;
-}
-
-/* ---------- Rangée principale ---------- */
-
-.rangee-principale {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 40px;
-  align-items: start;
-  transition: opacity 0.3s ease;
-}
-
-.carte-section {
-  display: flex;
-  flex-direction: column;
-  gap: 32px;
-  padding: 32px;
-}
-
-.carte-activite {
-  padding-bottom: 86px;
-}
-
-.entete-section {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.lien-souligne {
-  padding: 0 0 4px;
-  border: 0;
-  border-bottom: 1px solid var(--encre);
-  background: none;
-  color: var(--encre);
-  cursor: pointer;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 18px;
-  letter-spacing: 1.2px;
-  text-transform: uppercase;
-  transition: color 0.2s, border-color 0.2s;
-}
-
-.lien-souligne:hover {
-  color: var(--vert);
-  border-color: var(--vert);
-}
-
-.lien-rouge {
-  color: var(--rouge);
-  border-color: var(--rouge);
-}
-
-.vide {
-  margin: 0;
-  font-size: 14px;
-  line-height: 21px;
-  opacity: 0.5;
-}
-
-/* ---------- Timeline À traiter ---------- */
-
-.timeline {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.item-timeline {
-  position: relative;
-  padding-bottom: 24px;
-  padding-left: 32px;
-  border-left: 2px solid var(--bordure);
-}
-
-.item-timeline.item-dernier {
-  padding-bottom: 0;
-}
-
-.item-timeline.item-actif {
-  border-left-color: var(--vert);
-}
-
-.bouton-item {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: inherit;
-  text-align: left;
-  font: inherit;
-  cursor: pointer;
-}
-
-.point {
-  position: absolute;
-  top: 4px;
-  left: -5px;
-  width: 8px;
-  height: 8px;
-  border-radius: 9999px;
-  background: var(--bordure);
-}
-
-.item-actif .point {
-  background: var(--vert);
-}
-
-.item-haut {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  padding-bottom: 4px;
-}
-
-.item-temps {
-  flex-shrink: 0;
-  font-size: 12px;
-  line-height: 18px;
-  opacity: 0.4;
-}
-
-.item-titre {
-  font-size: 14px;
-  font-weight: 500;
-  line-height: 21px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.bouton-item:hover .item-titre {
-  text-decoration: underline;
-  text-underline-offset: 4px;
-}
-
-.item-meta {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding-top: 4px;
-  font-size: 12px;
-  line-height: 18px;
-  opacity: 0.6;
-}
-
-/* ---------- Statut système ---------- */
-
-.bloc-statut {
-  padding-top: 24px;
-  border-top: 1px solid var(--bordure);
-}
-
-.statut {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 20px;
-  background: var(--gris-clair);
-}
-
-.statut-icone {
-  display: flex;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 2px;
-  background: var(--vert);
-  color: #fff;
-}
-
-.statut-icone-rouge {
-  background: var(--rouge);
-}
-
-.statut-titre {
-  margin: 0;
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 18px;
-}
-
-.statut-texte {
-  margin: 0;
-  font-size: 14px;
-  line-height: 21px;
-  opacity: 0.7;
-}
-
-/* ---------- Tableau Activité ---------- */
-
-.tableau {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.ligne {
-  display: grid;
-  grid-template-columns: minmax(0, 186fr) minmax(0, 140fr) minmax(0, 140fr);
-  align-items: center;
-  border-bottom: 1px solid var(--bordure);
-}
-
-.ligne-entete {
-  padding: 16px 0;
-  opacity: 0.4;
-}
-
-.ligne-donnee {
-  padding: 20px 0;
-}
-
-.ligne-donnee.sans-bordure {
-  border-bottom: 0;
-}
-
-.aligne-droite {
-  text-align: right;
-}
-
-.cellule-evenement {
-  min-width: 0;
-  padding-right: 12px;
-}
-
-.evenement-titre {
-  margin: 0;
-  font-size: 14px;
-  line-height: 21px;
-}
-
-.evenement-detail {
-  margin: 0;
-  overflow: hidden;
-  font-size: 12px;
-  line-height: 18px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  opacity: 0.6;
-}
-
-.cellule-acteur {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  min-width: 0;
-}
-
-.avatar {
-  flex-shrink: 0;
-  width: 24px;
-  height: 24px;
-  border: 1px solid var(--bordure);
-  border-radius: 9999px;
-  object-fit: cover;
-}
-
-.avatar-initiales {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--gris-clair);
-  color: var(--vert);
-  font-size: 9px;
-  font-weight: 700;
-}
-
-.acteur-nom {
-  overflow: hidden;
-  font-size: 14px;
-  font-weight: 500;
-  line-height: 21px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.heure {
-  font-size: 12px;
-  line-height: 18px;
-  text-align: right;
-  opacity: 0.6;
-}
-
-/* ---------- Revenus ---------- */
-
-.carte-revenus {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-  padding: 32px;
-  transition: opacity 0.3s ease;
-}
-
-.legende {
-  display: flex;
-  gap: 16px;
-}
-
-.legende-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.legende-point {
-  width: 8px;
-  height: 8px;
-  border-radius: 9999px;
-  background: var(--vert);
-}
-
-.legende-point-noir {
-  background: var(--encre);
-}
-
-.legende-texte {
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 15px;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-}
-
-.graphique {
-  position: relative;
-  height: 200px;
-}
-
-.axe-y,
-.axe-x {
-  position: absolute;
-  color: #999;
-  font-family: 'Inter', system-ui, sans-serif;
-  font-size: 10px;
-  line-height: 12px;
-}
-
-.axe-y {
-  left: 0;
-  width: 32px;
-  text-align: right;
-  transform: translateY(-50%);
-}
-
-.axe-x {
-  top: 173px;
-  transform: translateX(-50%);
-}
-
-.zone-trace {
-  position: absolute;
-  top: 10px;
-  left: 40px;
-  right: 0;
-  height: 160px;
-  border-bottom: 1px solid var(--bordure);
-}
-
-.svg-trace {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-}
-
-.point-graphique {
-  position: absolute;
-  width: 10px;
-  height: 10px;
-  padding: 0;
-  border: 2px solid var(--carte);
-  border-radius: 9999px;
-  background: var(--vert);
-  cursor: pointer;
-  transform: translate(-50%, -50%);
-  transition: transform 0.15s ease;
-}
-
-.point-graphique::before {
-  content: '';
-  position: absolute;
-  inset: -10px;
-}
-
-.point-graphique.survole,
-.point-graphique:focus-visible {
-  transform: translate(-50%, -50%) scale(1.5);
-  outline: none;
-}
-
-.infobulle {
-  position: absolute;
-  z-index: 2;
-  display: flex;
-  flex-direction: column;
-  padding: 8px 12px;
-  background: var(--encre);
-  color: #fff;
-  font-size: 14px;
-  line-height: 21px;
-  white-space: nowrap;
-  pointer-events: none;
-  transform: translate(-50%, calc(-100% - 14px));
-}
-
-.infobulle-jour {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  opacity: 0.6;
-}
-
-.graphique-vide {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0;
-  font-size: 14px;
-  font-weight: 500;
-  opacity: 0.5;
-}
-
-/* ---------- États ---------- */
-
-.bandeau-erreur {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: -16px;
-  padding: 16px 20px;
-  background: rgba(153, 27, 27, 0.05);
-  outline: 1px solid rgba(153, 27, 27, 0.25);
-  outline-offset: -1px;
-  color: var(--rouge);
-  font-size: 14px;
-}
-
-.squelette {
-  background: linear-gradient(100deg, #fafaf8 30%, #f2f3f0 50%, #fafaf8 70%);
-  background-size: 300% 100%;
-  animation: reflet 1.6s ease-in-out infinite;
-}
-
-@keyframes reflet {
-  from { background-position: 100% 0; }
-  to { background-position: -100% 0; }
-}
-
-button:focus-visible {
-  outline: 2px solid var(--vert);
-  outline-offset: 2px;
-}
-
-/* ---------- Responsive ---------- */
-
-@media (max-width: 1280px) {
-  .rangee-kpi {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 24px;
-  }
-}
-
-@media (max-width: 1024px) {
-  .rangee-principale {
-    grid-template-columns: 1fr;
-  }
-  .carte-activite {
-    padding-bottom: 32px;
-  }
-}
-
-@media (max-width: 640px) {
-  .page {
-    gap: 32px;
-    padding: 24px 20px;
-  }
-  .titre-page {
-    font-size: 40px;
-    line-height: 40px;
-  }
-  .rangee-kpi {
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
-  .carte-kpi,
-  .carte-section,
-  .carte-revenus {
-    padding: 24px;
-  }
-  .entete-section {
-    flex-wrap: wrap;
-  }
-  .ligne {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-  .col-acteur {
-    display: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .squelette {
-    animation: none;
-  }
-  .attenue,
-  .rangee-kpi,
-  .rangee-principale,
-  .carte-revenus,
-  .point-graphique {
-    transition: none;
-  }
-}
-</style>

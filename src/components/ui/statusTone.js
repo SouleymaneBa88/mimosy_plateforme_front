@@ -44,7 +44,7 @@ const LIBELLES = {
   ANNULE: 'Annulé', ANNULEE: 'Annulée', NON_SOUMIS: 'Non soumis', INITIE: 'Initié',
   BLOQUE: 'Bloqué', REATTRIBUE: 'Réattribué', REMBOURSE: 'Remboursé',
   REPRISE_DEMANDEE: 'Reprise demandée', REPRISE_EFFECTUEE: 'Reprise effectuée',
-  REALISEE: 'Validation en attente',
+  REALISEE: 'Validation en attente', EN_COURS: 'En cours', DOSSIER_EN_REVUE: 'En revue',
 }
 
 // « EN_ATTENTE » → « En attente » : libellé de secours quand la page n'en

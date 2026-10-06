@@ -84,8 +84,10 @@ async function refreshAccessToken() {
 // Elle ajoute le jeton, renouvelle le jeton s'il a expiré, et lève
 // une erreur lisible si le serveur répond par une erreur.
 // ------------------------------------------------------------------
-export async function apiFetch(endpoint, options = {}) {
-  const token = getAccessToken()
+// Option « anonyme: true » : n'envoie pas le jeton (endpoints publics comme la
+// confirmation d'e-mail, qui ne doivent pas échouer à cause d'une vieille session).
+export async function apiFetch(endpoint, { anonyme = false, ...options } = {}) {
+  const token = anonyme ? null : getAccessToken()
   let { response, data } = await request(endpoint, options, token)
 
   // 401 = "non autorisé" : le jeton a sans doute expiré. On essaie de le renouveler.

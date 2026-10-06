@@ -77,6 +77,8 @@ export const listTransactions = () => apiFetch(API_ENDPOINTS.adminTransactions)
 
 // Dashboard et activité récente (données réelles, voir apps.adminpanel).
 export const getDashboardStats = () => apiFetch(API_ENDPOINTS.adminDashboard)
+// Séries mensuelles réelles pour les graphiques (mois : 3 à 24).
+export const getTendances = (mois = 12) => apiFetch(`${API_ENDPOINTS.adminDashboardTendances}${buildQuery({ mois })}`)
 export const getActiviteRecente = (limite = 15) => apiFetch(`${API_ENDPOINTS.adminActivite}${buildQuery({ limite })}`)
 
 // Utilisateurs.
@@ -121,3 +123,36 @@ export const reattribuerLitige = (id, nouveauPrestataireId) =>
 
 // Score de confiance prestataire.
 export const getScoreConfiance = (prestataireId) => apiFetch(API_ENDPOINTS.adminPrestataireScoreConfiance(prestataireId))
+
+// Dossiers de vérification des prestataires (parcours complet).
+export const listDossiersVerification = (statut, recherche = '') =>
+  apiFetch(`${API_ENDPOINTS.adminDossiers}${buildQuery({ statut, q: recherche })}`)
+// Nombre de dossiers par statut (onglets de la page Vérifications).
+export const getCompteursDossiers = () => apiFetch(API_ENDPOINTS.adminDossiersCompteurs)
+export const getDossierVerification = (id) => apiFetch(API_ENDPOINTS.adminDossier(id))
+export const deciderDossier = (id, decision, motif = '', etapeAReprendre = '') =>
+  apiFetch(API_ENDPOINTS.adminDossierDecision(id), {
+    method: 'POST',
+    body: { decision, motif, etape_a_reprendre: etapeAReprendre },
+  })
+
+// Fichier protégé (document ou vidéo d'entretien) récupéré sous
+// authentification puis converti en adresse locale ; à libérer avec
+// URL.revokeObjectURL dès qu'il n'est plus affiché.
+export async function recupererFichierProtege(chemin) {
+  const token = localStorage.getItem('mimosy_access_token')
+  const response = await fetch(`${API_BASE_URL}${chemin}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  if (!response.ok) {
+    const error = new Error(
+      response.status === 403 ? "Vous n'avez pas accès à ce fichier." : "Impossible d'afficher le fichier.",
+    )
+    error.status = response.status
+    throw error
+  }
+  return URL.createObjectURL(await response.blob())
+}
+
+// Recalcule la synthèse du dossier (ne prend aucune décision).
+export const regenererSynthese = (id) => apiFetch(API_ENDPOINTS.adminDossierRegenererSynthese(id), { method: 'POST' })
