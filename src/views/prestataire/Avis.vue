@@ -178,7 +178,7 @@ onMounted(chargerAvis)
     </h1>
 
     <p
-      class="max-w-2xl text-sm leading-6 text-[#7A847E] sm:text-base"
+      class="max-w-2xl text-sm leading-6 text-[#68716C] sm:text-base"
     >
       Consultez les évaluations laissées par vos clients après
       vos prestations.
@@ -214,14 +214,14 @@ onMounted(chargerAvis)
             Historique des avis
           </h2>
 
-          <p class="mt-1 text-sm leading-5 text-[#7A847E]">
+          <p class="mt-1 text-sm leading-5 text-[#68716C]">
             Retrouvez ici les avis publiés sur votre profil.
           </p>
         </div>
 
         <span
           v-if="!loading"
-          class="text-sm text-[#7A847E]"
+          class="text-sm text-[#68716C]"
         >
           {{ avisVisibles.length }}
           {{ avisVisibles.length > 1 ? 'avis' : 'avis' }}
@@ -242,7 +242,7 @@ onMounted(chargerAvis)
           class="h-7 w-7 animate-spin rounded-full border-2 border-[#E5E7E2] border-t-[#2D6A4F]"
         />
 
-        <p class="text-sm text-[#7A847E]">
+        <p class="text-sm text-[#68716C]">
           Chargement de vos avis...
         </p>
       </div>

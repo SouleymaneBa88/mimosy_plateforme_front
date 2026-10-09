@@ -218,7 +218,7 @@ const statutClasses = computed(() => {
     statut.value === 'EXPIRE' ||
     statut.value === 'EXPIREE'
   ) {
-    return 'bg-[#F1F5F9] text-[#64748B] border-[#E2E8F0]'
+    return 'bg-[#F1F5F9] text-[#68716C] border-[#E2E8F0]'
   }
 
   return 'bg-[#F2F3F0] text-[#1A1C1A] border-[#E5E7E2]'

@@ -34,7 +34,7 @@ const ROUVRABLES = ['profil', 'identite', 'competences', 'coherence']
             :class="{
               'border-[#2D6A4F] bg-[#2D6A4F] text-white': etape.etat === 'termine',
               'border-[#2D6A4F] bg-white text-[#2D6A4F]': etape.etat === 'en_cours',
-              'border-[#D3D7D0] bg-white text-[#7A847E]': etape.etat === 'a_faire',
+              'border-[#D3D7D0] bg-white text-[#68716C]': etape.etat === 'a_faire',
             }"
           >
             <Check v-if="etape.etat === 'termine'" class="h-4 w-4" aria-hidden="true" />
@@ -43,7 +43,7 @@ const ROUVRABLES = ['profil', 'identite', 'competences', 'coherence']
           </span>
           <span
             class="text-xs font-semibold"
-            :class="etape.etat === 'a_faire' ? 'text-[#7A847E]' : 'text-[#1C2420]'"
+            :class="etape.etat === 'a_faire' ? 'text-[#68716C]' : 'text-[#1C2420]'"
           >
             {{ etape.libelle }}
           </span>

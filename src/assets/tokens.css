@@ -26,11 +26,12 @@
   --mimosy-border-strong: #D3D7D0;
 
   /* Texte
-     muted (#7A847E) passe à ~3.9:1 sur le fond : réservé aux métadonnées
-     et placeholders. ink-soft sert au texte secondaire lisible (AA). */
+     muted : texte secondaire. #7A847E (3,5 à 3,9:1) échouait au niveau AA ;
+     #68716C atteint 5,04 sur blanc, 4,82 sur #FAFAF8 et 4,52 sur #F2F3F0.
+     Sur les fonds teintés (#E6E8E3, #E2EAE4 : ~4,1:1), préférer ink-soft. */
   --mimosy-text: #1C2420;
   --mimosy-text-soft: #4F5A54;
-  --mimosy-muted: #7A847E;
+  --mimosy-muted: #68716C;
 
   /* Sémantique — tons terreux dérivés de la palette, jamais saturés */
   --mimosy-success: #2D6A4F;
@@ -158,6 +159,8 @@
   --color-mimosy-tealBg: #D3EEEB;
   --color-mimosy-yellow: #D99A0B;
   --color-mimosy-yellowBg: #FBEFCF;
+  /* Texte et icônes sur fond jaune : #D99A0B n'y atteint que 2,1:1, #8A5F00 atteint 4,94:1. */
+  --color-mimosy-yellowText: #8A5F00;
   --color-mimosy-red: #C22F2F;
   --color-mimosy-redBg: #F7DBDB;
   --color-mimosy-gray: #57534E;

@@ -50,7 +50,7 @@ const statutClasses = {
   A_REMBOURSER: 'bg-[#FFFBF0] text-[#9A723C]',
   SIMULE: 'bg-[#FFF4DB] text-[#8A5A00]',
 }
-const classeStatut = (statut) => statutClasses[statut] || 'bg-[#F1F5F9] text-[#64748B]'
+const classeStatut = (statut) => statutClasses[statut] || 'bg-[#F1F5F9] text-[#68716C]'
 
 // Charge la liste des paiements (avec le filtre statut).
 async function chargerPaiements() {
@@ -118,7 +118,7 @@ chargerPaiements()
           :key="onglet.id"
           type="button"
           class="rounded-t-lg px-4 py-2.5 text-sm font-bold transition"
-          :class="ongletActif === onglet.id ? 'border-b-2 border-[#2F6250] text-[#2F6250]' : 'text-[#64748B] hover:text-[#051F20]'"
+          :class="ongletActif === onglet.id ? 'border-b-2 border-[#2F6250] text-[#2F6250]' : 'text-[#68716C] hover:text-[#051F20]'"
           @click="ouvrirOnglet(onglet.id)"
         >
           {{ onglet.label }}
@@ -154,7 +154,7 @@ chargerPaiements()
                 <td class="px-4 py-3">
                   <span class="rounded-full px-2.5 py-1 text-xs font-bold" :class="classeStatut(paiement.statut)">{{ paiement.statut }}</span>
                 </td>
-                <td class="px-4 py-3 text-[#64748B]">{{ new Date(paiement.date_creation).toLocaleDateString('fr-FR') }}</td>
+                <td class="px-4 py-3 text-[#68716C]">{{ new Date(paiement.date_creation).toLocaleDateString('fr-FR') }}</td>
               </tr>
             </tbody>
           </table>
@@ -190,7 +190,7 @@ chargerPaiements()
                 <td class="px-4 py-3">
                   <span class="rounded-full px-2.5 py-1 text-xs font-bold" :class="classeStatut(retrait.statut)">{{ retrait.statut }}</span>
                 </td>
-                <td class="px-4 py-3 text-[#64748B]">{{ new Date(retrait.date_creation).toLocaleDateString('fr-FR') }}</td>
+                <td class="px-4 py-3 text-[#68716C]">{{ new Date(retrait.date_creation).toLocaleDateString('fr-FR') }}</td>
               </tr>
             </tbody>
           </table>
@@ -216,9 +216,9 @@ chargerPaiements()
             <tbody class="divide-y divide-[#F1F5F9]">
               <tr v-for="tx in transactions.items" :key="tx.id">
                 <td class="px-4 py-3 font-bold text-[#051F20]">{{ typeLabels[tx.type] || tx.type }}</td>
-                <td class="px-4 py-3 text-[#64748B]">{{ tx.description }}</td>
+                <td class="px-4 py-3 text-[#68716C]">{{ tx.description }}</td>
                 <td class="px-4 py-3 font-bold">{{ Number(tx.montant).toLocaleString('fr-FR') }} FCFA</td>
-                <td class="px-4 py-3 text-[#64748B]">{{ new Date(tx.date_creation).toLocaleString('fr-FR') }}</td>
+                <td class="px-4 py-3 text-[#68716C]">{{ new Date(tx.date_creation).toLocaleString('fr-FR') }}</td>
               </tr>
             </tbody>
           </table>

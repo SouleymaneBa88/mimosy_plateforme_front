@@ -486,7 +486,7 @@ onMounted(chargerDemande)
               #{{ demande.id }}
             </h1>
 
-            <p class="mt-3 text-base text-[#7A847E]">
+            <p class="mt-3 text-base text-[#68716C]">
               Créée le {{ dateCreation }}
             </p>
           </div>
@@ -530,7 +530,7 @@ onMounted(chargerDemande)
                   </div>
 
                   <div class="min-w-0">
-                    <p class="text-xs font-semibold uppercase tracking-wide text-[#7A847E]">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-[#68716C]">
                       Nom complet
                     </p>
                     <p class="mt-1 truncate text-sm font-semibold text-[#1C2420]">
@@ -540,45 +540,45 @@ onMounted(chargerDemande)
                 </div>
 
                 <div>
-                  <p class="text-xs font-semibold uppercase tracking-wide text-[#7A847E]">
+                  <p class="text-xs font-semibold uppercase tracking-wide text-[#68716C]">
                     Email
                   </p>
 
                   <div class="mt-2 flex items-center gap-2 text-sm text-[#1C2420]">
-                    <Mail :size="16" :stroke-width="1.7" class="text-[#7A847E]" />
+                    <Mail :size="16" :stroke-width="1.7" class="text-[#68716C]" />
                     <span class="break-all">{{ emailClient }}</span>
                   </div>
                 </div>
 
                 <div>
-                  <p class="text-xs font-semibold uppercase tracking-wide text-[#7A847E]">
+                  <p class="text-xs font-semibold uppercase tracking-wide text-[#68716C]">
                     Téléphone
                   </p>
 
                   <div class="mt-2 flex items-center gap-2 text-sm text-[#1C2420]">
-                    <Phone :size="16" :stroke-width="1.7" class="text-[#7A847E]" />
+                    <Phone :size="16" :stroke-width="1.7" class="text-[#68716C]" />
                     <span>{{ telephoneClient }}</span>
                   </div>
                 </div>
 
                 <div>
-                  <p class="text-xs font-semibold uppercase tracking-wide text-[#7A847E]">
+                  <p class="text-xs font-semibold uppercase tracking-wide text-[#68716C]">
                     Ville
                   </p>
 
                   <div class="mt-2 flex items-center gap-2 text-sm text-[#1C2420]">
-                    <MapPin :size="16" :stroke-width="1.7" class="text-[#7A847E]" />
+                    <MapPin :size="16" :stroke-width="1.7" class="text-[#68716C]" />
                     <span>{{ ville }}</span>
                   </div>
                 </div>
 
                 <div>
-                  <p class="text-xs font-semibold uppercase tracking-wide text-[#7A847E]">
+                  <p class="text-xs font-semibold uppercase tracking-wide text-[#68716C]">
                     Quartier
                   </p>
 
                   <div class="mt-2 flex items-center gap-2 text-sm text-[#1C2420]">
-                    <MapPin :size="16" :stroke-width="1.7" class="text-[#7A847E]" />
+                    <MapPin :size="16" :stroke-width="1.7" class="text-[#68716C]" />
                     <span>{{ quartier }}</span>
                   </div>
                 </div>
@@ -595,7 +595,7 @@ onMounted(chargerDemande)
               <div class="mt-7 grid gap-6 sm:grid-cols-2">
 
                 <div>
-                  <p class="text-xs font-semibold uppercase tracking-wide text-[#7A847E]">
+                  <p class="text-xs font-semibold uppercase tracking-wide text-[#68716C]">
                     Service
                   </p>
                   <p class="mt-2 text-sm font-semibold text-[#1C2420]">
@@ -604,7 +604,7 @@ onMounted(chargerDemande)
                 </div>
 
                 <div>
-                  <p class="text-xs font-semibold uppercase tracking-wide text-[#7A847E]">
+                  <p class="text-xs font-semibold uppercase tracking-wide text-[#68716C]">
                     Catégorie
                   </p>
                   <p class="mt-2 text-sm font-semibold text-[#1C2420]">
@@ -613,7 +613,7 @@ onMounted(chargerDemande)
                 </div>
 
                 <div class="sm:col-span-2">
-                  <p class="text-xs font-semibold uppercase tracking-wide text-[#7A847E]">
+                  <p class="text-xs font-semibold uppercase tracking-wide text-[#68716C]">
                     Description complète
                   </p>
 
@@ -630,7 +630,7 @@ onMounted(chargerDemande)
                 class="mt-7 grid gap-4 rounded-xl border border-[#E6E8E3] bg-[#F2F3F0] p-5 sm:grid-cols-2"
               >
                 <div v-if="dateSouhaitee !== '—'">
-                  <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[#7A847E]">
+                  <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[#68716C]">
                     <CalendarDays :size="15" />
                     Date souhaitée
                   </div>
@@ -641,7 +641,7 @@ onMounted(chargerDemande)
                 </div>
 
                 <div v-if="heureSouhaitee !== '—'">
-                  <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[#7A847E]">
+                  <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[#68716C]">
                     <Clock3 :size="15" />
                     Heure souhaitée
                   </div>
@@ -654,7 +654,7 @@ onMounted(chargerDemande)
 
               <!-- Budget -->
               <div class="mt-6">
-                <p class="text-xs font-semibold uppercase tracking-wide text-[#7A847E]">
+                <p class="text-xs font-semibold uppercase tracking-wide text-[#68716C]">
                   Budget
                 </p>
 
@@ -682,7 +682,7 @@ onMounted(chargerDemande)
                     Adresse précise
                   </p>
 
-                  <p class="mt-1 text-sm leading-6 text-[#7A847E]">
+                  <p class="mt-1 text-sm leading-6 text-[#68716C]">
                     {{ adresse }}
                   </p>
                 </div>
@@ -704,7 +704,7 @@ onMounted(chargerDemande)
                     Localisation disponible
                   </p>
 
-                  <p class="mt-1 text-xs text-[#7A847E]">
+                  <p class="mt-1 text-xs text-[#68716C]">
                     {{ latitude }}, {{ longitude }}
                   </p>
                 </div>
@@ -718,14 +718,14 @@ onMounted(chargerDemande)
                   <MapPin
                     :size="24"
                     :stroke-width="1.6"
-                    class="mx-auto text-[#7A847E]"
+                    class="mx-auto text-[#68716C]"
                   />
 
                   <p class="mt-3 text-sm font-semibold text-[#1C2420]">
                     Coordonnées GPS indisponibles
                   </p>
 
-                  <p class="mt-1 text-xs text-[#7A847E]">
+                  <p class="mt-1 text-xs text-[#68716C]">
                     La demande contient uniquement l'adresse renseignée.
                   </p>
                 </div>
@@ -757,7 +757,7 @@ onMounted(chargerDemande)
                       {{ prestataireNom }}
                     </p>
 
-                    <p class="mt-1 text-sm text-[#7A847E]">
+                    <p class="mt-1 text-sm text-[#68716C]">
                       {{ prestataireSpecialite }}
                     </p>
                   </div>
@@ -768,13 +768,13 @@ onMounted(chargerDemande)
                   class="mt-5 border-t border-[#E6E8E3] pt-5"
                 >
                   <div class="flex items-center justify-between text-sm">
-                    <span class="text-[#7A847E]">
+                    <span class="text-[#68716C]">
                       Évaluation
                     </span>
 
                     <span class="font-semibold text-[#1C2420]">
                       {{ prestataireNote }}
-                      <span v-if="prestataireAvis !== '—'" class="font-normal text-[#7A847E]">
+                      <span v-if="prestataireAvis !== '—'" class="font-normal text-[#68716C]">
                         · {{ prestataireAvis }} avis
                       </span>
                     </span>
@@ -797,14 +797,14 @@ onMounted(chargerDemande)
                 <User
                   :size="24"
                   :stroke-width="1.6"
-                  class="mx-auto text-[#7A847E]"
+                  class="mx-auto text-[#68716C]"
                 />
 
                 <p class="mt-3 text-sm font-semibold text-[#1C2420]">
                   Aucun prestataire assigné
                 </p>
 
-                <p class="mt-1 text-xs leading-5 text-[#7A847E]">
+                <p class="mt-1 text-xs leading-5 text-[#68716C]">
                   Aucun prestataire n'est actuellement associé à cette demande.
                 </p>
               </div>
@@ -840,7 +840,7 @@ onMounted(chargerDemande)
                       {{ evenement.titre }}
                     </p>
 
-                    <p class="mt-1 text-xs leading-5 text-[#7A847E]">
+                    <p class="mt-1 text-xs leading-5 text-[#68716C]">
                       {{ evenement.description }}
                     </p>
 
@@ -856,7 +856,7 @@ onMounted(chargerDemande)
 
               <div
                 v-else
-                class="mt-6 text-sm text-[#7A847E]"
+                class="mt-6 text-sm text-[#68716C]"
               >
                 Aucun historique disponible.
               </div>

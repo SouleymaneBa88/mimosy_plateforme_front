@@ -18,6 +18,7 @@ import { ArrowLeft, CheckCircle2, MessageCircle, Receipt, TriangleAlert } from '
 // Les composants de la page.
 import ClientLayout from '@/components/layout/ClientLayout.vue'
 import NouveauLitigeModal from '@/components/disputes/NouveauLitigeModal.vue'
+import PiecesJointesDemande from '@/components/demandes/PiecesJointesDemande.vue'
 import PaiementModal from '@/components/client/PaiementModal.vue'
 // Les stores, les toasts, les appels à l'API et le temps réel.
 import { useDemandePrestationStore } from '@/stores/demandePrestation'
@@ -516,7 +517,8 @@ async function envoyerAvis() {
                 </span>
               </div>
 
-              <p class="mt-5 font-sans text-sm leading-relaxed text-mimosy-secondary">{{ demande.description || 'Aucune description.' }}</p>
+              <p class="mt-5 whitespace-pre-line font-sans text-sm leading-relaxed text-mimosy-secondary">{{ demande.description || 'Aucune description.' }}</p>
+              <PiecesJointesDemande class="mt-4" :pieces="demande.pieces_jointes || []" />
 
               <div class="mt-6 grid grid-cols-1 gap-5 border-t border-mimosy-border pt-6 sm:grid-cols-2">
                 <div>

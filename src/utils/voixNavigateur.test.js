@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   choisirVoixNavigateur,
+  choisirVoixNavigateurMasculine,
   creerLecteurNavigateur,
   decouperEnSegments,
   nettoyerTexte,
@@ -52,6 +53,18 @@ describe('decouperEnSegments', () => {
 })
 
 describe('choix de la voix', () => {
+  it('Mimo préfère une voix masculine disponible dans la langue demandée', () => {
+    const voix = [
+      { name: 'Google français Female', lang: 'fr-FR', localService: false },
+      { name: 'Microsoft male voice Online (Natural)', lang: 'fr-FR', localService: false },
+      { name: 'Google US English Male', lang: 'en-US', localService: false },
+    ]
+    expect(choisirVoixNavigateurMasculine(voix, 'fr-FR').name).toBe('Microsoft male voice Online (Natural)')
+    expect(choisirVoixNavigateurMasculine(voix, 'en-US').name).toBe('Google US English Male')
+    expect(choisirVoixNavigateurMasculine([{ name: 'Samantha', lang: 'en-US' }], 'fr-FR')).toBeNull()
+    expect(choisirVoixNavigateurMasculine([{ name: 'Google français Female', lang: 'fr-FR' }])).toBeNull()
+  })
+
   it('voix neuronale fr-FR d’abord, puis voix du système, puis eSpeak (variante la plus claire)', () => {
     const toutes = [
       voix('French (France)+female4'),

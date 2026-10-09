@@ -33,7 +33,7 @@ const emit = defineEmits(['view-profile'])
 // puisque les catégories MIMOSY sont réelles et dynamiques (pas une liste
 // figée de 3-4 noms) : correspondance par mot-clé, repli neutre sinon.
 const stylesCategorie = [
-  { mots: ['électric', 'electric'], fond: 'var(--color-mimosy-yellowBg)', texte: 'var(--color-mimosy-yellow)' },
+  { mots: ['électric', 'electric'], fond: 'var(--color-mimosy-yellowBg)', texte: 'var(--color-mimosy-yellowText)' },
   { mots: ['plomb'], fond: 'var(--color-mimosy-blueBg)', texte: 'var(--color-mimosy-blue)' },
   { mots: ['nettoy', 'ménage', 'menage'], fond: 'var(--color-mimosy-tealBg)', texte: 'var(--color-mimosy-teal)' },
 ]

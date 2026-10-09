@@ -248,7 +248,7 @@ onBeforeUnmount(() => {
           </span>
           <div>
             <p class="text-sm font-bold text-[#051F20]" data-test="nom-agent">Aby · Assistante IA de MIMOSY</p>
-            <p class="text-xs text-[#7A847E]">Intelligence artificielle. Vos réponses sont enregistrées au fur et à mesure.</p>
+            <p class="text-xs text-[#68716C]">Intelligence artificielle. Vos réponses sont enregistrées au fur et à mesure.</p>
           </div>
         </div>
         <div class="flex items-center gap-1">
@@ -280,7 +280,7 @@ onBeforeUnmount(() => {
       </div>
 
       <div ref="filConversation" class="flex max-h-[420px] flex-1 flex-col gap-3 overflow-y-auto px-5 py-4" aria-live="polite">
-        <p v-if="chargement" class="text-sm text-[#7A847E]">Chargement…</p>
+        <p v-if="chargement" class="text-sm text-[#68716C]">Chargement…</p>
         <div
           v-for="(message, index) in conversationVisible"
           v-else
@@ -317,7 +317,7 @@ onBeforeUnmount(() => {
         <p v-if="ecoute" class="rounded-lg bg-[#FAFAF8] px-3 py-2 text-sm italic text-[#4F5A54]" data-test="transcription">
           {{ messageEcoute }}
         </p>
-        <p v-if="etat?.langue && etat.langue.code !== 'fr'" class="text-xs text-[#7A847E]" data-test="note-langue">
+        <p v-if="etat?.langue && etat.langue.code !== 'fr'" class="text-xs text-[#68716C]" data-test="note-langue">
           Vos informations seront enregistrées en français sur votre profil.
         </p>
 
@@ -373,7 +373,7 @@ onBeforeUnmount(() => {
       <p class="text-sm font-bold text-[#051F20]">Votre profil</p>
       <dl class="mt-3 flex flex-col gap-2 border-b border-[#F2F3F0] pb-3 text-sm" data-test="compte">
         <div v-for="(valeur, cle) in etat?.compte || {}" :key="cle" class="flex items-center justify-between gap-2">
-          <dt class="text-[#7A847E]">{{ { nom: 'Nom', email: 'E-mail', telephone: 'Téléphone' }[cle] }}</dt>
+          <dt class="text-[#68716C]">{{ { nom: 'Nom', email: 'E-mail', telephone: 'Téléphone' }[cle] }}</dt>
           <dd class="flex items-center gap-1 truncate text-[#1C2420]">
             {{ valeur }} <Check class="h-3.5 w-3.5 shrink-0 text-[#2D6A4F]" aria-label="déjà connu" />
           </dd>
@@ -381,10 +381,10 @@ onBeforeUnmount(() => {
       </dl>
       <dl class="mt-3 flex flex-col gap-3">
         <div v-for="(libelle, champ) in LIBELLES" :key="champ" class="border-b border-[#F2F3F0] pb-2">
-          <dt class="flex items-center justify-between text-xs font-semibold text-[#7A847E]">
+          <dt class="flex items-center justify-between text-xs font-semibold text-[#68716C]">
             <span class="flex items-center gap-1">
               <Check v-if="connu(etat?.resume?.[champ])" class="h-3.5 w-3.5 text-[#2D6A4F]" aria-label="renseigné" />
-              <CircleHelp v-else class="h-3.5 w-3.5 text-[#7A847E]" aria-label="à compléter" />
+              <CircleHelp v-else class="h-3.5 w-3.5 text-[#68716C]" aria-label="à compléter" />
               {{ libelle }}
             </span>
             <button
@@ -398,7 +398,7 @@ onBeforeUnmount(() => {
               <Pencil class="h-3.5 w-3.5" aria-hidden="true" /> Corriger
             </button>
           </dt>
-          <dd class="mt-0.5 text-sm" :class="connu(etat?.resume?.[champ]) ? 'text-[#1C2420]' : 'text-[#7A847E]'">
+          <dd class="mt-0.5 text-sm" :class="connu(etat?.resume?.[champ]) ? 'text-[#1C2420]' : 'text-[#68716C]'">
             {{ afficherValeur(champ, etat?.resume?.[champ]) }}
           </dd>
         </div>

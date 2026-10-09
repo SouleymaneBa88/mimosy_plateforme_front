@@ -26,7 +26,7 @@ const statutLabels = {
 
 // Couleurs du badge selon le statut.
 const statutBadgeClasses = {
-  EN_ATTENTE: 'bg-mimosy-yellowBg text-mimosy-yellow',
+  EN_ATTENTE: 'bg-mimosy-yellowBg text-mimosy-yellowText',
   CONFIRME: 'bg-mimosy-primaryBg text-mimosy-primary',
   REFUSE: 'bg-[#FFF0EE] text-[#A85148]',
   ANNULE: 'bg-mimosy-grayBg text-mimosy-gray',

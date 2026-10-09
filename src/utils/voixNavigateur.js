@@ -38,6 +38,7 @@ const DELAI_DOUBLON = 1500
 
 const NEURONALES = /natural|neural|online|premium|enhanced|google/i
 const FEMININES = /(amélie|amelie|audrey|aurélie|aurelie|marie|julie|denise|vivienne|eloise|hortense|céline|celine|léa|lea|virginie|sylvie|chantal|charline|ariane|google français|female|femme)/i
+const MASCULINES = /\b(?:male|masculine|homme|masculin)\b|thomas|henri|antoine|paul|david|alexandre|daniel/i
 // Voix eSpeak (speech-dispatcher, Firefox sous Linux) : « French (France)+female2 ».
 const ESPEAK = /espeak|mbrola|^French \((France|Belgium|Switzerland|Canada)\)(\+[\w-]+)?$/i
 // Variantes eSpeak mesurées les plus claires, puis celles à éviter (déformées, chuchotées).
@@ -84,6 +85,13 @@ export function choisirVoixNavigateur(voix, bcp47 = 'fr-FR') {
     if (noterVoix(v, bcp47) > -1000 && (!meilleure || noterVoix(v, bcp47) > noterVoix(meilleure, bcp47))) meilleure = v
   }
   return meilleure
+}
+
+/** Préfère une voix masculine dans la langue demandée, sans en choisir une d'une autre langue. */
+export function choisirVoixNavigateurMasculine(voix, bcp47 = 'fr-FR') {
+  const compatibles = voix.filter((candidate) => noterVoix(candidate, bcp47) > -1000)
+  const masculines = compatibles.filter((candidate) => MASCULINES.test(candidate.name || ''))
+  return masculines.length ? choisirVoixNavigateur(masculines, bcp47) : null
 }
 
 /** Réglages de lecture adaptés au moteur de la voix choisie. */

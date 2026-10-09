@@ -78,7 +78,7 @@ const etat = computed(() => {
 const contenu = computed(() => ({
   requise: {
     icone: ShieldQuestion,
-    couleur: 'text-[#7A847E]',
+    couleur: 'text-[#68716C]',
     fond: 'bg-[#F2F3F0]',
     titre: 'Vérification requise',
     description: "Votre identité n'a pas encore été vérifiée.",

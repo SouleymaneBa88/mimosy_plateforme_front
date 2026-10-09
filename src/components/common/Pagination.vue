@@ -27,7 +27,7 @@ function aller(page) {
 
 <template>
   <!-- Rien n'est affiché s'il n'y a qu'une seule page. -->
-  <div v-if="totalPages > 1" class="flex items-center justify-between gap-3 px-1 py-2 text-sm text-[#64748B]">
+  <div v-if="totalPages > 1" class="flex items-center justify-between gap-3 px-1 py-2 text-sm text-[#68716C]">
     <p>Page {{ page }} sur {{ totalPages }} · {{ count }} résultat{{ count > 1 ? 's' : '' }}</p>
     <div class="flex items-center gap-2">
       <button

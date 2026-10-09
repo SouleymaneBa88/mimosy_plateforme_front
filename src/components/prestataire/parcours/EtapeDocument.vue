@@ -137,7 +137,7 @@ const TONS = { EN_ANALYSE: 'warning', A_VERIFIER: 'info', VALIDE: 'success', REJ
       data-test="champ-fichier"
       @change="choisir"
     />
-    <p class="text-xs text-[#7A847E]">
+    <p class="text-xs text-[#68716C]">
       {{ estIdentite ? 'Photo nette, JPEG ou PNG' : 'JPEG, PNG ou PDF' }}, 5 Mo maximum.
       Le document n'est visible que par vous et l'équipe MIMOSY.
     </p>

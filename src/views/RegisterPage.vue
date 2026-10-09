@@ -481,7 +481,7 @@ const handleGoogleSignup = () => {
             </button>
           </div>
 
-          <p class="mt-2 text-center text-xs text-[#64748B]">
+          <p class="mt-2 text-center text-xs text-[#68716C]">
             {{
               selectedRole === "client"
                 ? "Vous recherchez un professionnel pour une prestation."
@@ -517,7 +517,7 @@ const handleGoogleSignup = () => {
                   autocomplete="given-name"
                   placeholder="Fatou"
                   :maxlength="NOM_LONGUEUR_MAX"
-                  class="h-[42px] w-full rounded-[10px] border bg-white px-3 text-sm text-[#0F172A] outline-none transition placeholder:text-[#64748B] focus:ring-4"
+                  class="h-[42px] w-full rounded-[10px] border bg-white px-3 text-sm text-[#0F172A] outline-none transition placeholder:text-[#68716C] focus:ring-4"
                   :class="
                     firstNameError
                       ? 'border-red-400 focus:border-red-400 focus:ring-red-100'
@@ -553,7 +553,7 @@ const handleGoogleSignup = () => {
                   autocomplete="family-name"
                   placeholder="Sarr"
                   :maxlength="NOM_LONGUEUR_MAX"
-                  class="h-[42px] w-full rounded-[10px] border bg-white px-3 text-sm text-[#0F172A] outline-none transition placeholder:text-[#64748B] focus:ring-4"
+                  class="h-[42px] w-full rounded-[10px] border bg-white px-3 text-sm text-[#0F172A] outline-none transition placeholder:text-[#68716C] focus:ring-4"
                   :class="
                     lastNameError
                       ? 'border-red-400 focus:border-red-400 focus:ring-red-100'
@@ -590,7 +590,7 @@ const handleGoogleSignup = () => {
                 autocomplete="email"
                 placeholder="fatousarr@domaine.sn"
                 :maxlength="EMAIL_LONGUEUR_MAX"
-                class="h-[42px] w-full rounded-[10px] border bg-white px-3 text-sm text-[#0F172A] outline-none transition placeholder:text-[#64748B] focus:ring-4"
+                class="h-[42px] w-full rounded-[10px] border bg-white px-3 text-sm text-[#0F172A] outline-none transition placeholder:text-[#68716C] focus:ring-4"
                 :class="
                   emailError
                     ? 'border-red-400 focus:border-red-400 focus:ring-red-100'
@@ -641,7 +641,7 @@ const handleGoogleSignup = () => {
                   inputmode="numeric"
                   autocomplete="tel"
                   placeholder="77 123 45 67"
-                  class="min-w-0 flex-1 px-3 text-sm text-[#0F172A] outline-none placeholder:text-[#64748B]"
+                  class="min-w-0 flex-1 px-3 text-sm text-[#0F172A] outline-none placeholder:text-[#68716C]"
                   @input="formatPhone"
                 />
               </div>
@@ -675,7 +675,7 @@ const handleGoogleSignup = () => {
                     autocomplete="new-password"
                     placeholder="••••••••"
                     :maxlength="MOT_DE_PASSE_LONGUEUR_MAX"
-                    class="h-[42px] w-full rounded-[10px] border bg-white px-3 pr-16 text-sm text-[#0F172A] outline-none transition placeholder:text-[#64748B] focus:ring-4"
+                    class="h-[42px] w-full rounded-[10px] border bg-white px-3 pr-16 text-sm text-[#0F172A] outline-none transition placeholder:text-[#68716C] focus:ring-4"
                     :class="
                       passwordError
                         ? 'border-red-400 focus:border-red-400 focus:ring-red-100'
@@ -725,7 +725,7 @@ const handleGoogleSignup = () => {
                     autocomplete="new-password"
                     placeholder="••••••••"
                     :maxlength="MOT_DE_PASSE_LONGUEUR_MAX"
-                    class="h-[42px] w-full rounded-[10px] border bg-white px-3 pr-16 text-sm text-[#0F172A] outline-none transition placeholder:text-[#64748B] focus:ring-4"
+                    class="h-[42px] w-full rounded-[10px] border bg-white px-3 pr-16 text-sm text-[#0F172A] outline-none transition placeholder:text-[#68716C] focus:ring-4"
                     :class="
                       passwordConfirmationError
                         ? 'border-red-400 focus:border-red-400 focus:ring-red-100'
@@ -836,7 +836,7 @@ const handleGoogleSignup = () => {
           <!-- <div class="my-5 flex items-center gap-4">
             <div class="h-px flex-1 bg-[#E2E8F0]"></div>
 
-            <span class="text-[13px] text-[#64748B]"> ou </span>
+            <span class="text-[13px] text-[#68716C]"> ou </span>
 
             <div class="h-px flex-1 bg-[#E2E8F0]"></div>
           </div> -->

@@ -103,7 +103,7 @@ function onPhotoSelectionnee(event) {
     <!-- En grand format : nom, email et bouton pour changer la photo. -->
     <div v-if="size === 'large'" class="min-w-0 flex-1">
       <p class="truncate text-base font-extrabold text-[#051F20]">{{ name }}</p>
-      <p v-if="email" class="truncate text-sm text-[#64748B]">{{ email }}</p>
+      <p v-if="email" class="truncate text-sm text-[#68716C]">{{ email }}</p>
 
       <label
         v-if="editable"

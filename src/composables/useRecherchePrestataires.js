@@ -46,13 +46,16 @@ export function useRecherchePrestataires() {
   // Clic sur une catégorie : on met à jour le filtre et on relance la recherche.
   function choisirCategorie(id) {
     categorieActive.value = id
-    filtres.value = { ...filtres.value, categorie: id }
+    // Un service choisi par Mimo n'a plus de sens dans une autre catégorie.
+    filtres.value = { ...filtres.value, categorie: id, service: '' }
     lancerRecherche()
   }
 
   /* Filtres avancés : catégorie, compétence, ville, disponibilité. */
   const filtres = ref({
     categorie: '',
+    // Service exact du catalogue (renseigné par l'orientation de Mimo).
+    service: '',
     competence: '',
     ville: '',
     disponible: false,
@@ -161,6 +164,7 @@ export function useRecherchePrestataires() {
     const params = {
       q: searchService.value,
       categorie: filtres.value.categorie,
+      service: filtres.value.service || '',
       competence: filtres.value.competence,
       ville: filtres.value.ville,
       disponible: filtres.value.disponible ? 'true' : '',
@@ -231,7 +235,7 @@ export function useRecherchePrestataires() {
     searchService.value = ''
     rechercheNaturelleActive.value = false
     categorieActive.value = ''
-    filtres.value = { categorie: '', competence: '', ville: '', disponible: false, rayon_km: 10 }
+    filtres.value = { categorie: '', service: '', competence: '', ville: '', disponible: false, rayon_km: 10 }
     filtreVerifies.value = false
     filtresOuverts.value = false
     positionActive.value = false
@@ -264,10 +268,24 @@ export function useRecherchePrestataires() {
 
   /**
    * Charge le catalogue (catégories réelles) + une première recherche.
-   * `routeQuery` : si fourni avec q/categorie (ex. arrivée depuis
-   * Diagnostic.vue), pré-remplit la recherche avant de la lancer.
+   * `routeQuery` : si fourni avec q/categorie/service (ex. arrivée depuis
+   * Mimo, /client/diagnostic), pré-remplit la recherche avant de la lancer.
+   * Mimo sans catégorie ni service identifiés (source=mimo + q seul) : le
+   * texte passe par la recherche intelligente existante (interprétation,
+   * embeddings, suggestions IA), exactement comme la barre de recherche.
    */
   function chargerDonnees(routeQuery) {
+    const depuisMimo = routeQuery?.source === 'mimo'
+    if (depuisMimo && typeof routeQuery.service === 'string' && routeQuery.service) {
+      filtres.value = { ...filtres.value, service: routeQuery.service }
+    }
+    if (depuisMimo && routeQuery.q && !routeQuery.categorie && !routeQuery.service) {
+      return Promise.all([
+        catalogueStore.chargerCatalogue().catch(() => {}),
+        Promise.resolve(handleSearch({ service: String(routeQuery.q) })),
+      ])
+    }
+
     // On pré-remplit la recherche avec les paramètres de l'URL, s'il y en a.
     if (routeQuery) {
       if (typeof routeQuery.q === 'string' && routeQuery.q) {

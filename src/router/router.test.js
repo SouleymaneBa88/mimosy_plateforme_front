@@ -39,6 +39,15 @@ describe('router.beforeEach', () => {
     expect(router.currentRoute.value.name).toBe('demandes')
   })
 
+  it('ancienne URL diagnostic → accueil avec le modal Mimo demandé', async () => {
+    connecter({ email: 'a@x.sn', role: 'CLIENT', email_verified: true })
+
+    await router.push('/client/diagnostic')
+
+    expect(router.currentRoute.value.name).toBe('client-home')
+    expect(router.currentRoute.value.query.mimo).toBe('1')
+  })
+
   it('les pages publiques restent accessibles à un compte non vérifié', async () => {
     connecter({ email: 'a@x.sn', role: 'PRESTATAIRE', email_verified: false })
 

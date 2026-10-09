@@ -42,6 +42,8 @@ export const API_ENDPOINTS = {
   rejectRequest: (id) => `/api/demande-prestation/${id}/refuser/`,
   completeRequest: (id) => `/api/demande-prestation/${id}/terminer/`,
   confirmRequest: (id) => `/api/demande-prestation/${id}/confirmer/`,
+  // Photo jointe à une demande : jamais une URL média publique, toujours ce contrôle d'accès.
+  pieceJointeDemandeFichier: (id) => `/api/pieces-jointes-demande/${id}/fichier/`,
   // Devis.
   quoteRequests: '/api/demandes/',
   quoteResponses: '/api/reponses/',
@@ -133,6 +135,8 @@ export const API_ENDPOINTS = {
   litigeReattribuer: (id) => `/api/litiges/${id}/reattribuer/`,
   // Divers : diagnostic, catalogue, notifications, messagerie.
   diagnostic: '/api/diagnostic/',
+  // Mimo, l'assistant IA client (un tour de conversation : texte, historique, photo).
+  diagnosticMimo: '/api/diagnostic/mimo/',
   category: (id) => `/api/categories/${id}/`,
   service: (id) => `/api/services/${id}/`,
   notifications: '/api/notifications/',

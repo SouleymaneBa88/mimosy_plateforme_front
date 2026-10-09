@@ -317,7 +317,7 @@ useEvenementTempsReel(
                 <FileCheck2 class="mt-0.5 h-5 w-5 shrink-0 text-[#2D6A4F]" />
                 <div>
                   <h2 class="font-extrabold text-[#051F20]">Pièce d'identité</h2>
-                  <p class="mt-1 max-w-xl text-sm text-[#64748B]">
+                  <p class="mt-1 max-w-xl text-sm text-[#68716C]">
                     Carte nationale d'identité ou passeport. Analysée automatiquement,
                     puis vérifiée par un administrateur MIMOSY.
                   </p>
@@ -368,7 +368,7 @@ useEvenementTempsReel(
               class="mt-5 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-4"
             >
               <p class="text-sm font-bold text-[#051F20]">Analyse automatique indisponible</p>
-              <p class="mt-1 text-sm text-[#64748B]">
+              <p class="mt-1 text-sm text-[#68716C]">
                 L'analyse automatique des documents est actuellement désactivée.
                 Votre document sera examiné directement par l'équipe MIMOSY.
               </p>
@@ -381,7 +381,7 @@ useEvenementTempsReel(
             >
               <div class="flex flex-wrap items-center justify-between gap-2">
                 <p class="text-sm font-bold text-[#051F20]">Résultat de l'analyse automatique</p>
-                <p v-if="niveauConfiance" class="text-xs font-bold text-[#64748B]">
+                <p v-if="niveauConfiance" class="text-xs font-bold text-[#68716C]">
                   Niveau de confiance : <span class="text-[#051F20]">{{ niveauConfiance }}</span>
                 </p>
               </div>
@@ -429,7 +429,7 @@ useEvenementTempsReel(
                 </button>
                 <button
                   type="button"
-                  class="rounded-xl border border-[#E5E7E2] px-4 py-2.5 text-sm font-bold text-[#64748B] transition hover:bg-[#F8FAFC]"
+                  class="rounded-xl border border-[#E5E7E2] px-4 py-2.5 text-sm font-bold text-[#68716C] transition hover:bg-[#F8FAFC]"
                   :disabled="!!envoiEnCours"
                   @click="annulerPreview"
                 >
@@ -483,10 +483,10 @@ useEvenementTempsReel(
           <p class="text-xs font-bold uppercase tracking-[0.08em] text-[#2D6A4F]">Obligatoire</p>
           <article class="border border-[#E5E7E2] bg-white p-6">
             <div class="flex gap-3">
-              <ScrollText class="mt-0.5 h-5 w-5 shrink-0 text-[#7A847E]" />
+              <ScrollText class="mt-0.5 h-5 w-5 shrink-0 text-[#68716C]" />
               <div>
                 <h2 class="font-extrabold text-[#051F20]">Conditions Générales d'Utilisation</h2>
-                <p class="mt-2 max-w-xl text-sm text-[#64748B]">
+                <p class="mt-2 max-w-xl text-sm text-[#68716C]">
                   L'acceptation des CGU sera intégrée à ce parcours lorsque le mécanisme
                   d'enregistrement sera disponible côté serveur. Cette étape n'est pas encore active.
                 </p>
@@ -499,8 +499,8 @@ useEvenementTempsReel(
              FACULTATIF — DOCUMENTS COMPLÉMENTAIRES
         ============================================================== -->
         <section class="flex flex-col gap-3">
-          <p class="text-xs font-bold uppercase tracking-[0.08em] text-[#7A847E]">Facultatif</p>
-          <p class="text-sm text-[#64748B]">
+          <p class="text-xs font-bold uppercase tracking-[0.08em] text-[#68716C]">Facultatif</p>
+          <p class="text-sm text-[#68716C]">
             Ces justificatifs ne sont pas nécessaires pour obtenir la vérification de votre identité.
             Ils renforcent votre crédibilité auprès des clients, mais restent optionnels.
           </p>
@@ -519,7 +519,7 @@ useEvenementTempsReel(
                   {{ LABELS_STATUT[documents[type.value]?.statut || 'NON_SOUMIS'] }}
                 </span>
               </div>
-              <p class="mt-2 text-xs leading-5 text-[#7A847E]">{{ type.description }}</p>
+              <p class="mt-2 text-xs leading-5 text-[#68716C]">{{ type.description }}</p>
               <p
                 v-if="documents[type.value]?.statut === 'REJETE' && documents[type.value]?.motif_rejet && !documents[type.value].motif_rejet.startsWith('[ERREUR TECHNIQUE]')"
                 class="mt-2 text-xs text-[#A85148]"

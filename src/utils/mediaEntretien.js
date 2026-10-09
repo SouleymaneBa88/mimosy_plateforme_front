@@ -24,7 +24,7 @@
  * avec de faux adaptateurs, sans caméra, micro ni réseau.
  */
 import * as parcoursService from '@/services/parcoursService'
-import { creerLecteurNavigateur } from './voixNavigateur'
+import { creerLecteurNavigateur, voixDisponibles } from './voixNavigateur'
 
 // Silence (ms) après lequel une réponse parlée est considérée comme terminée.
 const SILENCE_FIN_REPONSE = 3000
@@ -75,7 +75,13 @@ function lecteurNavigateur() {
  * silence prolongé qui suit une prise de parole (ou si personne ne parle).
  * Renvoie la fonction qui arrête la surveillance (sans effet sans Web Audio).
  */
-export function surveillerSilence(flux, fin, { contexte = null, maintenant = () => Date.now() } = {}) {
+export function surveillerSilence(flux, fin, {
+  contexte = null,
+  maintenant = () => Date.now(),
+  silenceFinReponse = SILENCE_FIN_REPONSE,
+  attenteDebutReponse = ATTENTE_DEBUT_REPONSE,
+  dureeMaxReponse = DUREE_MAX_REPONSE,
+} = {}) {
   const Contexte = typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext)
   if (!flux?.getAudioTracks?.().length || (!contexte && !Contexte)) return () => {}
   const audio = contexte || new Contexte()
@@ -91,13 +97,53 @@ export function surveillerSilence(flux, fin, { contexte = null, maintenant = () 
     for (const e of echantillons) somme += e * e
     const instant = maintenant()
     if (Math.sqrt(somme / echantillons.length) > SEUIL_PAROLE) derniereParole = instant
-    const silence = derniereParole ? instant - derniereParole >= SILENCE_FIN_REPONSE : instant - debut >= ATTENTE_DEBUT_REPONSE
-    if (silence || instant - debut >= DUREE_MAX_REPONSE) fin()
+    const silence = derniereParole ? instant - derniereParole >= silenceFinReponse : instant - debut >= attenteDebutReponse
+    if (silence || instant - debut >= dureeMaxReponse) fin()
   }, 150)
   return () => {
     clearInterval(minuteur)
     if (!contexte) audio.close?.().catch?.(() => {})
   }
+}
+
+export function surveillerBargeIn(flux, interrompre, {
+  contexte = null,
+  maintenant = () => Date.now(),
+  seuilParole = 0.055,
+  dureeMinimumParole = 350,
+} = {}) {
+  const Contexte = typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext)
+  if (!flux?.getAudioTracks?.().length || (!contexte && !Contexte)) return () => {}
+  const audio = contexte || new Contexte()
+  const analyseur = audio.createAnalyser()
+  analyseur.fftSize = 2048
+  audio.createMediaStreamSource(flux).connect(analyseur)
+  const echantillons = new Float32Array(analyseur.fftSize)
+  let debutParole = null
+  let declenche = false
+  let minuteur = null
+
+  const arreter = () => {
+    clearInterval(minuteur)
+    if (!contexte) audio.close?.().catch?.(() => {})
+  }
+  minuteur = setInterval(() => {
+    if (declenche) return
+    analyseur.getFloatTimeDomainData(echantillons)
+    let somme = 0
+    for (const echantillon of echantillons) somme += echantillon * echantillon
+    if (Math.sqrt(somme / echantillons.length) >= seuilParole) {
+      debutParole ??= maintenant()
+      if (maintenant() - debutParole >= dureeMinimumParole) {
+        declenche = true
+        arreter()
+        interrompre()
+      }
+    } else {
+      debutParole = null
+    }
+  }, 100)
+  return arreter
 }
 
 /**
@@ -127,6 +173,9 @@ export function creerVoix({
   langue = () => null,
   attendre = (ms) => new Promise((ok) => setTimeout(ok, ms)),
   recupererVoix = parcoursService.recupererVoix,
+  // Vérifie qu'une voix existe vraiment dans le navigateur avant de compter sur
+  // le secours : sinon « indisponible » plutôt qu'une lecture muette (Mimo).
+  verifierVoixNavigateur = false,
 } = {}) {
   const lecteur = lecteurNavigateur()
   let audio = null
@@ -139,7 +188,8 @@ export function creerVoix({
   const serveurDisponible = () => maintenant() >= pauseJusqua
 
   // Joue l'audio du serveur ; résout true (fin ou interruption) ou false (fichier illisible).
-  function jouer(url) {
+  // onEtape('lecture') quand le son démarre vraiment, ('attente_geste') si le navigateur le bloque.
+  function jouer(url, onEtape = () => {}) {
     return new Promise((resolve) => {
       audio = new Audio(url)
       audio.preload = 'auto'
@@ -154,6 +204,7 @@ export function creerVoix({
       audio.onended = () => terminer?.(true)
       // Fichier illisible : la phrase est lue par le navigateur.
       audio.onerror = () => terminer?.(false)
+      audio.onplaying = () => onEtape('lecture')
       audio.play().catch((erreur) => {
         if (erreur?.name !== 'NotAllowedError') {
           terminer?.(true) // lecture interrompue (le prestataire a coupé la parole)
@@ -161,6 +212,7 @@ export function creerVoix({
         }
         // Page ouverte sans clic : le navigateur bloque le son. La phrase
         // est jouée au premier geste du prestataire au lieu d'être perdue.
+        onEtape('attente_geste')
         const rejouer = () => {
           attenteGeste?.()
           lecteurAudio.play().catch(() => terminer?.(true))
@@ -187,16 +239,34 @@ export function creerVoix({
   }
 
   return {
-    async parler({ texte, source } = {}) {
+    // ignorerPause : relecture demandée par l'utilisateur, la voix serveur est retentée tout de suite.
+    async parler({ texte, source, onEtape = () => {}, ignorerPause = false } = {}) {
       if (!texte) return { statut: 'serveur' }
       this.taire()
       const moi = generation
+      onEtape('preparation')
       const info = langue()
       // Voix de secours du navigateur dans cette langue ? (pas de wolof lu par une voix française)
-      const secoursNavigateur = !(info && info.voix_navigateur === false)
+      const secoursPossible = !(info && info.voix_navigateur === false) && Boolean(lecteur)
+      // Vérifiée seulement quand on en a besoin (le chargement des voix peut prendre
+      // quelques secondes) : la voix serveur est toujours demandée sans attendre.
+      let secoursVerifie = null
+      const aSecours = async () => {
+        if (secoursVerifie === null) {
+          secoursVerifie = secoursPossible
+          if (secoursPossible && verifierVoixNavigateur) {
+            // Sans voix réelle dans le navigateur, il n'y a pas de secours : la voix
+            // serveur ne doit alors jamais être mise en pause (sinon silence total).
+            const voix = await voixDisponibles(lecteur.synthese)
+            const prefixe = (info?.bcp47 || 'fr-FR').slice(0, 2).toLowerCase()
+            secoursVerifie = voix.some((v) => (v.lang || '').toLowerCase().startsWith(prefixe))
+          }
+        }
+        return secoursVerifie
+      }
       let raison = ''
 
-      if (source && (!secoursNavigateur || serveurDisponible())) {
+      if (source && (ignorerPause || serveurDisponible() || !(await aSecours()))) {
         for (let essai = 0; ; essai += 1) {
           try {
             const url = await recupererVoix(source)
@@ -204,12 +274,14 @@ export function creerVoix({
               URL.revokeObjectURL(url)
               return { statut: 'interrompue' }
             }
-            if (await jouer(url)) return { statut: moi === generation ? 'serveur' : 'interrompue' }
+            if (await jouer(url, onEtape)) return { statut: moi === generation ? 'serveur' : 'interrompue' }
             raison = 'audio_illisible'
             break
           } catch (erreur) {
             raison = erreur?.code || (erreur?.status ? `http_${erreur.status}` : 'reseau')
-            if (secoursNavigateur) {
+            const secours = await aSecours()
+            if (moi !== generation) return { statut: 'interrompue' }
+            if (secours) {
               // Voix serveur indisponible (quota, réseau) : pause, puis nouvel essai.
               pauseJusqua = maintenant() + PAUSE_APRES_ECHEC_VOIX
               break
@@ -223,7 +295,10 @@ export function creerVoix({
       }
       if (moi !== generation) return { statut: 'interrompue' }
       // Secours du navigateur, seulement s'il a une voix dans cette langue.
-      if (!secoursNavigateur || !lecteur) return { statut: 'indisponible', raison: raison || 'aucune_voix' }
+      const secours = await aSecours()
+      if (moi !== generation) return { statut: 'interrompue' }
+      if (!secours) return { statut: 'indisponible', raison: raison || 'aucune_voix' }
+      onEtape('lecture')
       await lecteur.lire(texte, { lang: info?.bcp47 || 'fr-FR' })
       return { statut: moi === generation ? 'navigateur' : 'interrompue' }
     },
@@ -258,12 +333,21 @@ export function creerVoix({
  * arreter(), après un silence, ou à la fin du temps imparti, et renvoie le
  * texte final — transcrit par le serveur si le navigateur n'a rien compris.
  */
-export function creerEcoute({ flux = () => null, langue = () => null, onEtape = () => {} } = {}) {
+export function creerEcoute({
+  flux = () => null,
+  langue = () => null,
+  onEtape = () => {},
+  transcrire = parcoursService.transcrireAudio,
+  transcrireToujours = false,
+  silenceFinReponse = SILENCE_FIN_REPONSE,
+} = {}) {
   const Reconnaissance = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition)
   let terminer = null
   // Dernière erreur de transcription ('' si aucune) : distingue « rien
   // entendu » d'une transcription impossible (réseau, service indisponible).
   let erreur = ''
+  // annuler() : l'écoute s'arrête sans transcription ni texte (rien n'est envoyé).
+  let annulee = false
 
   return {
     disponible: Boolean(Reconnaissance) || enregistrementDisponible(),
@@ -272,6 +356,7 @@ export function creerEcoute({ flux = () => null, langue = () => null, onEtape = 
     },
     ecouter(onPartiel = () => {}) {
       erreur = ''
+      annulee = false
       return new Promise((resolve) => {
         let final = ''
         let partiel = ''
@@ -309,15 +394,18 @@ export function creerEcoute({ flux = () => null, langue = () => null, onEtape = 
               dictaphone.stop()
             })
           }
-          if (!texte && morceaux.length) {
+          if (annulee) {
+            resolve('')
+            return
+          }
+          if ((transcrireToujours || !texte) && morceaux.length) {
             onEtape('transcription')
             try {
               const type = (morceaux[0].type || 'audio/webm').split(';')[0]
               const fichier = new File(morceaux, 'reponse.webm', { type: type.replace('video/', 'audio/') })
-              texte = (await parcoursService.transcrireAudio(fichier)).texte || ''
+              texte = (await transcrire(fichier)).texte || texte
             } catch {
-              texte = ''
-              erreur = 'La transcription automatique est indisponible. Réessayez, ou écrivez votre réponse.'
+              if (!texte) erreur = 'La transcription automatique est indisponible. Réessayez, ou écrivez votre réponse.'
             }
           }
           resolve(texte)
@@ -325,7 +413,7 @@ export function creerEcoute({ flux = () => null, langue = () => null, onEtape = 
 
         if (!dictee && dictaphone) {
           // Réponse transcrite par le serveur : un silence prolongé la termine.
-          arreterSurveillance = surveillerSilence(fluxAudio, () => terminer?.())
+          arreterSurveillance = surveillerSilence(fluxAudio, () => terminer?.(), { silenceFinReponse })
         }
         if (dictee) {
           reconnaissance = new Reconnaissance()
@@ -341,7 +429,7 @@ export function creerEcoute({ flux = () => null, langue = () => null, onEtape = 
             }
             onPartiel(`${final} ${partiel}`.trim())
             clearTimeout(silence)
-            silence = setTimeout(() => terminer?.(), SILENCE_FIN_REPONSE)
+            silence = setTimeout(() => terminer?.(), silenceFinReponse)
           }
           reconnaissance.onerror = (evenement) => {
             // « no-speech » et « aborted » ne sont pas des pannes : le serveur peut encore transcrire.
@@ -355,6 +443,10 @@ export function creerEcoute({ flux = () => null, langue = () => null, onEtape = 
       })
     },
     arreter() {
+      terminer?.()
+    },
+    annuler() {
+      annulee = true
       terminer?.()
     },
   }

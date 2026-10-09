@@ -44,7 +44,7 @@ function save() {
     <!-- Le formulaire : description, date de naissance, expérience, disponibilité. -->
     <form class="grid gap-4" @submit.prevent="save">
       <textarea v-model="form.description" class="rounded-xl border border-[#D9DDD8] bg-white px-4 py-3 text-sm text-[#0F172A] outline-none placeholder:text-[#94A3B8]" placeholder="Description professionnelle" rows="4" />
-      <label class="flex flex-col gap-1.5 text-xs font-bold text-[#64748B]">
+      <label class="flex flex-col gap-1.5 text-xs font-bold text-[#68716C]">
         Date de naissance
         <input v-model="form.date_naissance" type="date" class="rounded-xl border border-[#D9DDD8] bg-white px-4 py-3 text-sm text-[#0F172A] outline-none" />
       </label>

@@ -166,7 +166,7 @@ onBeforeUnmount(() => {
         >
           <option v-for="l in langues" :key="l.code" :value="l.code">{{ l.libelle }}</option>
         </select>
-        <span v-if="entretien.langue.value && entretien.langue.value.code !== 'fr'" class="text-xs text-[#7A847E]">
+        <span v-if="entretien.langue.value && entretien.langue.value.code !== 'fr'" class="text-xs text-[#68716C]">
           Le rapport transmis à l'équipe MIMOSY sera rédigé en français.
         </span>
         <p v-if="erreurLangue" class="w-full text-sm text-[#A4443A]" role="alert">{{ erreurLangue }}</p>
@@ -274,7 +274,7 @@ onBeforeUnmount(() => {
 
       <!-- Transcription -->
       <div class="flex flex-col gap-3 bg-white px-4 py-4 sm:px-6">
-        <p class="text-xs font-semibold uppercase tracking-wide text-[#7A847E]">Transcription</p>
+        <p class="text-xs font-semibold uppercase tracking-wide text-[#68716C]">Transcription</p>
         <ol
           ref="filTranscription"
           class="flex max-h-56 flex-col gap-3 overflow-y-auto rounded-lg bg-[#FAFAF8] px-3 py-3 text-[15px]"
@@ -284,12 +284,12 @@ onBeforeUnmount(() => {
           <li v-for="(echange, index) in entretien.echanges.value" :key="index" data-test="echange">
             <p class="text-xs font-bold" :class="echange.role === 'ia' ? 'text-[#2D6A4F]' : 'text-[#051F20]'">
               {{ echange.role === 'ia' ? nomAgent : 'Vous' }}
-              <span v-if="echange.mode" class="font-normal text-[#7A847E]">· {{ echange.mode === 'VOIX' ? 'à la voix' : 'par écrit' }}</span>
+              <span v-if="echange.mode" class="font-normal text-[#68716C]">· {{ echange.mode === 'VOIX' ? 'à la voix' : 'par écrit' }}</span>
             </p>
             <p class="text-[#1C2420]">{{ echange.texte }}</p>
           </li>
           <li v-if="entretien.ecouteEnCours.value" data-test="transcription-directe">
-            <p class="text-xs font-bold text-[#051F20]">Vous <span class="font-normal text-[#7A847E]">· en cours</span></p>
+            <p class="text-xs font-bold text-[#051F20]">Vous <span class="font-normal text-[#68716C]">· en cours</span></p>
             <p class="text-[#4F5A54]">{{ entretien.transcriptionDirecte.value || 'Parlez maintenant…' }}</p>
           </li>
         </ol>

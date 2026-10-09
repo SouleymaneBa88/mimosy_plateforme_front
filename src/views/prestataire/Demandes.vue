@@ -21,6 +21,7 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import Modal from '@/components/common/Modal.vue'
 import NouveauLitigeModal from '@/components/disputes/NouveauLitigeModal.vue'
+import PiecesJointesDemande from '@/components/demandes/PiecesJointesDemande.vue'
 
 // Le store des demandes, les toasts et le temps réel.
 import { useDemandePrestationStore } from '@/stores/demandePrestation'
@@ -104,14 +105,14 @@ const statusBadgeClasses = {
     'bg-[#2D6A4F] text-[#FFFFFF] border border-[#E5E7E2]',
 
   ANNULEE:
-    'bg-[#F2F3F0] text-[#7A847E] border border-[#E5E7E2]',
+    'bg-[#F2F3F0] text-[#68716C] border border-[#E5E7E2]',
 }
 
 // Classes CSS du badge d'un statut.
 function badgeClass(statut) {
   return (
     statusBadgeClasses[statut] ||
-    'bg-[#F2F3F0] text-[#7A847E] border border-[#E5E7E2]'
+    'bg-[#F2F3F0] text-[#68716C] border border-[#E5E7E2]'
   )
 }
 
@@ -790,7 +791,7 @@ onMounted(async () => {
 
         <div
           v-if="demandeStore.isLoading"
-          class="border border-[#E5E7E2] bg-[#FAFAF8] px-6 py-16 text-center font-['DM_Sans'] text-sm text-[#7A847E]"
+          class="border border-[#E5E7E2] bg-[#FAFAF8] px-6 py-16 text-center font-['DM_Sans'] text-sm text-[#68716C]"
         >
           Chargement des demandes...
         </div>
@@ -1291,9 +1292,11 @@ onMounted(async () => {
           <p class="font-['DM_Sans'] text-[10px] font-bold uppercase leading-[15px] tracking-[1px] text-[#1A1C1A]/40">
             Description
           </p>
-          <p class="mt-2 font-['DM_Sans'] text-sm leading-relaxed text-[#1A1C1A]/80">
+          <p class="mt-2 whitespace-pre-line font-['DM_Sans'] text-sm leading-relaxed text-[#1A1C1A]/80">
             {{ demandeSelectionnee.description || 'Aucune description.' }}
           </p>
+          <!-- Photos du client (Mimo) : à confirmer sur place, jamais un diagnostic. -->
+          <PiecesJointesDemande class="mt-4" :pieces="demandeSelectionnee.pieces_jointes || []" />
         </div>
 
         <!-- Actions -->

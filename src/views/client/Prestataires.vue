@@ -12,7 +12,7 @@
  * ------------------------------------------------------------------
  */
 // Outils Vue, routeur et icônes.
-import { onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { CheckCircle2, Circle, LocateFixed, MapPin, RotateCcw, Search, SlidersHorizontal } from 'lucide-vue-next'
 
@@ -25,6 +25,7 @@ import SuggestionsRecherche from '@/components/client/SuggestionsRecherche.vue'
 import ProvidersMap from '@/components/client/ProvidersMap.vue'
 import Modal from '@/components/common/Modal.vue'
 import { useRecherchePrestataires } from '@/composables/useRecherchePrestataires'
+import { useMimoStore } from '@/stores/mimo'
 
 // La route (pour lire les paramètres ?q=... et ?categorie=...).
 const route = useRoute()
@@ -67,6 +68,12 @@ const {
   pluriel,
 } = useRecherchePrestataires()
 
+// Arrivée depuis Mimo : on rappelle l'orientation proposée (jamais un résultat de recherche).
+const mimoStore = useMimoStore()
+const orientationMimo = computed(() =>
+  route.query.source === 'mimo' && mimoStore.termine ? mimoStore.resultat : null,
+)
+
 // Au montage : on charge le catalogue et on lance la recherche (avec les paramètres de l'URL).
 onMounted(() => chargerDonnees(route.query))
 </script>
@@ -76,7 +83,21 @@ onMounted(() => chargerDonnees(route.query))
     <div class="pr-page">
       <div class="flex flex-col gap-1.5">
         <h1 class="font-serif text-[28px] leading-[34px] text-mimosy-text sm:text-[32px]">Prestataires</h1>
-        <p class="font-sans text-sm text-mimosy-secondary">Parcourez tous les professionnels disponibles sur MIMOSY.</p>
+        <p class="font-sans text-sm text-mimosy-secondary">
+          {{ orientationMimo ? 'Prestataires correspondant à votre besoin, selon la recherche MIMOSY.' : 'Parcourez tous les professionnels disponibles sur MIMOSY.' }}
+        </p>
+      </div>
+
+      <!-- Rappel de l'orientation de Mimo : la liste ci-dessous vient de la recherche MIMOSY. -->
+      <div v-if="orientationMimo" class="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-[20px] border border-mimosy-border bg-mimosy-surface px-4 py-3.5 sm:px-5" data-testid="orientation-mimo">
+        <span class="font-sans text-sm font-extrabold text-mimosy-text">Orientation proposée par Mimo :</span>
+        <span v-if="orientationMimo.domaine" class="pr-nl__chip">{{ orientationMimo.domaine }}</span>
+        <span v-if="orientationMimo.service_recommande" class="pr-nl__chip">{{ orientationMimo.service_recommande }}</span>
+        <span class="w-full font-sans text-xs text-mimosy-secondary">
+          Mimo ne choisit aucun prestataire : la liste ci-dessous vient de la recherche MIMOSY, à partir de cette orientation.
+          Votre pré-diagnostic{{ mimoStore.pieces.length ? ' et vos photos' : '' }} seront proposés dans la demande : vous pourrez tout modifier avant l'envoi.
+          <router-link :to="{ name: 'client-diagnostic' }" class="font-bold text-mimosy-primary hover:underline">Revoir la conversation</router-link>
+        </span>
       </div>
 
       <ServiceSearch

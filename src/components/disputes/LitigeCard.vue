@@ -309,7 +309,7 @@ onUnmounted(() => {
               {{ typesPreuve.find((type) => type.value === apercu.preuve.type_preuve)?.label || apercu.preuve.type_preuve }}
               · {{ apercu.preuve.depose_par_nom }}
             </p>
-            <button type="button" class="text-xl text-[#64748B]" aria-label="Fermer" @click="fermerApercu">×</button>
+            <button type="button" class="text-xl text-[#68716C]" aria-label="Fermer" @click="fermerApercu">×</button>
           </div>
           <div class="max-h-[75vh] overflow-auto bg-[#F8FAFC] p-4">
             <img
@@ -318,7 +318,7 @@ onUnmounted(() => {
               alt="Aperçu de la preuve"
               class="mx-auto max-h-[70vh] w-auto rounded-xl object-contain"
             />
-            <div v-else class="flex flex-col items-center gap-3 py-8 text-sm text-[#64748B]">
+            <div v-else class="flex flex-col items-center gap-3 py-8 text-sm text-[#68716C]">
               <p>Ce fichier est un document (PDF), sans aperçu image.</p>
               <a :href="apercu.url" target="_blank" rel="noopener" class="rounded-xl bg-[#2F6250] px-4 py-2 font-bold text-white">
                 Ouvrir le document

@@ -50,7 +50,7 @@ const displayName = computed(() => props.userName || clientProfilStore.nomComple
     <!-- Le sous-titre, ou l'adresse. -->
     <p
       v-if="subtitle || address"
-      class="mt-1 line-clamp-2 text-[13px] font-normal leading-5 text-[#64748B] sm:text-[14px] sm:leading-[21px]"
+      class="mt-1 line-clamp-2 text-[13px] font-normal leading-5 text-[#68716C] sm:text-[14px] sm:leading-[21px]"
     >
       {{ subtitle || `Votre adresse : ${address}` }}
     </p>

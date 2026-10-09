@@ -444,7 +444,7 @@ function statutClasses(demande) {
     statut === 'EXPIRE' ||
     statut === 'EXPIREE'
   ) {
-    return 'bg-[#F1F5F9] text-[#64748B]'
+    return 'bg-[#F1F5F9] text-[#68716C]'
   }
 
   return 'bg-[#F2F3F0] text-[#1A1C1A]'

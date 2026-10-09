@@ -93,11 +93,11 @@ const statutRetraitLabels = {
 }
 
 const statutRetraitCouleur = {
-  EN_ATTENTE: 'bg-[#F2F3F0] text-[#7A847E]',
+  EN_ATTENTE: 'bg-[#F2F3F0] text-[#68716C]',
   EN_COURS: 'bg-[#DBE8F7] text-[#3267B1]',
   REUSSI: 'bg-[#E2EAE4] text-[#2D6A4F]',
   ECHOUE: 'bg-[#F7DBDB] text-[#991B1B]',
-  ANNULE: 'bg-[#F2F3F0] text-[#64748B]',
+  ANNULE: 'bg-[#F2F3F0] text-[#68716C]',
   SIMULE: 'bg-[#FFF4DB] text-[#8A5A00]',
 }
 
@@ -448,7 +448,7 @@ function statutTransactionClasses(transaction) {
     return 'bg-[#F7DBDB] text-[#991B1B]'
   }
 
-  return 'bg-[#F2F3F0] text-[#7A847E]'
+  return 'bg-[#F2F3F0] text-[#68716C]'
 }
 
 function statutTransactionNet(transaction) {
@@ -724,7 +724,7 @@ onMounted(chargerDonnees)
           Revenus
         </h1>
 
-        <p class="text-sm leading-6 text-[#7A847E]">
+        <p class="text-sm leading-6 text-[#68716C]">
           Suivez vos gains, votre solde et vos mouvements financiers.
         </p>
       </div>
@@ -735,7 +735,7 @@ onMounted(chargerDonnees)
 
       <div
         v-if="loading"
-        class="border border-[#E5E7E2] bg-[#FAFAF8] p-10 text-center text-sm text-[#7A847E]"
+        class="border border-[#E5E7E2] bg-[#FAFAF8] p-10 text-center text-sm text-[#68716C]"
       >
         Chargement de vos données financières...
       </div>
@@ -773,7 +773,7 @@ onMounted(chargerDonnees)
             class="border border-[#E5E7E2] bg-[#FAFAF8] p-6 rounded-2xl"
           >
             <div class="flex items-center justify-between">
-              <p class="text-sm font-medium uppercase tracking-[0.7px] text-[#7A847E]">
+              <p class="text-sm font-medium uppercase tracking-[0.7px] text-[#68716C]">
                 Disponible
               </p>
 
@@ -807,7 +807,7 @@ onMounted(chargerDonnees)
             class="border border-[#E5E7E2] bg-[#FAFAF8] p-6 rounded-2xl"
           >
             <div class="flex items-center justify-between">
-              <p class="text-sm font-medium uppercase tracking-[0.7px] text-[#7A847E]">
+              <p class="text-sm font-medium uppercase tracking-[0.7px] text-[#68716C]">
                 En attente
               </p>
 
@@ -815,7 +815,7 @@ onMounted(chargerDonnees)
                 <Clock3
                   :size="18"
                   stroke-width="1.8"
-                  class="text-[#7A847E]"
+                  class="text-[#68716C]"
                 />
               </div>
             </div>
@@ -824,7 +824,7 @@ onMounted(chargerDonnees)
               {{ formaterMontant(montantEnAttente) }}
             </p>
 
-            <p class="mt-3 text-xs leading-[18px] text-[#7A847E]">
+            <p class="mt-3 text-xs leading-[18px] text-[#68716C]">
               Fonds bloqués jusqu'à la fin de l'intervention
             </p>
           </article>
@@ -835,7 +835,7 @@ onMounted(chargerDonnees)
             class="border border-[#E5E7E2] bg-[#FAFAF8] p-6 rounded-2xl"
           >
             <div class="flex items-center justify-between">
-              <p class="text-sm font-medium uppercase tracking-[0.7px] text-[#7A847E]">
+              <p class="text-sm font-medium uppercase tracking-[0.7px] text-[#68716C]">
                 Total gagné
               </p>
 
@@ -879,14 +879,14 @@ onMounted(chargerDonnees)
                   Retirer des fonds
                 </h2>
 
-                <p class="mt-1 text-sm text-[#7A847E]">
+                <p class="mt-1 text-sm text-[#68716C]">
                   Choisissez le montant et le moyen de paiement.
                 </p>
               </div>
 
               <button
                 type="button"
-                class="flex h-9 w-9 items-center justify-center border border-[#E5E7E2] text-[#7A847E] transition hover:text-[#1C2420]"
+                class="flex h-9 w-9 items-center justify-center border border-[#E5E7E2] text-[#68716C] transition hover:text-[#1C2420]"
                 @click="fermerFlux"
               >
                 <X :size="17" />
@@ -896,7 +896,7 @@ onMounted(chargerDonnees)
             <div class="mt-6 grid gap-5 md:grid-cols-3">
 
               <label class="flex flex-col gap-2">
-                <span class="text-xs font-medium uppercase tracking-[0.5px] text-[#7A847E]">
+                <span class="text-xs font-medium uppercase tracking-[0.5px] text-[#68716C]">
                   Montant (FCFA)
                 </span>
 
@@ -912,7 +912,7 @@ onMounted(chargerDonnees)
               </label>
 
               <label class="flex flex-col gap-2">
-                <span class="text-xs font-medium uppercase tracking-[0.5px] text-[#7A847E]">
+                <span class="text-xs font-medium uppercase tracking-[0.5px] text-[#68716C]">
                   Moyen
                 </span>
 
@@ -931,7 +931,7 @@ onMounted(chargerDonnees)
               </label>
 
               <label class="flex flex-col gap-2">
-                <span class="text-xs font-medium uppercase tracking-[0.5px] text-[#7A847E]">
+                <span class="text-xs font-medium uppercase tracking-[0.5px] text-[#68716C]">
                   Numéro
                 </span>
 
@@ -972,13 +972,13 @@ onMounted(chargerDonnees)
               Vérifiez votre retrait
             </h2>
 
-            <p class="mt-1 text-sm text-[#7A847E]">
+            <p class="mt-1 text-sm text-[#68716C]">
               Vérifiez les informations avant de confirmer.
             </p>
 
             <dl class="mt-6 border border-[#E5E7E2] bg-white p-5">
               <div class="flex items-center justify-between gap-4">
-                <dt class="text-sm text-[#7A847E]">
+                <dt class="text-sm text-[#68716C]">
                   Montant
                 </dt>
 
@@ -988,7 +988,7 @@ onMounted(chargerDonnees)
               </div>
 
               <div class="mt-4 flex items-center justify-between gap-4 border-t border-[#E5E7E2] pt-4">
-                <dt class="text-sm text-[#7A847E]">
+                <dt class="text-sm text-[#68716C]">
                   Moyen
                 </dt>
 
@@ -998,7 +998,7 @@ onMounted(chargerDonnees)
               </div>
 
               <div class="mt-4 flex items-center justify-between gap-4 border-t border-[#E5E7E2] pt-4">
-                <dt class="text-sm text-[#7A847E]">
+                <dt class="text-sm text-[#68716C]">
                   Numéro
                 </dt>
 
@@ -1068,7 +1068,7 @@ onMounted(chargerDonnees)
                 Retrait en cours
               </h2>
 
-              <p class="mx-auto mt-2 max-w-lg text-sm leading-6 text-[#7A847E]">
+              <p class="mx-auto mt-2 max-w-lg text-sm leading-6 text-[#68716C]">
                 Votre demande a été transmise à PayDunya.
                 Le solde a été pris en compte et sera recrédité
                 automatiquement si le retrait échoue.
@@ -1089,7 +1089,7 @@ onMounted(chargerDonnees)
                 Simulation de démonstration
               </h2>
 
-              <p class="mx-auto mt-2 max-w-lg text-sm leading-6 text-[#7A847E]">
+              <p class="mx-auto mt-2 max-w-lg text-sm leading-6 text-[#68716C]">
                 Le parcours de retrait de
                 {{ formaterMontant(dernierRetrait?.montant) }}
                 vers {{ dernierRetrait?.destination || form.destination }}
@@ -1097,7 +1097,7 @@ onMounted(chargerDonnees)
                 n'a été effectué</strong> : aucun argent n'a été envoyé sur ce numéro.
               </p>
 
-              <p class="mt-2 text-xs text-[#7A847E]">
+              <p class="mt-2 text-xs text-[#68716C]">
                 Référence interne : {{ dernierRetrait?.reference_externe }}
               </p>
             </template>
@@ -1116,7 +1116,7 @@ onMounted(chargerDonnees)
                 Retrait réussi
               </h2>
 
-              <p class="mt-2 text-sm text-[#7A847E]">
+              <p class="mt-2 text-sm text-[#68716C]">
                 {{ formaterMontant(dernierRetrait?.montant) }}
                 envoyé vers
                 {{ dernierRetrait?.destination || form.destination }}.
@@ -1135,7 +1135,7 @@ onMounted(chargerDonnees)
                 Retrait échoué
               </h2>
 
-              <p class="mt-2 text-sm text-[#7A847E]">
+              <p class="mt-2 text-sm text-[#68716C]">
                 Le montant sera recrédité sur votre solde disponible.
               </p>
 
@@ -1173,7 +1173,7 @@ onMounted(chargerDonnees)
             <div class="flex items-center gap-2">
               <span class="h-2.5 w-2.5 bg-[#2D6A4F]" />
 
-              <span class="text-xs text-[#7A847E]">
+              <span class="text-xs text-[#68716C]">
                 Gains nets
               </span>
             </div>
@@ -1181,7 +1181,7 @@ onMounted(chargerDonnees)
 
           <div
             v-if="!graphique.lignes.length"
-            class="flex h-[240px] items-center justify-center text-sm text-[#7A847E]"
+            class="flex h-[240px] items-center justify-center text-sm text-[#68716C]"
           >
             Aucune donnée d'évolution disponible.
           </div>
@@ -1204,7 +1204,7 @@ onMounted(chargerDonnees)
                       top: `${index * 20}%`,
                     }"
                   >
-                    <span class="w-10 pr-2 text-right text-[10px] text-[#7A847E]">
+                    <span class="w-10 pr-2 text-right text-[10px] text-[#68716C]">
                       {{ formaterMontantCourt(valeur) }}
                     </span>
 
@@ -1255,7 +1255,7 @@ onMounted(chargerDonnees)
                       index % Math.max(1, Math.floor(graphique.lignes.length / 5)) === 0
                     )"
                     :key="point.date"
-                    class="text-[10px] text-[#7A847E]"
+                    class="text-[10px] text-[#68716C]"
                   >
                     {{ formaterDate(point.date) }}
                   </span>
@@ -1289,7 +1289,7 @@ onMounted(chargerDonnees)
               >
                 <Download
                   :size="14"
-                  class="text-[#7A847E]"
+                  class="text-[#68716C]"
                 />
 
                 Exporter CSV
@@ -1302,7 +1302,7 @@ onMounted(chargerDonnees)
               >
                 <Filter
                   :size="14"
-                  class="text-[#7A847E]"
+                  class="text-[#68716C]"
                 />
 
                 Filtrer
@@ -1332,7 +1332,7 @@ onMounted(chargerDonnees)
                 :class="
                   filtreStatut === filtre.value
                     ? 'border-[#2D6A4F] bg-[#2D6A4F] text-white'
-                    : 'border-[#E5E7E2] bg-white text-[#7A847E] hover:text-[#1C2420]'
+                    : 'border-[#E5E7E2] bg-white text-[#68716C] hover:text-[#1C2420]'
                 "
                 @click="appliquerFiltre(filtre.value)"
               >
@@ -1350,27 +1350,27 @@ onMounted(chargerDonnees)
             <table class="w-full min-w-[950px] border-collapse">
               <thead>
                 <tr class="border-b border-[#E5E7E2] bg-[#F2F3F0]/30">
-                  <th class="px-8 py-4 text-left text-xs font-medium uppercase tracking-[0.6px] text-[#7A847E]">
+                  <th class="px-8 py-4 text-left text-xs font-medium uppercase tracking-[0.6px] text-[#68716C]">
                     Service
                   </th>
 
-                  <th class="px-8 py-4 text-left text-xs font-medium uppercase tracking-[0.6px] text-[#7A847E]">
+                  <th class="px-8 py-4 text-left text-xs font-medium uppercase tracking-[0.6px] text-[#68716C]">
                     Date
                   </th>
 
-                  <th class="px-8 py-4 text-left text-xs font-medium uppercase tracking-[0.6px] text-[#7A847E]">
+                  <th class="px-8 py-4 text-left text-xs font-medium uppercase tracking-[0.6px] text-[#68716C]">
                     Total (FCFA)
                   </th>
 
-                  <th class="px-8 py-4 text-left text-xs font-medium uppercase tracking-[0.6px] text-[#7A847E]">
+                  <th class="px-8 py-4 text-left text-xs font-medium uppercase tracking-[0.6px] text-[#68716C]">
                     Commission
                   </th>
 
-                  <th class="px-8 py-4 text-right text-xs font-medium uppercase tracking-[0.6px] text-[#7A847E]">
+                  <th class="px-8 py-4 text-right text-xs font-medium uppercase tracking-[0.6px] text-[#68716C]">
                     Net
                   </th>
 
-                  <th class="px-8 py-4 text-right text-xs font-medium uppercase tracking-[0.6px] text-[#7A847E]">
+                  <th class="px-8 py-4 text-right text-xs font-medium uppercase tracking-[0.6px] text-[#68716C]">
                     Statut
                   </th>
                 </tr>
@@ -1392,7 +1392,7 @@ onMounted(chargerDonnees)
                       }}
                     </p>
 
-                    <p class="mt-1 text-xs text-[#7A847E]">
+                    <p class="mt-1 text-xs text-[#68716C]">
                       Réf:
                       {{
                         transaction.reference ||
@@ -1416,7 +1416,7 @@ onMounted(chargerDonnees)
                     {{ formaterMontantCourt(transaction.montant) }}
                   </td>
 
-                  <td class="whitespace-nowrap px-8 py-5 text-sm text-[#7A847E]">
+                  <td class="whitespace-nowrap px-8 py-5 text-sm text-[#68716C]">
                     {{
                       commissionTransaction(transaction) > 0
                         ? `-${formaterMontantCourt(commissionTransaction(transaction))}`
@@ -1470,7 +1470,7 @@ onMounted(chargerDonnees)
                     }}
                   </h3>
 
-                  <p class="mt-1 text-xs text-[#7A847E]">
+                  <p class="mt-1 text-xs text-[#68716C]">
                     Réf:
                     {{
                       transaction.reference ||
@@ -1491,7 +1491,7 @@ onMounted(chargerDonnees)
 
               <div class="mt-5 grid grid-cols-2 gap-4">
                 <div>
-                  <p class="text-xs text-[#7A847E]">
+                  <p class="text-xs text-[#68716C]">
                     Date
                   </p>
 
@@ -1506,7 +1506,7 @@ onMounted(chargerDonnees)
                 </div>
 
                 <div>
-                  <p class="text-xs text-[#7A847E]">
+                  <p class="text-xs text-[#68716C]">
                     Total
                   </p>
 
@@ -1517,11 +1517,11 @@ onMounted(chargerDonnees)
                 </div>
 
                 <div>
-                  <p class="text-xs text-[#7A847E]">
+                  <p class="text-xs text-[#68716C]">
                     Commission
                   </p>
 
-                  <p class="mt-1 text-sm text-[#7A847E]">
+                  <p class="mt-1 text-sm text-[#68716C]">
                     {{
                       commissionTransaction(transaction) > 0
                         ? `-${formaterMontantCourt(commissionTransaction(transaction))}`
@@ -1531,7 +1531,7 @@ onMounted(chargerDonnees)
                 </div>
 
                 <div>
-                  <p class="text-xs text-[#7A847E]">
+                  <p class="text-xs text-[#68716C]">
                     Net
                   </p>
 
@@ -1557,7 +1557,7 @@ onMounted(chargerDonnees)
             v-if="transactionsFiltrees.length"
             class="flex flex-col gap-4 bg-[#F2F3F0]/20 px-6 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-8"
           >
-            <p class="text-sm text-[#7A847E]">
+            <p class="text-sm text-[#68716C]">
               Affichage de
               {{ debutAffichage }}
               à
@@ -1640,7 +1640,7 @@ onMounted(chargerDonnees)
                   {{ formaterMontant(retrait.montant) }}
                 </p>
 
-                <p class="mt-1 text-xs text-[#7A847E]">
+                <p class="mt-1 text-xs text-[#68716C]">
                   {{ retrait.provider || 'Moyen de paiement' }}
                   ·
                   {{ retrait.destination || '—' }}
@@ -1653,7 +1653,7 @@ onMounted(chargerDonnees)
                 class="w-fit px-2 py-1 text-[11px] font-bold uppercase"
                 :class="
                   statutRetraitCouleur[retrait.statut] ||
-                  'bg-[#F2F3F0] text-[#7A847E]'
+                  'bg-[#F2F3F0] text-[#68716C]'
                 "
               >
                 {{

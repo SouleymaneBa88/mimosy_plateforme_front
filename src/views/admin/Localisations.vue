@@ -124,7 +124,7 @@ onBeforeUnmount(() => {
       <!-- La carte. -->
       <div ref="mapContainer" class="h-[520px] w-full overflow-hidden rounded-2xl border border-[#E2E8F0]"></div>
 
-      <p class="text-sm text-[#64748B]">{{ localisations.length }} localisation(s) affichée(s).</p>
+      <p class="text-sm text-[#68716C]">{{ localisations.length }} localisation(s) affichée(s).</p>
     </div>
   </AppLayout>
 </template>

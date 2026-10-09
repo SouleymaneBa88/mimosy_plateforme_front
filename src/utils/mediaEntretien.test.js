@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import * as parcoursService from '@/services/parcoursService'
-import { choisirVoixNavigateur, creerVoix } from './mediaEntretien'
+import { choisirVoixNavigateur, creerEcoute, creerVoix, surveillerBargeIn } from './mediaEntretien'
 
 vi.mock('@/services/parcoursService', () => ({ recupererVoix: vi.fn(), transcrireAudio: vi.fn() }))
 
@@ -19,6 +19,73 @@ describe('choisirVoixNavigateur', () => {
     expect(choisirVoixNavigateur(liste).name).toBe('Microsoft Denise Online (Natural) - French (France)')
     expect(choisirVoixNavigateur([voix('eSpeak French', 'fr'), voix('Thomas')]).name).toBe('Thomas')
     expect(choisirVoixNavigateur([voix('Samantha', 'en-US')])).toBeNull()
+  })
+})
+
+describe('creerEcoute — transcription serveur Mimo', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('envoie l’enregistrement au transcripteur serveur prioritaire', async () => {
+    vi.stubGlobal('MediaStream', class { constructor(pistes) { this.pistes = pistes } })
+    vi.stubGlobal('MediaRecorder', class {
+      constructor() {
+        this.state = 'inactive'
+        this.mimeType = 'audio/webm'
+      }
+      start() {
+        this.state = 'recording'
+        this.ondataavailable?.({ data: new Blob(['audio'], { type: 'audio/webm' }) })
+      }
+      stop() {
+        this.state = 'inactive'
+        this.onstop?.()
+      }
+    })
+    const transcrire = vi.fn().mockResolvedValue({ texte: 'Ma douche fuit.' })
+    const ecoute = creerEcoute({
+      flux: () => ({ getAudioTracks: () => [{}] }),
+      transcrire,
+      transcrireToujours: true,
+    })
+
+    const resultat = ecoute.ecouter()
+    ecoute.arreter()
+
+    await expect(resultat).resolves.toBe('Ma douche fuit.')
+    expect(transcrire).toHaveBeenCalledTimes(1)
+    expect(transcrire.mock.calls[0][0].type).toBe('audio/webm')
+  })
+})
+
+describe('surveillerBargeIn', () => {
+  it('interrompt après une vraie prise de parole, pas après un bruit bref', () => {
+    vi.useFakeTimers()
+    const niveau = { valeur: 0 }
+    vi.stubGlobal('AudioContext', class {
+      createAnalyser() {
+        return { fftSize: 0, getFloatTimeDomainData: (buffer) => buffer.fill(niveau.valeur) }
+      }
+      createMediaStreamSource() { return { connect: vi.fn() } }
+      close() { return Promise.resolve() }
+    })
+    const interrompre = vi.fn()
+    const arreter = surveillerBargeIn({ getAudioTracks: () => [{}] }, interrompre)
+
+    try {
+      niveau.valeur = 0.1
+      vi.advanceTimersByTime(200)
+      niveau.valeur = 0
+      vi.advanceTimersByTime(200)
+      expect(interrompre).not.toHaveBeenCalled()
+
+      niveau.valeur = 0.1
+      vi.advanceTimersByTime(500)
+      expect(interrompre).toHaveBeenCalledOnce()
+    } finally {
+      arreter()
+      vi.useRealTimers()
+      vi.unstubAllGlobals()
+    }
   })
 })
 

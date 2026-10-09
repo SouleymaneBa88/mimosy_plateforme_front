@@ -247,7 +247,7 @@ onMounted(charger)
           :key="onglet.id"
           type="button"
           class="rounded-t-lg px-4 py-2.5 text-sm font-bold transition"
-          :class="ongletActif === onglet.id ? 'border-b-2 border-[#2F6250] text-[#2F6250]' : 'text-[#64748B] hover:text-[#051F20]'"
+          :class="ongletActif === onglet.id ? 'border-b-2 border-[#2F6250] text-[#2F6250]' : 'text-[#68716C] hover:text-[#051F20]'"
           @click="ongletActif = onglet.id"
         >
           {{ onglet.label }}
@@ -287,7 +287,7 @@ onMounted(charger)
                   <p class="text-xs text-[#94A3B8]">{{ service.description || 'Aucune description' }}</p>
                 </td>
                 <td class="px-4 py-3 text-[#334155]">{{ service.categorie_nom }}</td>
-                <td class="px-4 py-3 text-[#64748B]">{{ new Date(service.date_creation).toLocaleDateString('fr-FR') }}</td>
+                <td class="px-4 py-3 text-[#68716C]">{{ new Date(service.date_creation).toLocaleDateString('fr-FR') }}</td>
                 <td class="px-4 py-3">
                   <div class="flex flex-wrap gap-2">
                     <button type="button" class="rounded-lg border border-[#E2E8F0] px-3 py-1.5 text-xs font-bold text-[#051F20]" @click="ouvrirEditionService(service)">
@@ -326,7 +326,7 @@ onMounted(charger)
                 </td>
                 <td class="px-4 py-3 font-bold text-[#051F20]">{{ categorie.services.length }}</td>
                 <td class="px-4 py-3">
-                  <span class="rounded-full px-2.5 py-1 text-xs font-bold" :class="categorie.statut === 'ACTIVE' ? 'bg-[#EAF8F2] text-[#16805B]' : 'bg-[#F1F5F9] text-[#64748B]'">
+                  <span class="rounded-full px-2.5 py-1 text-xs font-bold" :class="categorie.statut === 'ACTIVE' ? 'bg-[#EAF8F2] text-[#16805B]' : 'bg-[#F1F5F9] text-[#68716C]'">
                     {{ categorie.statut }}
                   </span>
                 </td>

@@ -179,7 +179,7 @@ onMounted(() => etat.charger())
           :key="vue.id"
           type="button"
           class="rounded-t-lg px-4 py-2.5 text-sm font-bold transition"
-          :class="vueActive === vue.id ? 'border-b-2 border-[#2F6250] text-[#2F6250]' : 'text-[#64748B] hover:text-[#051F20]'"
+          :class="vueActive === vue.id ? 'border-b-2 border-[#2F6250] text-[#2F6250]' : 'text-[#68716C] hover:text-[#051F20]'"
           @click="changerVue(vue.id)"
         >
           {{ vue.label }}
@@ -237,11 +237,11 @@ onMounted(() => etat.charger())
                 <p class="text-xs text-[#94A3B8]">{{ item.email }}</p>
               </td>
               <td v-if="vueActive === 'TOUS'" class="px-4 py-3">
-                <span class="rounded-full bg-[#F1F5F9] px-2.5 py-1 text-xs font-bold text-[#64748B]">{{ item.role }}</span>
+                <span class="rounded-full bg-[#F1F5F9] px-2.5 py-1 text-xs font-bold text-[#68716C]">{{ item.role }}</span>
               </td>
-              <td v-if="vueActive === 'CLIENT'" class="px-4 py-3 text-[#64748B]">{{ item.ville || '—' }}</td>
+              <td v-if="vueActive === 'CLIENT'" class="px-4 py-3 text-[#68716C]">{{ item.ville || '—' }}</td>
               <td v-if="vueActive === 'CLIENT'" class="px-4 py-3 font-bold text-[#051F20]">{{ item.nombre_demandes }}</td>
-              <td v-if="vueActive === 'PRESTATAIRE'" class="px-4 py-3 text-[#64748B]">
+              <td v-if="vueActive === 'PRESTATAIRE'" class="px-4 py-3 text-[#68716C]">
                 {{ [item.quartier, item.ville].filter(Boolean).join(', ') || '—' }}
               </td>
               <td v-if="vueActive === 'PRESTATAIRE'" class="px-4 py-3 font-bold text-[#051F20]">{{ item.nombre_services }}</td>
@@ -258,7 +258,7 @@ onMounted(() => etat.charger())
                   {{ item.is_active ? 'Actif' : 'Désactivé' }}
                 </span>
               </td>
-              <td class="px-4 py-3 text-[#64748B]">{{ new Date(item.date_joined).toLocaleDateString('fr-FR') }}</td>
+              <td class="px-4 py-3 text-[#68716C]">{{ new Date(item.date_joined).toLocaleDateString('fr-FR') }}</td>
               <td class="px-4 py-3">
                 <div class="flex flex-wrap gap-2">
                   <button
@@ -323,14 +323,14 @@ onMounted(() => etat.charger())
             <li v-for="(facteur, cle) in scoreAffiche.resultat.facteurs" :key="cle" class="flex items-start justify-between gap-3">
               <div>
                 <p class="font-bold text-[#051F20]">{{ libellesFacteurs[cle] || cle }}</p>
-                <p class="text-xs text-[#64748B]">{{ facteur.explication }}</p>
+                <p class="text-xs text-[#68716C]">{{ facteur.explication }}</p>
               </div>
               <span class="shrink-0 font-bold text-[#051F20]">{{ facteur.points }}/{{ facteur.maximum }}</span>
             </li>
             <li class="flex items-start justify-between gap-3 border-t border-[#E2E8F0] pt-2">
               <div>
                 <p class="font-bold text-[#A85148]">Litiges résolus (malus)</p>
-                <p class="text-xs text-[#64748B]">{{ scoreAffiche.resultat.malus.explication }}</p>
+                <p class="text-xs text-[#68716C]">{{ scoreAffiche.resultat.malus.explication }}</p>
               </div>
               <span class="shrink-0 font-bold text-[#A85148]">-{{ scoreAffiche.resultat.malus.points }}</span>
             </li>

@@ -230,7 +230,7 @@ onMounted(async () => {
       Gérez votre emploi du temps
     </h1>
 
-    <p class="max-w-3xl text-sm leading-6 text-[#7A847E] sm:text-base">
+    <p class="max-w-3xl text-sm leading-6 text-[#68716C] sm:text-base">
       Définissez vos horaires de travail et vos périodes
       d'indisponibilité pour que vos clients puissent réserver au bon
       moment.
@@ -251,7 +251,7 @@ onMounted(async () => {
         Horaires hebdomadaires
       </h2>
 
-      <p class="mt-1 text-sm leading-5 text-[#7A847E]">
+      <p class="mt-1 text-sm leading-5 text-[#68716C]">
         Vos horaires de travail standard pour chaque jour de la semaine.
       </p>
     </div>
@@ -260,7 +260,7 @@ onMounted(async () => {
 
     <div
       v-if="rdvStore.isLoadingDisponibilites"
-      class="py-10 text-center text-sm text-[#7A847E]"
+      class="py-10 text-center text-sm text-[#68716C]"
     >
       Chargement de vos disponibilités...
     </div>
@@ -308,7 +308,7 @@ onMounted(async () => {
             :class="
               jourActif(jour)
                 ? 'text-[#1C2420]'
-                : 'text-[#7A847E]'
+                : 'text-[#68716C]'
             "
           >
             {{ jour.label }}
@@ -330,7 +330,7 @@ onMounted(async () => {
               class="flex items-center gap-3 text-sm"
               :class="
                 disponibilite.actif === false
-                  ? 'text-[#7A847E]'
+                  ? 'text-[#68716C]'
                   : 'text-[#1C2420]'
               "
             >
@@ -340,7 +340,7 @@ onMounted(async () => {
                 {{ formatHeure(disponibilite.heure_debut) }}
               </span>
 
-              <span class="text-[#7A847E]">—</span>
+              <span class="text-[#68716C]">—</span>
 
               <span
                 class="border border-[#E5E7E2] bg-[#F2F3F0] px-3 py-2"
@@ -352,7 +352,7 @@ onMounted(async () => {
             <div class="flex items-center gap-3">
               <button
                 type="button"
-                class="text-sm text-[#7A847E] transition hover:text-[#2D6A4F]"
+                class="text-sm text-[#68716C] transition hover:text-[#2D6A4F]"
                 @click="ouvrirEdition(disponibilite)"
               >
                 Modifier
@@ -385,7 +385,7 @@ onMounted(async () => {
           class="flex w-full items-center justify-between sm:w-auto sm:min-w-[340px]"
         >
           <span
-            class="border border-[#E5E7E2] bg-[#F2F3F0] px-3 py-2 text-sm text-[#7A847E]"
+            class="border border-[#E5E7E2] bg-[#F2F3F0] px-3 py-2 text-sm text-[#68716C]"
           >
             Indisponible
           </span>
@@ -419,7 +419,7 @@ onMounted(async () => {
           Périodes d'indisponibilité exceptionnelles
         </h2>
 
-        <p class="mt-1 text-sm leading-5 text-[#7A847E]">
+        <p class="mt-1 text-sm leading-5 text-[#68716C]">
           Bloquez des dates spécifiques pour vos vacances ou imprévus.
         </p>
       </div>
@@ -438,7 +438,7 @@ onMounted(async () => {
     <div
       class="border border-dashed border-[#E5E7E2] px-5 py-8 text-center"
     >
-      <p class="text-sm leading-6 text-[#7A847E]">
+      <p class="text-sm leading-6 text-[#68716C]">
         La gestion des périodes d'indisponibilité exceptionnelles
         nécessite encore son endpoint API.
       </p>
@@ -479,7 +479,7 @@ onMounted(async () => {
             }}
           </h2>
 
-          <p class="mt-1 text-sm leading-5 text-[#7A847E]">
+          <p class="mt-1 text-sm leading-5 text-[#68716C]">
             Définissez le jour et les horaires pendant lesquels vous êtes
             disponible.
           </p>
@@ -487,7 +487,7 @@ onMounted(async () => {
 
         <button
           type="button"
-          class="shrink-0 text-[#7A847E] transition hover:text-[#1C2420]"
+          class="shrink-0 text-[#68716C] transition hover:text-[#1C2420]"
           aria-label="Fermer"
           :disabled="formulaireEnvoi"
           @click="fermerFormulaire"

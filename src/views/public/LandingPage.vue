@@ -264,13 +264,12 @@ const showTarifs = false
 </script>
 
 <template>
-  <div class="min-h-screen overflow-x-hidden bg-[#FAF5F0] text-[#051F20]">
+  <div class="min-h-screen overflow-x-hidden bg-[#F2F3F0] text-[#051F20]">
     <!-- ================================================================= -->
     <!-- HEADER (pilule en verre flottante) -->
     <!-- ================================================================= -->
 
-    <header class="sticky top-0 z-50 px-3 pt-3 sm:px-6 sm:pt-4 lg:px-8">
-      <div
+<header class="fixed top-0 left-0 right-0 z-50 px-3 pt-2 sm:px-6 sm:pt-4 lg:px-8">      <div
         :class="[
           glass,
           'mx-auto flex h-16 w-full max-w-[1400px] items-center justify-between rounded-full pl-5 pr-2 sm:h-[68px] sm:pl-6',
@@ -412,7 +411,7 @@ const showTarifs = false
             près de chez vous.
           </h1>
 
-          <p class="mt-6 max-w-xl text-[15px] leading-7 text-[#64748B] sm:text-base sm:leading-8 lg:text-[17px]">
+          <p class="mt-6 max-w-xl text-[15px] leading-7 text-[#68716C] sm:text-base sm:leading-8 lg:text-[17px]">
             MIMOSY connecte les particuliers et les entreprises du Sénégal
             avec des professionnels de confiance.
             <template v-if="domainesHero">{{ domainesHero }}</template>
@@ -427,7 +426,7 @@ const showTarifs = false
             @submit.prevent="submitHeroSearch"
           >
             <label class="flex min-h-[52px] w-full min-w-0 flex-1 items-center gap-3 rounded-full px-4">
-              <svg class="h-5 w-5 shrink-0 text-[#64748B]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <svg class="h-5 w-5 shrink-0 text-[#68716C]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <circle cx="11" cy="11" r="7" />
                 <path d="m20 20-4-4" />
               </svg>
@@ -436,7 +435,7 @@ const showTarifs = false
                 v-model="heroSearch"
                 type="text"
                 placeholder="Quel service recherchez-vous ?"
-                class="min-w-0 flex-1 bg-transparent text-[15px] text-[#051F20] outline-none placeholder:text-[#64748B]"
+                class="min-w-0 flex-1 bg-transparent text-[15px] text-[#051F20] outline-none placeholder:text-[#68716C]"
               />
             </label>
 
@@ -449,7 +448,7 @@ const showTarifs = false
           </form>
 
           <p class="mt-6 text-[13px] font-medium text-[#2F6250] sm:text-sm">
-            Prestataires : 40 jours d'essai gratuit, sans carte bancaire.
+            Prestataires : 5% seront debuter de son compte pour chaque Prestation.
           </p>
         </div>
 
@@ -519,8 +518,8 @@ const showTarifs = false
               <span class="h-2 w-2 rounded-full bg-[#2F6250]"></span>
               Pour les prestataires
             </span>
-            <span class="text-[28px] font-extrabold leading-none tracking-tight text-[#051F20]">40 jours</span>
-            <span class="text-[13px] leading-5 text-[#051F20]/70">d'essai gratuit, sans carte bancaire.</span>
+            <span class="text-[28px] font-extrabold leading-none tracking-tight text-[#051F20]">5%</span>
+            <span class="text-[13px] leading-5 text-[#051F20]/70">seront debuter de son compte pour chaque Prestation.</span>
           </div>
         </div>
       </div>
@@ -541,7 +540,7 @@ const showTarifs = false
               Des professionnels pour vos besoins du quotidien
             </h2>
           </div>
-          <p class="max-w-sm text-sm leading-7 text-[#64748B]">
+          <p class="max-w-sm text-sm leading-7 text-[#68716C]">
             MIMOSY facilite la recherche de professionnels dans différents
             domaines de services.
           </p>
@@ -799,7 +798,7 @@ const showTarifs = false
           <h2 class="mt-3 font-sans text-[30px] font-extrabold leading-[1.05] tracking-[-0.02em] text-[#051F20] sm:text-[42px] lg:text-[52px]">
             Testez MIMOSY avant de vous abonner
           </h2>
-          <p class="mt-4 text-sm leading-7 text-[#64748B]">
+          <p class="mt-4 text-sm leading-7 text-[#68716C]">
             Commencez avec 40 jours d'accès gratuit avant de décider de
             continuer avec l'abonnement.
           </p>
@@ -810,7 +809,7 @@ const showTarifs = false
             <p class="text-xs font-bold uppercase tracking-wide text-[#2F6250]">Essai gratuit</p>
             <div class="mt-4 flex items-baseline gap-2">
               <span class="font-sans text-4xl font-extrabold">0 FCFA</span>
-              <span class="text-sm text-[#64748B]">pendant 40 jours</span>
+              <span class="text-sm text-[#68716C]">pendant 40 jours</span>
             </div>
             <ul class="mt-6 flex-1 space-y-3 text-sm">
               <li>✓ Profil visible auprès des clients</li>
@@ -899,7 +898,7 @@ const showTarifs = false
             >
               <img src="/images/mimosy_logo_transparent.png" alt="MIMOSY" class="h-auto w-[140px] object-contain" />
             </button>
-            <p class="mt-5 text-sm leading-6 text-[#64748B]">
+            <p class="mt-5 text-sm leading-6 text-[#68716C]">
               La plateforme de mise en relation entre clients et
               professionnels au Sénégal.
             </p>
@@ -908,7 +907,7 @@ const showTarifs = false
           <!-- Plateforme -->
           <div>
             <h3 class="text-xs font-bold uppercase tracking-wide text-[#051F20]">Plateforme</h3>
-            <div class="mt-5 flex flex-col gap-4 text-sm text-[#64748B]">
+            <div class="mt-5 flex flex-col gap-4 text-sm text-[#68716C]">
               <button type="button" class="text-left transition hover:text-[#2F6250]" @click="scrollToSection('accueil')">Accueil</button>
               <button type="button" class="text-left transition hover:text-[#2F6250]" @click="scrollToSection('services')">Services</button>
               <button type="button" class="text-left transition hover:text-[#2F6250]" @click="scrollToSection('tarifs')">Tarifs</button>
@@ -918,7 +917,7 @@ const showTarifs = false
           <!-- Entreprise -->
           <div>
             <h3 class="text-xs font-bold uppercase tracking-wide text-[#051F20]">Entreprise</h3>
-            <div class="mt-5 flex flex-col gap-4 text-sm text-[#64748B]">
+            <div class="mt-5 flex flex-col gap-4 text-sm text-[#68716C]">
               <button type="button" class="text-left transition hover:text-[#2F6250]" @click="scrollToSection('apropos')">À propos</button>
               <button type="button" class="text-left transition hover:text-[#2F6250]">Blog</button>
               <button type="button" class="text-left transition hover:text-[#2F6250]">Carrières</button>
@@ -928,7 +927,7 @@ const showTarifs = false
           <!-- Support -->
           <div>
             <h3 class="text-xs font-bold uppercase tracking-wide text-[#051F20]">Support</h3>
-            <div class="mt-5 flex flex-col gap-4 text-sm text-[#64748B]">
+            <div class="mt-5 flex flex-col gap-4 text-sm text-[#68716C]">
               <button type="button" class="text-left transition hover:text-[#2F6250]">Centre d'aide</button>
               <button type="button" class="text-left transition hover:text-[#2F6250]">Nous contacter</button>
               <button type="button" class="text-left transition hover:text-[#2F6250]">FAQ</button>
@@ -945,7 +944,7 @@ const showTarifs = false
             MIMOSY<span class="text-[#2F6250]">.</span>
           </p> -->
 
-          <div class="mt-6 flex flex-col gap-1 text-xs text-[#64748B] sm:flex-row sm:justify-between">
+          <div class="mt-6 flex flex-col gap-1 text-xs text-[#68716C] sm:flex-row sm:justify-between">
             <p>© 2026 MIMOSY. Tous droits réservés.</p>
             <p>Dakar, Sénégal</p>
           </div>

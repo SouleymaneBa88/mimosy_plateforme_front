@@ -75,8 +75,8 @@ onMounted(charger)
               <td class="px-4 py-3 font-bold text-[#051F20]">{{ rdv.client_nom }}</td>
               <td class="px-4 py-3 text-[#334155]">{{ rdv.prestataire_nom }}</td>
               <td class="px-4 py-3 text-[#334155]">{{ rdv.service_nom }}</td>
-              <td class="px-4 py-3 text-[#64748B]">{{ new Date(rdv.date_heure_debut).toLocaleString('fr-FR') }}</td>
-              <td class="px-4 py-3 text-[#64748B]">{{ new Date(rdv.date_heure_fin).toLocaleString('fr-FR') }}</td>
+              <td class="px-4 py-3 text-[#68716C]">{{ new Date(rdv.date_heure_debut).toLocaleString('fr-FR') }}</td>
+              <td class="px-4 py-3 text-[#68716C]">{{ new Date(rdv.date_heure_fin).toLocaleString('fr-FR') }}</td>
               <td class="px-4 py-3">
                 <span class="rounded-full px-2.5 py-1 text-xs font-bold" :class="classeStatut[rdv.statut]">{{ rdv.statut }}</span>
               </td>

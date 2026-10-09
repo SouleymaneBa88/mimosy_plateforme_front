@@ -17,7 +17,7 @@
 // Outils Vue, routeur et icônes.
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { CheckCircle2, Circle, LocateFixed, MapPin, RotateCcw, Search, SlidersHorizontal } from 'lucide-vue-next'
+import { ArrowRight, CheckCircle2, Circle, LocateFixed, MapPin, RotateCcw, Search, SlidersHorizontal, Sparkles } from 'lucide-vue-next'
 
 // Les composants de la page.
 import ClientLayout from '@/components/layout/ClientLayout.vue'
@@ -38,6 +38,10 @@ const router = useRouter()
 const prestataireStore = usePrestataireStore()
 const catalogueStore = useCatalogueStore()
 const { positionPourRecherche, loading: positionLoading, error: positionError } = useLocation()
+
+function ouvrirMimo() {
+  window.dispatchEvent(new Event('mimo:ouvrir'))
+}
 
 /* ---------------------------------------------------------------- *
  * Recherche : une seule barre (voir ServiceSearch.vue). Le texte saisi
@@ -321,6 +325,23 @@ onMounted(chargerDonnees)
         :service="searchService"
         @search="handleSearch"
       />
+
+      <!-- Seconde porte d'entrée : Mimo, l'assistant IA (la recherche ci-dessus reste inchangée). -->
+      <!-- <button
+        type="button"
+        class="group flex items-center gap-3 rounded-[20px] border border-mimosy-border bg-mimosy-surface px-4 py-3.5 transition hover:border-mimosy-primary sm:px-5"
+        data-testid="entree-mimo"
+        @click="ouvrirMimo"
+      >
+        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-mimosy-primary text-white" aria-hidden="true">
+          <Sparkles :size="18" :stroke-width="2" />
+        </span>
+        <span class="min-w-0 flex-1">
+          <span class="block font-sans text-sm font-extrabold text-mimosy-text">Parler à Mimo</span>
+          <span class="block font-sans text-xs text-mimosy-secondary">Vous ne savez pas quel professionnel choisir ? Décrivez votre problème, Mimo vous oriente.</span>
+        </span>
+        <ArrowRight :size="18" :stroke-width="2" class="shrink-0 text-mimosy-secondary transition group-hover:text-mimosy-primary" />
+      </button> -->
 
       <!-- Résultat de l'interprétation de la recherche intelligente (même barre que ci-dessus) -->
       <div v-if="rechercheNaturelleActive && prestataireStore.interpretationRecherche" class="hc-nl__comprehension">

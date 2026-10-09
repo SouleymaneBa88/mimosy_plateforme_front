@@ -134,7 +134,7 @@ function formaterDate(date) {
         </span>
         <div>
           <h2 class="text-lg font-extrabold text-[#051F20]">Ma localisation</h2>
-          <p class="text-sm text-[#64748B]">Utilisée pour la recherche par proximité et la carte.</p>
+          <p class="text-sm text-[#68716C]">Utilisée pour la recherche par proximité et la carte.</p>
         </div>
       </div>
 
@@ -149,22 +149,22 @@ function formaterDate(date) {
     </div>
 
     <!-- États : chargement ou erreur. -->
-    <div v-if="chargement" class="mt-5 text-sm text-[#64748B]">Chargement de votre localisation...</div>
+    <div v-if="chargement" class="mt-5 text-sm text-[#68716C]">Chargement de votre localisation...</div>
     <div v-else-if="erreurChargement" class="mt-5 rounded-[8px] bg-[#FFF0EE] p-4 text-sm text-[#C53B35]">{{ erreurChargement }}</div>
 
     <!-- Lecture -->
     <div v-else-if="!enEdition && localisation" class="mt-5 space-y-4">
       <div>
-        <p class="text-xs font-bold uppercase tracking-[0.05em] text-[#64748B]">Adresse</p>
+        <p class="text-xs font-bold uppercase tracking-[0.05em] text-[#68716C]">Adresse</p>
         <p class="mt-1 font-semibold text-[#051F20]">{{ localisation.adresse }}</p>
       </div>
       <div class="grid gap-4 sm:grid-cols-2">
         <div>
-          <p class="text-xs font-bold uppercase tracking-[0.05em] text-[#64748B]">Quartier</p>
+          <p class="text-xs font-bold uppercase tracking-[0.05em] text-[#68716C]">Quartier</p>
           <p class="mt-1 font-semibold text-[#051F20]">{{ localisation.quartier }}</p>
         </div>
         <div>
-          <p class="text-xs font-bold uppercase tracking-[0.05em] text-[#64748B]">Ville</p>
+          <p class="text-xs font-bold uppercase tracking-[0.05em] text-[#68716C]">Ville</p>
           <p class="mt-1 font-semibold text-[#051F20]">{{ localisation.ville }}</p>
         </div>
       </div>
@@ -174,24 +174,24 @@ function formaterDate(date) {
     </div>
 
     <!-- Aucune localisation enregistrée. -->
-    <div v-else-if="!enEdition" class="mt-5 rounded-[8px] border border-dashed border-[#CBD5E1] p-4 text-sm text-[#64748B]">
+    <div v-else-if="!enEdition" class="mt-5 rounded-[8px] border border-dashed border-[#CBD5E1] p-4 text-sm text-[#68716C]">
       Aucune localisation enregistrée. Cliquez sur « Ajouter » pour la renseigner.
     </div>
 
     <!-- Édition -->
     <form v-else class="mt-5 flex flex-col gap-4" @submit.prevent="enregistrer">
       <label class="flex flex-col gap-1.5">
-        <span class="text-xs font-bold uppercase tracking-[0.05em] text-[#64748B]">Adresse</span>
+        <span class="text-xs font-bold uppercase tracking-[0.05em] text-[#68716C]">Adresse</span>
         <input v-model="form.adresse" type="text" placeholder="Ex. Villa 12, Sacré-Cœur 3" class="h-12 rounded-[10px] border border-[#E2E8F0] px-3 text-sm font-medium text-[#051F20] outline-none focus:border-[#2F6250] focus:ring-4 focus:ring-[#2F6250]/10" />
       </label>
 
       <div class="grid gap-4 sm:grid-cols-2">
         <label class="flex flex-col gap-1.5">
-          <span class="text-xs font-bold uppercase tracking-[0.05em] text-[#64748B]">Quartier</span>
+          <span class="text-xs font-bold uppercase tracking-[0.05em] text-[#68716C]">Quartier</span>
           <input v-model="form.quartier" type="text" class="h-12 rounded-[10px] border border-[#E2E8F0] px-3 text-sm font-medium text-[#051F20] outline-none focus:border-[#2F6250] focus:ring-4 focus:ring-[#2F6250]/10" />
         </label>
         <label class="flex flex-col gap-1.5">
-          <span class="text-xs font-bold uppercase tracking-[0.05em] text-[#64748B]">Ville</span>
+          <span class="text-xs font-bold uppercase tracking-[0.05em] text-[#68716C]">Ville</span>
           <input v-model="form.ville" type="text" class="h-12 rounded-[10px] border border-[#E2E8F0] px-3 text-sm font-medium text-[#051F20] outline-none focus:border-[#2F6250] focus:ring-4 focus:ring-[#2F6250]/10" />
         </label>
       </div>
@@ -200,7 +200,7 @@ function formaterDate(date) {
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p class="text-sm font-bold text-[#051F20]">Coordonnées GPS</p>
-            <p class="mt-0.5 text-xs text-[#64748B]">
+            <p class="mt-0.5 text-xs text-[#68716C]">
               {{ form.latitude != null && form.longitude != null ? `${form.latitude.toFixed(5)}, ${form.longitude.toFixed(5)}` : 'Aucune position récupérée pour le moment.' }}
             </p>
           </div>

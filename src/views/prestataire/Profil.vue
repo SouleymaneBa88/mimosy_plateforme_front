@@ -217,7 +217,7 @@ async function envoyerPhotoProfil(fichier) {
       Profil et paramètres
     </h1>
 
-    <p class="max-w-2xl text-sm leading-6 text-[#7A847E] sm:text-base">
+    <p class="max-w-2xl text-sm leading-6 text-[#68716C] sm:text-base">
       Gérez vos informations personnelles et votre profil professionnel.
     </p>
   </header>
@@ -285,7 +285,7 @@ async function envoyerPhotoProfil(fichier) {
 
               <button
                 type="button"
-                class="inline-flex h-8 w-8 items-center justify-center border border-[#E5E7E2] text-[#7A847E] transition hover:border-[#2D6A4F] hover:text-[#2D6A4F]"
+                class="inline-flex h-8 w-8 items-center justify-center border border-[#E5E7E2] text-[#68716C] transition hover:border-[#2D6A4F] hover:text-[#2D6A4F]"
                 aria-label="Modifier le nom"
                 @click="ouvrirEditionNom"
               >
@@ -350,7 +350,7 @@ async function envoyerPhotoProfil(fichier) {
 
             <p
               v-if="!editionNomOuverte"
-              class="mt-2 max-w-2xl text-sm leading-6 text-[#7A847E]"
+              class="mt-2 max-w-2xl text-sm leading-6 text-[#68716C]"
             >
               {{
                 profil.description ||
@@ -416,7 +416,7 @@ async function envoyerPhotoProfil(fichier) {
               Informations de compte
             </h2>
 
-            <p class="mt-1 text-sm leading-5 text-[#7A847E]">
+            <p class="mt-1 text-sm leading-5 text-[#68716C]">
               Les informations utilisées pour votre compte MIMOSY.
             </p>
           </div>
@@ -427,10 +427,10 @@ async function envoyerPhotoProfil(fichier) {
         >
           <div class="flex gap-3">
             <Lock
-              class="mt-0.5 h-4 w-4 shrink-0 text-[#7A847E]"
+              class="mt-0.5 h-4 w-4 shrink-0 text-[#68716C]"
             />
 
-            <p class="text-xs leading-5 text-[#7A847E]">
+            <p class="text-xs leading-5 text-[#68716C]">
               Ces informations sont protégées. Leur modification
               dépend des mécanismes de sécurité disponibles sur
               votre compte.
@@ -440,7 +440,7 @@ async function envoyerPhotoProfil(fichier) {
 
         <dl class="mt-6 divide-y divide-[#E5E7E2]">
           <div class="flex gap-4 py-4 first:pt-0">
-            <Mail class="mt-0.5 h-4 w-4 shrink-0 text-[#7A847E]" />
+            <Mail class="mt-0.5 h-4 w-4 shrink-0 text-[#68716C]" />
 
             <div class="min-w-0">
               <dt class="text-xs font-medium uppercase tracking-wide text-[#8A938E]">
@@ -456,7 +456,7 @@ async function envoyerPhotoProfil(fichier) {
           </div>
 
           <div class="flex gap-4 py-4 last:pb-0">
-            <Phone class="mt-0.5 h-4 w-4 shrink-0 text-[#7A847E]" />
+            <Phone class="mt-0.5 h-4 w-4 shrink-0 text-[#68716C]" />
 
             <div>
               <dt class="text-xs font-medium uppercase tracking-wide text-[#8A938E]">
@@ -488,7 +488,7 @@ async function envoyerPhotoProfil(fichier) {
           Expérience professionnelle
         </h2>
 
-        <p class="mt-1 text-sm leading-5 text-[#7A847E]">
+        <p class="mt-1 text-sm leading-5 text-[#68716C]">
           Présentez votre expérience pour aider les clients à
           mieux comprendre votre parcours.
         </p>
@@ -543,7 +543,7 @@ async function envoyerPhotoProfil(fichier) {
               Ma localisation
             </h2>
 
-            <p class="text-sm text-[#7A847E]">
+            <p class="text-sm text-[#68716C]">
               Gérez la localisation utilisée pour vos prestations.
             </p>
           </div>

@@ -256,7 +256,7 @@ onUnmounted(() => {
           Demandes
         </h1>
 
-        <p class="mt-2 text-sm leading-6 text-[#7A847E] sm:text-base">
+        <p class="mt-2 text-sm leading-6 text-[#68716C] sm:text-base">
           Suivre les demandes de prestation de la plateforme en temps réel.
         </p>
       </header>
@@ -293,7 +293,7 @@ onUnmounted(() => {
             type="search"
             placeholder="Rechercher..."
             aria-label="Rechercher une demande"
-            class="h-10 w-full border border-[#E6E8E3] bg-[#FAFAF8] px-4 text-sm text-[#1C2420] outline-none placeholder:text-[#7A847E]/50 focus:border-[#2D6A4F] sm:w-[250px]"
+            class="h-10 w-full border border-[#E6E8E3] bg-[#FAFAF8] px-4 text-sm text-[#1C2420] outline-none placeholder:text-[#68716C]/50 focus:border-[#2D6A4F] sm:w-[250px]"
           />
 
           <input
@@ -383,7 +383,7 @@ onUnmounted(() => {
 
             <!-- Haut : référence + statut -->
             <div class="flex items-center justify-between gap-3 px-6 pt-6">
-              <span class="font-mono text-xs text-[#7A847E]">#{{ demande.id }}</span>
+              <span class="font-mono text-xs text-[#68716C]">#{{ demande.id }}</span>
 
               <span
                 class="inline-flex rounded-sm px-3 py-1 text-[10px] font-bold uppercase tracking-[0.04em]"
@@ -433,7 +433,7 @@ onUnmounted(() => {
                   </p>
                   <p
                     v-if="demande.client_email"
-                    class="truncate text-xs text-[#7A847E]"
+                    class="truncate text-xs text-[#68716C]"
                     :title="demande.client_email"
                   >
                     {{ demande.client_email }}
@@ -508,7 +508,7 @@ onUnmounted(() => {
             </p>
             <p
               v-if="totalPages > 1"
-              class="text-[10px] uppercase tracking-[0.12em] text-[#7A847E]/60"
+              class="text-[10px] uppercase tracking-[0.12em] text-[#68716C]/60"
             >
               Page {{ page }} sur {{ totalPages }}
             </p>

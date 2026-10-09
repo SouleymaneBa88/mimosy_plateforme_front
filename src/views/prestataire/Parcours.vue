@@ -161,7 +161,7 @@ onBeforeUnmount(() => clearTimeout(rafraichissement))
 
           <StepperParcours :etapes="parcours.etapes" :etape-affichee="etapeAffichee" @choisir="choisirEtape" />
 
-          <p v-if="parcours.ia" class="text-xs text-[#7A847E]" data-test="etat-ia">
+          <p v-if="parcours.ia" class="text-xs text-[#68716C]" data-test="etat-ia">
             {{
               parcours.ia.active
                 ? "Deux assistantes IA vous accompagnent : Aby pour votre profil, puis Fassa pour l'entretien professionnel. Ce sont des intelligences artificielles : elles aident l'équipe MIMOSY, qui prend la décision finale."
@@ -170,7 +170,7 @@ onBeforeUnmount(() => clearTimeout(rafraichissement))
           </p>
 
           <div v-if="etape" class="flex flex-col gap-1">
-            <p class="text-xs font-semibold uppercase tracking-wide text-[#7A847E]" data-test="numero-etape">
+            <p class="text-xs font-semibold uppercase tracking-wide text-[#68716C]" data-test="numero-etape">
               Étape {{ etape.numero }} sur {{ parcours.nombre_etapes }}
             </p>
             <h2 class="text-xl font-bold text-[#051F20]">{{ etape.titre }}</h2>
@@ -211,9 +211,9 @@ onBeforeUnmount(() => clearTimeout(rafraichissement))
                   {{ parcours.coherence.conclusion_justificatif.etat === 'COHERENCE_APPARENTE' ? 'Cohérence apparente' : 'Vérification nécessaire' }}
                 </p>
                 <dl class="mt-2 grid grid-cols-[110px_1fr] gap-y-1 text-[#1C2420]">
-                  <dt class="text-[#7A847E]">Profil</dt><dd>{{ parcours.coherence.conclusion_justificatif.profil || '—' }}</dd>
-                  <dt class="text-[#7A847E]">Domaine</dt><dd>{{ parcours.coherence.conclusion_justificatif.domaine || '—' }}</dd>
-                  <dt class="text-[#7A847E]">Justificatif</dt><dd>{{ parcours.coherence.conclusion_justificatif.justificatif || '—' }}</dd>
+                  <dt class="text-[#68716C]">Profil</dt><dd>{{ parcours.coherence.conclusion_justificatif.profil || '—' }}</dd>
+                  <dt class="text-[#68716C]">Domaine</dt><dd>{{ parcours.coherence.conclusion_justificatif.domaine || '—' }}</dd>
+                  <dt class="text-[#68716C]">Justificatif</dt><dd>{{ parcours.coherence.conclusion_justificatif.justificatif || '—' }}</dd>
                 </dl>
                 <p class="mt-2 text-[#4F5A54]">{{ parcours.coherence.conclusion_justificatif.message }}</p>
               </div>
@@ -229,7 +229,7 @@ onBeforeUnmount(() => clearTimeout(rafraichissement))
                   <li v-for="item in parcours.coherence.points_a_verifier" :key="item">{{ item }}</li>
                 </ul>
               </div>
-              <p class="text-xs text-[#7A847E]">
+              <p class="text-xs text-[#68716C]">
                 Cette analyse automatique aide l'équipe MIMOSY ; elle ne constitue pas une décision. Si une
                 information est erronée, corrigez votre profil ou vos documents depuis les étapes précédentes.
               </p>

@@ -63,7 +63,7 @@ onMounted(charger)
       <ClientHeader title="Modération des avis" subtitle="Avis mis en attente par l'analyse automatique." />
 
       <!-- États : chargement, erreur, vide. -->
-      <p v-if="loading" class="rounded-lg bg-white p-8 text-center text-[#64748B]">Chargement...</p>
+      <p v-if="loading" class="rounded-lg bg-white p-8 text-center text-[#68716C]">Chargement...</p>
       <p v-else-if="errorMessage" class="rounded-lg bg-[#FFF0EE] p-4 text-center text-sm text-[#A85148]">{{ errorMessage }}</p>
 
       <EmptyState v-else-if="!avis.length" title="Aucun avis en attente" message="Les avis signalés par l'analyse automatique apparaîtront ici." />
@@ -74,7 +74,7 @@ onMounted(charger)
           <div class="flex flex-wrap items-center justify-between gap-2">
             <span class="text-sm font-bold text-[#334155]">{{ item.note }}/5</span>
             <div class="flex gap-2 text-xs">
-              <span v-if="item.sentiment" class="rounded-full bg-[#F1F5F9] px-2.5 py-1 font-bold text-[#64748B]">
+              <span v-if="item.sentiment" class="rounded-full bg-[#F1F5F9] px-2.5 py-1 font-bold text-[#68716C]">
                 Sentiment : {{ item.sentiment }} ({{ item.score_sentiment != null ? Math.round(item.score_sentiment * 100) + '%' : '—' }})
               </span>
               <span v-if="item.est_inapproprie" class="rounded-full bg-[#FFF0EE] px-2.5 py-1 font-bold text-[#A85148]">

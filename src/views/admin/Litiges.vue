@@ -236,7 +236,7 @@ useEvenementTempsReel(['litige.nouveau', 'litige.statut', 'litige.preuve'], () =
             <span v-if="litige.fonds_geles" class="rounded-full bg-[#FFF0EE] px-2.5 py-1 font-bold text-[#A85148]">
               Fonds gelés
             </span>
-            <span v-if="litige.paiement_statut" class="text-[#64748B]">Paiement : {{ litige.paiement_statut }}</span>
+            <span v-if="litige.paiement_statut" class="text-[#68716C]">Paiement : {{ litige.paiement_statut }}</span>
             <span v-if="litige.date_limite_reprise && litige.statut === 'REPRISE_DEMANDEE'" class="text-[#9A723C]">
               Délai jusqu'au {{ new Date(litige.date_limite_reprise).toLocaleString('fr-FR') }}
             </span>
@@ -387,7 +387,7 @@ useEvenementTempsReel(['litige.nouveau', 'litige.statut', 'litige.preuve'], () =
         au nouveau prestataire, 25 % resteront acquis au prestataire initial.
       </p>
 
-      <p v-if="prestatairesChargement" class="mt-3 text-sm text-[#64748B]">Chargement des prestataires vérifiés...</p>
+      <p v-if="prestatairesChargement" class="mt-3 text-sm text-[#68716C]">Chargement des prestataires vérifiés...</p>
       <select
         v-else
         v-model="nouveauPrestataireId"

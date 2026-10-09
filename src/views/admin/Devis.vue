@@ -75,7 +75,7 @@ onMounted(charger)
               <td class="px-4 py-3">
                 <span class="rounded-full px-2.5 py-1 text-xs font-bold" :class="classeStatut[devisItem.statut]">{{ devisItem.statut }}</span>
               </td>
-              <td class="px-4 py-3 text-[#64748B]">{{ new Date(devisItem.date_creation).toLocaleDateString('fr-FR') }}</td>
+              <td class="px-4 py-3 text-[#68716C]">{{ new Date(devisItem.date_creation).toLocaleDateString('fr-FR') }}</td>
             </tr>
           </tbody>
         </table>

@@ -55,7 +55,7 @@ const router = createRouter({
     // (chargement "paresseux") : le site démarre plus vite.
     { path: '/client/paiement/retour', name: 'client-paiement-retour', component: () => import('@/views/client/PaiementRetour.vue'), meta: { requiresAuth: true, roles: ['CLIENT'] } },
     { path: '/client/factures/:id', name: 'client-facture', component: () => import('@/views/client/Facture.vue'), meta: { requiresAuth: true, roles: ['CLIENT'] } },
-    { path: '/client/diagnostic', name: 'client-diagnostic', component: () => import('@/views/client/Diagnostic.vue'), meta: { requiresAuth: true, roles: ['CLIENT'] } },
+    { path: '/client/diagnostic', name: 'client-diagnostic', redirect: { name: 'client-home', query: { mimo: '1' } } },
     { path: '/client/litiges', name: 'client-litiges', component: () => import('@/views/client/MesLitiges.vue'), meta: { requiresAuth: true, roles: ['CLIENT'] } },
     // Messagerie : partagée entre clients et prestataires.
     { path: '/messages', name: 'messagerie', component: Messages, meta: { requiresAuth: true, roles: ['CLIENT', 'PRESTATAIRE'] } },

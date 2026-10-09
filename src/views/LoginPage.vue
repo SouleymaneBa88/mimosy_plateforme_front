@@ -350,7 +350,7 @@ const handleGoogleLogin = () => {
               Se connecter
             </h2>
 
-            <p class="mt-1 text-[15px] text-[#64748B]">
+            <p class="mt-1 text-[15px] text-[#68716C]">
               Accédez à votre espace sécurisé
             </p>
           </div>
@@ -492,7 +492,7 @@ const handleGoogleLogin = () => {
           <!-- <div class="my-7 flex items-center gap-4">
             <div class="h-px flex-1 bg-[#E2E8F0]"></div>
 
-            <span class="text-sm text-[#64748B]"> ou </span>
+            <span class="text-sm text-[#68716C]"> ou </span>
 
             <div class="h-px flex-1 bg-[#E2E8F0]"></div>
           </div> -->
@@ -538,7 +538,7 @@ const handleGoogleLogin = () => {
           <!-- ================================================= -->
 
           <div class="mt-7 flex items-center justify-center gap-1.5 text-sm">
-            <span class="text-[#64748B]"> Pas encore de compte ? </span>
+            <span class="text-[#68716C]"> Pas encore de compte ? </span>
 
             <button
               type="button"
@@ -553,7 +553,7 @@ const handleGoogleLogin = () => {
           <div class="mt-3 text-center text-sm">
             <router-link
               :to="{ name: 'verifier-email' }"
-              class="font-medium text-[#64748B] transition hover:text-[#2F6250]"
+              class="font-medium text-[#68716C] transition hover:text-[#2F6250]"
             >
               Renvoyer l'e-mail de confirmation
             </router-link>

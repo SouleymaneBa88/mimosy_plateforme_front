@@ -32,6 +32,7 @@ import ClientLayout from '@/components/layout/ClientLayout.vue'
 import { useDemandePrestationStore } from '@/stores/demandePrestation'
 import { usePrestataireStore } from '@/stores/prestataire'
 import { useRendezVousStore } from '@/stores/rendezVous'
+import { useMimoStore } from '@/stores/mimo'
 import * as devisService from '@/services/devisService'
 import * as rendezVousService from '@/services/rendezVousService'
 
@@ -41,6 +42,7 @@ const router = useRouter()
 const prestataireStore = usePrestataireStore()
 const demandeStore = useDemandePrestationStore()
 const rendezVousStore = useRendezVousStore()
+const mimoStore = useMimoStore()
 
 /* ---------------------------------------------------------------- *
  * État local des trois modales (prestation / devis / rendez-vous)
@@ -59,6 +61,9 @@ const rendezVousLoading = ref(false)
 // Les valeurs des formulaires "demande de prestation" et "demande de devis".
 const demandeForm = reactive({ service: '', description: '', date_souhaitee: '', budget: '' })
 const devisForm = reactive({ service: '', description: '', date_souhaitee: '', budget_estime: '' })
+// Pré-remplissage par Mimo : la fenêtre a-t-elle repris le pré-diagnostic, et quelles photos joindre.
+const demandeDepuisMimo = ref(false)
+const photosMimo = ref([])
 
 /* ---------------------------------------------------------------- *
  * Prise de rendez-vous : date choisie -> créneaux calculés par
@@ -191,7 +196,30 @@ function demanderPrestation() {
   demandeStore.errorMessage = ''
   // Pré-sélectionne le premier service disponible pour accélérer la saisie.
   demandeForm.service = servicesDisponibles.value[0]?.service?.id || ''
+  preremplirDepuisMimo()
   demandeModalOpen.value = true
+}
+
+/**
+ * Si le client vient d'un pré-diagnostic Mimo, la fenêtre reprend le service
+ * orienté (s'il est proposé par ce prestataire), la description et les photos.
+ * Tout reste modifiable : la demande ne part que sur « Envoyer la demande ».
+ */
+function preremplirDepuisMimo() {
+  const brouillon = mimoStore.brouillonDemande
+  demandeDepuisMimo.value = Boolean(brouillon)
+  photosMimo.value = brouillon ? [...brouillon.pieces] : []
+  if (!brouillon) return
+  const offre =
+    servicesDisponibles.value.find((o) => brouillon.serviceNom && o.service?.nom === brouillon.serviceNom) ||
+    servicesDisponibles.value.find((o) => brouillon.categorieNom && o.service?.categorie?.nom === brouillon.categorieNom)
+  if (offre) demandeForm.service = offre.service.id
+  if (!demandeForm.description.trim()) demandeForm.description = brouillon.description
+}
+
+// Retire une photo de CETTE demande (elle reste modifiable jusqu'à l'envoi).
+function retirerPhotoMimo(id) {
+  photosMimo.value = photosMimo.value.filter((piece) => piece.id !== id)
 }
 
 // Envoie la demande de prestation (tous les champs sont obligatoires).
@@ -201,6 +229,7 @@ async function envoyerDemande() {
     return
   }
 
+  const piecesJointes = photosMimo.value.map((piece) => piece.id)
   try {
     await demandeStore.creerDemande({
       prestataire: prestataire.value.id,
@@ -208,7 +237,12 @@ async function envoyerDemande() {
       description: demandeForm.description.trim(),
       date_souhaitee: new Date(demandeForm.date_souhaitee).toISOString(),
       budget: demandeForm.budget,
+      ...(piecesJointes.length ? { pieces_jointes: piecesJointes } : {}),
     })
+    // La conversation Mimo est terminée : ses photos appartiennent maintenant à la demande.
+    if (demandeDepuisMimo.value) await mimoStore.demandeEnvoyee(piecesJointes)
+    demandeDepuisMimo.value = false
+    photosMimo.value = []
     demandeEnvoyee.value = true
     demandeForm.service = ''
     demandeForm.description = ''
@@ -532,6 +566,10 @@ watch(() => rendezVousForm.date, chargerCreneaux)
               </div>
 
               <div v-else class="grid gap-[1.125rem]">
+                <p v-if="demandeDepuisMimo" class="flex items-start gap-2 rounded-xl bg-mimosy-primaryBg px-3.5 py-3 font-sans text-xs text-mimosy-primary" data-testid="demande-preremplie-mimo">
+                  <Sparkles :size="14" :stroke-width="2" class="mt-0.5 shrink-0" />
+                  Pré-remplie à partir de votre échange avec Mimo. Vérifiez et modifiez librement avant l'envoi : le professionnel confirmera le problème sur place.
+                </p>
                 <label class="grid gap-2">
                   <span class="font-sans text-xs font-bold uppercase tracking-[0.04em] text-mimosy-secondary">Service</span>
                   <select v-model="demandeForm.service" required class="w-full rounded-lg border border-mimosy-border bg-mimosy-surface px-3.5 py-3 font-sans text-[15px] text-mimosy-text outline-none focus:border-mimosy-primary">
@@ -542,8 +580,20 @@ watch(() => rendezVousForm.date, chargerCreneaux)
 
                 <label class="grid gap-2">
                   <span class="font-sans text-xs font-bold uppercase tracking-[0.04em] text-mimosy-secondary">Description</span>
-                  <textarea v-model="demandeForm.description" rows="4" required placeholder="Décrivez votre besoin" class="w-full resize-y rounded-lg border border-mimosy-border bg-mimosy-surface px-3.5 py-3 font-sans text-[15px] text-mimosy-text outline-none focus:border-mimosy-primary" />
+                  <textarea v-model="demandeForm.description" :rows="demandeDepuisMimo ? 6 : 4" required placeholder="Décrivez votre besoin" class="w-full resize-y rounded-lg border border-mimosy-border bg-mimosy-surface px-3.5 py-3 font-sans text-[15px] text-mimosy-text outline-none focus:border-mimosy-primary" />
                 </label>
+
+                <div v-if="photosMimo.length" class="grid gap-2" data-testid="demande-photos-mimo">
+                  <span class="font-sans text-xs font-bold uppercase tracking-[0.04em] text-mimosy-secondary">Pièces jointes</span>
+                  <ul class="grid gap-1.5">
+                    <li v-for="piece in photosMimo" :key="piece.id" class="flex items-center gap-2 rounded-lg border border-mimosy-border px-3 py-2 font-sans text-sm text-mimosy-text">
+                      <span class="min-w-0 flex-1 truncate">{{ piece.nom || 'photo.jpg' }}</span>
+                      <button type="button" class="flex h-7 w-7 items-center justify-center rounded-lg text-mimosy-secondary hover:bg-mimosy-page" :aria-label="`Ne pas joindre ${piece.nom || 'cette photo'}`" @click="retirerPhotoMimo(piece.id)">
+                        <X :size="14" :stroke-width="2.5" />
+                      </button>
+                    </li>
+                  </ul>
+                </div>
 
                 <div class="grid gap-[1.125rem] sm:grid-cols-2">
                   <label class="grid gap-2">

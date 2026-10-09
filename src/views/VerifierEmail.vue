@@ -333,13 +333,13 @@ onMounted(() => {
         </p>
       </form>
 
-      <p v-if="etat === 'attente' && connecte" class="mt-6 text-sm text-[#7A847E]">
+      <p v-if="etat === 'attente' && connecte" class="mt-6 text-sm text-[#68716C]">
         Mauvais compte ?
         <button type="button" class="font-bold text-[#2D6A4F] hover:underline" @click="seDeconnecter">
           Se déconnecter
         </button>
       </p>
-      <p v-else-if="etat === 'attente'" class="mt-6 text-sm text-[#7A847E]">
+      <p v-else-if="etat === 'attente'" class="mt-6 text-sm text-[#68716C]">
         Déjà vérifiée ?
         <router-link to="/login" class="font-bold text-[#2D6A4F] hover:underline">Se connecter</router-link>
       </p>

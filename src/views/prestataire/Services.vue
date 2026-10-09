@@ -584,7 +584,7 @@ function allerAuProfil() {
 
 .page-eyebrow {
   margin: 0 0 8px;
-  color: #7a847e;
+  color: #68716C;
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -603,7 +603,7 @@ function allerAuProfil() {
 .page-description {
   max-width: 620px;
   margin: 10px 0 0;
-  color: #7a847e;
+  color: #68716C;
   font-size: 15px;
   line-height: 24px;
 }
@@ -673,7 +673,7 @@ function allerAuProfil() {
 }
 
 .summary-label {
-  color: #7a847e;
+  color: #68716C;
   font-size: 13px;
   font-weight: 600;
 }
@@ -703,7 +703,7 @@ function allerAuProfil() {
 
 .summary-icon--warning {
   background: #fbefcf;
-  color: #d99a0b;
+  color: #8a5f00;
 }
 
 .summary-value {
@@ -718,7 +718,7 @@ function allerAuProfil() {
 
 .summary-description {
   margin: 8px 0 0;
-  color: #7a847e;
+  color: #68716C;
   font-size: 12px;
 }
 
@@ -798,7 +798,7 @@ function allerAuProfil() {
 
 .section-heading p {
   margin: 5px 0 0;
-  color: #7a847e;
+  color: #68716C;
   font-size: 13px;
 }
 
@@ -869,7 +869,7 @@ function allerAuProfil() {
 
 .service-category {
   margin: 0 0 6px;
-  color: #7a847e;
+  color: #68716C;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -1012,7 +1012,7 @@ function allerAuProfil() {
 }
 
 .price-unit {
-  color: #7a847e;
+  color: #68716C;
   font-size: 12px;
 }
 
